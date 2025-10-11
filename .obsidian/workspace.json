@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "design/learning/exercise-0.md",
+                "file": "design/brainstorming/questioning.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "exercise-0"
+              "title": "questioning"
             }
           }
         ]
@@ -94,7 +94,7 @@
             "state": {
               "type": "backlink",
               "state": {
-                "file": "design/learning/exercise-0.md",
+                "file": "design/brainstorming/questioning.md",
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -104,7 +104,7 @@
                 "unlinkedCollapsed": true
               },
               "icon": "links-coming-in",
-              "title": "Backlinks for exercise-0"
+              "title": "Backlinks for questioning"
             }
           },
           {
@@ -169,15 +169,25 @@
       "bases:Create new base": false
     }
   },
-  "active": "60ccb8b74e272dda",
+  "active": "9b42b4503c7d88ad",
   "lastOpenFiles": [
+    "context/design/brainstorming/questioning.md/20251010_205904.12c7ce45.md",
+    "context/design/brainstorming/questioning.md/steps/response.3cf6a865.md",
+    "context/design/brainstorming/questioning.md/20251010_205835.269ffbb5.md",
+    "context/design/brainstorming/questioning.md/steps/prompt.6ce39b7a.md",
+    "design/learning/exercise-0.md",
+    "context/design/brainstorming/questioning.md/20251010_205549.de0fa014.md",
+    "context/design/brainstorming/questioning.md/steps/response.7373d5c1.md",
+    "context/design/brainstorming/questioning.md/20251010_205544.d4eeb26e.md",
+    "context/design/brainstorming/questioning.md/steps/file.d4eeb26e.md",
+    "context/design/brainstorming/questioning.md/20251010_205500.3f51a6fc.md",
+    "context/design/brainstorming/questioning.md/steps/file.f65d9d11.md",
     "context/design/learning/exercise-0.md/steps/_.e7b8ee3b.md",
     "context/design/learning/exercise-0.md/steps",
     "context/design/learning/exercise-0.md/20251010_203032.af88fef1.md",
     "context/design/learning/exercise-0.md",
     "design/learning/understanding-concepts.md",
     "design/brainstorming/questioning.md",
-    "design/learning/exercise-0.md",
     "context/design/brainstorming/questioning.md/20251010_202419.5cb8ddfa.md",
     "context/design/learning/understanding-concepts.md/20251010_201621.4a3fbcc1.md",
     "context/design/brainstorming/questioning.md/20251010_200745.77acaeeb.md",
@@ -187,9 +197,6 @@
     "context/design/brainstorming/questioning.md/steps/prompt.2a709ab8.md",
     "context/design/learning/understanding-concepts.md/20251010_201611.e621495c.md",
     "context/design/learning/understanding-concepts.md/20251007_220831.68f5d90a.md",
-    "context/design/learning/understanding-concepts.md/20251007_220759.21c003be.md",
-    "context/design/learning/understanding-concepts.md/steps/response.4458f3c7.md",
-    "context/design/learning/understanding-concepts.md/steps/question.6afca290.md",
-    "README.md"
+    "context/design/learning/understanding-concepts.md/20251007_220759.21c003be.md"
   ]
 }

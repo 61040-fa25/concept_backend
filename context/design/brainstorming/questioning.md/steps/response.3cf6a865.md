@@ -1,25 +1,9 @@
-# prompt: Please help implement this function that I have attached below
+---
+timestamp: 'Fri Oct 10 2025 20:59:04 GMT-0400 (Eastern Daylight Time)'
+parent: '[[../20251010_205904.12c7ce45.md]]'
+content_id: 3cf6a865c695ecd3b790ec099f22e88886210c14d876f695023cfe69e4d3f218
+---
 
-/**
-* Submits a new score for a player.
-* @requires The player with the given ID exists.
-* @effects A new score is recorded for the player.
-*/
-async submitScore(
-{ player, value }: { player: Player; value: number },
-): Promise<{ score: Score } | { error: string }> {
-// TODO (from 07-errorHandling.test.ts)
-// Add a check here: before inserting a score, verify the player exists.
-// Use `findOne` on the `players` collection with the player's ID.
-// If no player is found, return { error: "Player not found" }.
-
-// TODO (from 03-submitScore.test.ts)
-// 1. Create a new score document with a fresh ID.
-// 2. The document should include the player's ID, the score value, and the current date (`new Date()`).
-// 3. Insert the document into the `scores` collection.
-// 4. Return the new score's ID: { score: newScoreId }
-throw new Error("Not implemented");
-}
 # response:
 
 To implement the `submitScore` function, we need to interact with a database (presumably MongoDB, given the typical patterns like `_id` and `collection.findOne`, `collection.insertOne`).
