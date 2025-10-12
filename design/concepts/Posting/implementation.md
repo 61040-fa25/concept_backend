@@ -6,12 +6,14 @@
 
 [@concept-spec](Posting.md)
 
-# implement: Posting
+[@posting-implementation](../../../src/concepts/Posting/PostingConcept.ts)
+
+# prompt: Please modify getPostsbyAuthor to return the posts in order of most recent to oldest.
 # response:
 
-```typescript
-// file: src/Posting/PostingConcept.ts
+Here's the modified `PostingConcept.ts` file with the `_getPostsByAuthor` query updated to return posts from most recent to oldest:
 
+```typescript
 import { Collection, Db } from "npm:mongodb";
 import { Empty, ID } from "@utils/types.ts"; // Assuming @utils/types.ts provides ID and Empty
 import { freshID } from "@utils/database.ts"; // Assuming @utils/database.ts provides freshID
@@ -44,6 +46,7 @@ interface PostDocument {
   caption: string;
   images: Image[];
   author: User;
+  createdAt: Date;
 }
 
 export default class PostingConcept {
@@ -58,7 +61,7 @@ export default class PostingConcept {
    * action: create (user: User, images: Set<Image>, caption: String): (post: Post)
    *
    * requires: user to exist (as an ID, we assume its validity is handled by other concepts or syncs),
-   *           images cannot be empty.
+   *           images cannot be empty
    * effects: creates a new post authored by the user with its content being the caption and images given.
    */
   async create(
@@ -70,16 +73,20 @@ export default class PostingConcept {
     if (!images || images.length === 0) {
       return { error: "Images cannot be empty for a post." };
     }
-    if (!caption || caption.trim() === "") {
-        return { error: "Caption cannot be empty." };
+    if (
+      caption === undefined || caption === null // however, caption can be empty such as ""
+    ) {
+      return { error: "Caption cannot be undefined." };
     }
 
     const newPostId = freshID();
+    const now = new Date();
     const newPost: PostDocument = {
       _id: newPostId,
       caption: caption,
       images: images,
       author: user,
+      createdAt: now,
     };
 
     try {
@@ -136,7 +143,11 @@ export default class PostingConcept {
    * effects: edits the caption of the post to be that of the new one.
    */
   async edit(
-    { user, post, new_caption }: { user: User; post: Post; new_caption: string },
+    { user, post, new_caption }: {
+      user: User;
+      post: Post;
+      new_caption: string;
+    },
   ): Promise<Empty | { error: string }> {
     if (!user) {
       return { error: "User ID must be provided." };
@@ -144,8 +155,10 @@ export default class PostingConcept {
     if (!post) {
       return { error: "Post ID must be provided." };
     }
-    if (new_caption === undefined || new_caption === null || new_caption.trim() === "") {
-        return { error: "New caption cannot be empty." };
+    if (
+      new_caption === undefined || new_caption === null
+    ) {
+      return { error: "New caption cannot be undefined." };
     }
 
     const existingPost = await this.posts.findOne({ _id: post });
@@ -201,7 +214,7 @@ export default class PostingConcept {
   /**
    * query: _getPostsByAuthor (user: User): (posts: PostDocument[])
    *
-   * effects: Returns all posts authored by a specific user.
+   * effects: Returns all posts authored by a specific user, ordered from most recent to oldest.
    */
   async _getPostsByAuthor(
     { user }: { user: User },
@@ -210,7 +223,9 @@ export default class PostingConcept {
       return { error: "User ID must be provided." };
     }
     try {
-      const posts = await this.posts.find({ author: user }).toArray();
+      const posts = await this.posts.find({ author: user })
+        .sort({ createdAt: -1 }) // Added sorting here: -1 for descending order (most recent first)
+        .toArray();
       return { posts };
     } catch (e) {
       console.error("Failed to retrieve posts by author:", e);
@@ -218,19 +233,4 @@ export default class PostingConcept {
     }
   }
 }
-
-// --- Simulated @utils/types.ts and @utils/database.ts for completeness ---
-// In a real project, these would be in separate files.
-/*
-declare module "@utils/types.ts" {
-  export type ID = string & { __brand: "ID" };
-  export type Empty = Record<PropertyKey, never>;
-}
-
-declare module "@utils/database.ts" {
-  export function freshID(): ID {
-    return `id:${crypto.randomUUID()}` as ID;
-  }
-}
-*/
 ```

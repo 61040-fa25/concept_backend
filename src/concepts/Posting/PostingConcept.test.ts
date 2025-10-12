@@ -328,6 +328,17 @@ Deno.test("Posting Concept Tests", async (t) => {
         true,
         "Alice's posts should include A2",
       );
+      // Verify the order: postA2 should be first (most recent), then postA1 (older)
+      assertEquals(
+        alicePostsResult.posts?.[0]._id,
+        postA2Id,
+        "First post should be Alice's second post (most recent)",
+      );
+      assertEquals(
+        alicePostsResult.posts?.[1]._id,
+        postA1Id,
+        "Second post should be Alice's first post (oldest)",
+      );
 
       // Query for Bob's posts
       const bobPostsResult = await postingConcept._getPostsByAuthor({

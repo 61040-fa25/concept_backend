@@ -1,15 +1,10 @@
-[@implementation](implementation.md)
+---
+timestamp: 'Sun Oct 12 2025 06:03:34 GMT-0400 (Eastern Daylight Time)'
+parent: '[[../20251012_060334.67f9eae3.md]]'
+content_id: b3c59cb49f6a0044d953397ad2b6ddc41c7b91fe8a9c6f5bd3a83eb18dfd55ce
+---
 
-[@testing-concepts](../../background/testing-concepts.md)
-
-[@posting-testing](../../../src/concepts/Posting/PostingConcept.test.ts)
-
-# prompt: I have modified the query for getting all posts by an author to return the posts in order of most recent to oldest. Please edit the tests to check that this order is followed.
-# response:
-
-You're absolutely right to add a test for the sorting! It's a crucial detail for user experience.
-
-Here's the updated test file `src/concepts/Posting/PostingConcept.test.ts`, with modifications to check the "most recent to oldest" order for `_getPostsByAuthor`:
+# file: src/concepts/Posting/PostingConcept.test.ts
 
 ```typescript
 import { assertEquals } from "jsr:@std/assert";
@@ -287,11 +282,11 @@ Deno.test("Posting Concept Tests", async (t) => {
   });
 
   await t.step(
-    "Scenario: Multiple users and multiple posts, using queries including order",
-    async () => { // Changed the step description
-      console.log("\n--- Scenario: Multiple Users and Posts (with order check) ---");
+    "Scenario: Multiple users and multiple posts, using queries",
+    async () => {
+      console.log("\n--- Scenario: Multiple Users and Posts ---");
 
-      // Alice creates her first post
+      // Alice creates two posts
       const postA1Result = await postingConcept.create({
         user: userAlice,
         images: [image1],
@@ -299,13 +294,7 @@ Deno.test("Posting Concept Tests", async (t) => {
       });
       const postA1Id = (postA1Result as { post: ID }).post;
       console.log(`Alice creates post A1 (${postA1Id}): `, postA1Result);
-      if ("error" in postA1Result) throw new AssertionError({ message: "Post A1 creation failed" });
-      
-      // Introduce a slight delay to ensure distinct `createdAt` timestamps
-      // In a real system, timestamps are usually precise enough, but for robust testing, a delay helps.
-      await new Promise(resolve => setTimeout(resolve, 10));
 
-      // Alice creates her second post (more recent)
       const postA2Result = await postingConcept.create({
         user: userAlice,
         images: [image2, image3],
@@ -313,7 +302,6 @@ Deno.test("Posting Concept Tests", async (t) => {
       });
       const postA2Id = (postA2Result as { post: ID }).post;
       console.log(`Alice creates post A2 (${postA2Id}): `, postA2Result);
-      if ("error" in postA2Result) throw new AssertionError({ message: "Post A2 creation failed" });
 
       // Bob creates one post
       const postB1Result = await postingConcept.create({
@@ -323,9 +311,8 @@ Deno.test("Posting Concept Tests", async (t) => {
       });
       const postB1Id = (postB1Result as { post: ID }).post;
       console.log(`Bob creates post B1 (${postB1Id}): `, postB1Result);
-      if ("error" in postB1Result) throw new AssertionError({ message: "Post B1 creation failed" });
 
-      // Query for Alice's posts and check order
+      // Query for Alice's posts
       const alicePostsResult = await postingConcept._getPostsByAuthor({
         user: userAlice,
       });
@@ -340,17 +327,15 @@ Deno.test("Posting Concept Tests", async (t) => {
         2,
         "Alice should have 2 posts",
       );
-
-      // Verify the order: postA2 should be first (most recent), then postA1 (older)
       assertEquals(
-        alicePostsResult.posts?.[0]._id,
-        postA2Id,
-        "First post should be Alice's second post (most recent)",
+        alicePostsResult.posts?.some((p) => p._id === postA1Id),
+        true,
+        "Alice's posts should include A1",
       );
       assertEquals(
-        alicePostsResult.posts?.[1]._id,
-        postA1Id,
-        "Second post should be Alice's first post (oldest)",
+        alicePostsResult.posts?.some((p) => p._id === postA2Id),
+        true,
+        "Alice's posts should include A2",
       );
 
       // Query for Bob's posts
@@ -365,9 +350,9 @@ Deno.test("Posting Concept Tests", async (t) => {
       );
       assertEquals(bobPostsResult.posts?.length, 1, "Bob should have 1 post");
       assertEquals(
-        bobPostsResult.posts?.[0]._id,
-        postB1Id,
-        "Bob's posts should include B1 as the only item",
+        bobPostsResult.posts?.some((p) => p._id === postB1Id),
+        true,
+        "Bob's posts should include B1",
       );
 
       // Query for a user with no posts

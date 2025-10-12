@@ -2,6 +2,8 @@
 
 As per the comments on Assignment 2, I edited my delete and edit actions to also take in the user as a parameter. This is to prevent any user from being able to delete/edit any post that they want. Rather, the intended functionality is such that only the user that owns the post can edit the caption or delete the post.
 
+I also edited the state slightly to include the creation date with the Post. This was inspired by Context's implementation of my Commenting concept. I figured that keeping such a date would be handy for later on when displaying posts on a home page or someone's profile page, for which more recent posts generally show up at the top.
+
 # Other Issues
 
 My interpretation of captions is that they can be optional. One may argue that this contradicts the principle of my app, which is to facilitate more personal discussion among bird enthusiasts, I believe that it makes sense for a user to want their posts' pictures to essentially do the talking for itself. When using Context to generate an implementation, I would find that it was rather keen on checking that the caption was not empty, but I manually went ahead and removed these from the implementation and test cases.

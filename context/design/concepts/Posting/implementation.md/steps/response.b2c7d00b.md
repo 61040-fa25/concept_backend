@@ -1,3 +1,14 @@
+---
+timestamp: 'Sun Oct 12 2025 06:01:04 GMT-0400 (Eastern Daylight Time)'
+parent: '[[../20251012_060104.1df4650a.md]]'
+content_id: b2c7d00b20b5573b57575766d7b5065d1cf73f81df89a83d38b7ea1e7d6e0a80
+---
+
+# response:
+
+Here's the modified `PostingConcept.ts` file with the `_getPostsByAuthor` query updated to return posts from most recent to oldest:
+
+```typescript
 import { Collection, Db } from "npm:mongodb";
 import { Empty, ID } from "@utils/types.ts"; // Assuming @utils/types.ts provides ID and Empty
 import { freshID } from "@utils/database.ts"; // Assuming @utils/database.ts provides freshID
@@ -198,7 +209,7 @@ export default class PostingConcept {
   /**
    * query: _getPostsByAuthor (user: User): (posts: PostDocument[])
    *
-   * effects: Returns all posts authored by a specific user.
+   * effects: Returns all posts authored by a specific user, ordered from most recent to oldest.
    */
   async _getPostsByAuthor(
     { user }: { user: User },
@@ -217,3 +228,4 @@ export default class PostingConcept {
     }
   }
 }
+```

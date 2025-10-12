@@ -6,10 +6,11 @@
         * a caption String
         * a set of Images
         * an author User
+        * a creation date Date
 * **actions** 
     * create (user: User, images: Set<Image>, caption: String): (post: Post) 
         * *requires* user to exist, images cannot be empty
-        * *effects* creates a new post authored by the user with its content being the caption and images given
+        * *effects* creates a new post authored by the user timestamped as now with its content being the caption and images given
     * delete (user: User, post: Post):
         * *requires* user to exist, post to exist and belong to user
         * *effects* deletes the post for the author and their friends

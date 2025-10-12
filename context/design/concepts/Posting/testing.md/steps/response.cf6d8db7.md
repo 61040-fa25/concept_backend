@@ -1,10 +1,9 @@
-[@implementation](implementation.md)
+---
+timestamp: 'Sun Oct 12 2025 06:03:53 GMT-0400 (Eastern Daylight Time)'
+parent: '[[../20251012_060353.69a48ed7.md]]'
+content_id: cf6d8db76ace1d47e1ccbe5da5c135b6798cc3a9d61ca8caf09a16c8aa12e5f2
+---
 
-[@testing-concepts](../../background/testing-concepts.md)
-
-[@posting-testing](../../../src/concepts/Posting/PostingConcept.test.ts)
-
-# prompt: I have modified the query for getting all posts by an author to return the posts in order of most recent to oldest. Please edit the tests to check that this order is followed.
 # response:
 
 You're absolutely right to add a test for the sorting! It's a crucial detail for user experience.
