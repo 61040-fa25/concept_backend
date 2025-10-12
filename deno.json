@@ -2,5 +2,7 @@
     "imports": {
         "@concepts/": "./src/concepts/",
         "@utils/": "./src/utils/"
+    ,
+    "@std/assert": "https://deno.land/std@0.203.0/testing/asserts.ts"
     }
 }
