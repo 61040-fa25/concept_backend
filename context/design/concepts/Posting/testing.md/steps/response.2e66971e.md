@@ -1,0 +1,327 @@
+---
+timestamp: 'Sun Oct 12 2025 05:26:27 GMT-0400 (Eastern Daylight Time)'
+parent: '[[../20251012_052627.d8ee62dd.md]]'
+content_id: 2e66971e2b8bb31e8589d7060805f1407de0c9733b6467c97c7aec2314f62e3d
+---
+
+# response:
+
+```typescript
+// file: src/Posting/PostingConcept.test.ts
+
+import { assertEquals } from "jsr:@std/assert";
+import { testDb, freshID } from "@utils/database.ts"; // Assuming @utils/database.ts provides testDb and freshID
+import { ID } from "@utils/types.ts"; // Assuming @utils/types.ts provides ID
+
+import PostingConcept from "./PostingConcept.ts";
+
+Deno.test("Posting Concept Tests", async (t) => {
+  const [db, client] = await testDb();
+  const postingConcept = new PostingConcept(db);
+
+  const userAlice = "user:Alice" as ID;
+  const userBob = "user:Bob" as ID;
+  const image1 = "image:unsplash_abc1" as ID;
+  const image2 = "image:unsplash_xyz2" as ID;
+  const image3 = "image:unsplash_def3" as ID;
+
+  await t.step("Principle: Users can create, edit, and delete their posts", async () => {
+    console.log("\n--- Principle Test: Create, Edit, Delete ---");
+
+    // 1. User Alice creates a post
+    const createResult = await postingConcept.create({
+      user: userAlice,
+      images: [image1, image2],
+      caption: "My first post about nature!",
+    });
+    console.log(
+      `Alice creates post: user=${userAlice}, images=[${image1}, ${image2}], caption='My first post about nature!' -> `,
+      createResult,
+    );
+
+    assertEquals(createResult.error, undefined, "Create should not return an error");
+    const postId = (createResult as { post: ID }).post;
+    assertEquals(typeof postId, "string", "Created post ID should be a string");
+
+    // Verify post exists and has correct content
+    const getPostResult1 = await postingConcept._getPostById({ post: postId });
+    console.log(`Query post by ID ${postId}: `, getPostResult1);
+    assertEquals(getPostResult1.error, undefined, "Query should not return an error");
+    assertEquals(getPostResult1.postDetails?.author, userAlice, "Post author should be Alice");
+    assertEquals(getPostResult1.postDetails?.caption, "My first post about nature!", "Post caption mismatch");
+    assertEquals(getPostResult1.postDetails?.images.length, 2, "Post should have 2 images");
+
+    // 2. User Alice edits the post's caption
+    const newCaption = "My updated post about beautiful nature!";
+    const editResult = await postingConcept.edit({
+      user: userAlice,
+      post: postId,
+      new_caption: newCaption,
+    });
+    console.log(
+      `Alice edits post ${postId}: user=${userAlice}, new_caption='${newCaption}' -> `,
+      editResult,
+    );
+    assertEquals(editResult.error, undefined, "Edit should not return an error");
+
+    // Verify post's caption is updated
+    const getPostResult2 = await postingConcept._getPostById({ post: postId });
+    console.log(`Query post by ID ${postId} after edit: `, getPostResult2);
+    assertEquals(getPostResult2.error, undefined, "Query after edit should not return an error");
+    assertEquals(getPostResult2.postDetails?.caption, newCaption, "Post caption was not updated");
+
+    // 3. User Alice deletes the post
+    const deleteResult = await postingConcept.delete({
+      user: userAlice,
+      post: postId,
+    });
+    console.log(`Alice deletes post ${postId}: user=${userAlice} -> `, deleteResult);
+    assertEquals(deleteResult.error, undefined, "Delete should not return an error");
+
+    // Verify post no longer exists
+    const getPostResult3 = await postingConcept._getPostById({ post: postId });
+    console.log(`Query post by ID ${postId} after delete: `, getPostResult3);
+    assertEquals(getPostResult3.error, `Post with ID '${postId}' not found.`, "Post should no longer exist");
+  });
+
+  await t.step("Scenario: Invalid 'create' calls", async () => {
+    console.log("\n--- Scenario: Invalid Create Calls ---");
+
+    // Case 1: Create post with no images
+    const createNoImagesResult = await postingConcept.create({
+      user: userAlice,
+      images: [],
+      caption: "Post with no images",
+    });
+    console.log(
+      `Alice tries to create post with no images: user=${userAlice}, images=[], caption='Post with no images' -> `,
+      createNoImagesResult,
+    );
+    assertEquals(
+      createNoImagesResult.error,
+      "Images cannot be empty for a post.",
+      "Creating with no images should return an error",
+    );
+
+    // Case 2: Create post with empty caption
+    const createEmptyCaptionResult = await postingConcept.create({
+      user: userAlice,
+      images: [image1],
+      caption: "   ", // empty string
+    });
+    console.log(
+      `Alice tries to create post with empty caption: user=${userAlice}, images=[${image1}], caption='   ' -> `,
+      createEmptyCaptionResult,
+    );
+    assertEquals(
+      createEmptyCaptionResult.error,
+      "Caption cannot be empty.",
+      "Creating with empty caption should return an error",
+    );
+
+    // Case 3: Create post with no user ID
+    const createNoUserResult = await postingConcept.create({
+      user: "" as ID, // Invalid user ID
+      images: [image1],
+      caption: "Post by no user",
+    });
+    console.log(
+      `Tries to create post with no user: user='', images=[${image1}], caption='Post by no user' -> `,
+      createNoUserResult,
+    );
+    assertEquals(
+      createNoUserResult.error,
+      "User ID must be provided.",
+      "Creating with no user ID should return an error",
+    );
+  });
+
+  await t.step("Scenario: Unauthorized 'delete' and 'edit' attempts", async () => {
+    console.log("\n--- Scenario: Unauthorized Actions ---");
+
+    // Alice creates a post for testing unauthorized actions
+    const createResult = await postingConcept.create({
+      user: userAlice,
+      images: [image1],
+      caption: "Alice's test post",
+    });
+    const alicePostId = (createResult as { post: ID }).post;
+    console.log(`Alice creates test post ${alicePostId}: `, createResult);
+    assertEquals(createResult.error, undefined, "Create should succeed for setup");
+
+    // Case 1: Bob tries to delete Alice's post
+    const bobDeleteResult = await postingConcept.delete({
+      user: userBob,
+      post: alicePostId,
+    });
+    console.log(
+      `Bob tries to delete Alice's post ${alicePostId}: user=${userBob} -> `,
+      bobDeleteResult,
+    );
+    assertEquals(
+      bobDeleteResult.error,
+      "Unauthorized: User is not the author of this post.",
+      "Bob should not be able to delete Alice's post",
+    );
+
+    // Case 2: Bob tries to edit Alice's post
+    const bobEditResult = await postingConcept.edit({
+      user: userBob,
+      post: alicePostId,
+      new_caption: "Bob tries to change caption",
+    });
+    console.log(
+      `Bob tries to edit Alice's post ${alicePostId}: user=${userBob}, new_caption='Bob tries to change caption' -> `,
+      bobEditResult,
+    );
+    assertEquals(
+      bobEditResult.error,
+      "Unauthorized: User is not the author of this post.",
+      "Bob should not be able to edit Alice's post",
+    );
+
+    // Clean up Alice's post
+    await postingConcept.delete({ user: userAlice, post: alicePostId });
+  });
+
+  await t.step("Scenario: Actions on non-existent posts", async () => {
+    console.log("\n--- Scenario: Actions on Non-existent Posts ---");
+
+    const nonExistentPostId = freshID();
+
+    // Case 1: Delete a non-existent post
+    const deleteNonExistentResult = await postingConcept.delete({
+      user: userAlice,
+      post: nonExistentPostId,
+    });
+    console.log(
+      `Alice tries to delete non-existent post ${nonExistentPostId}: -> `,
+      deleteNonExistentResult,
+    );
+    assertEquals(
+      deleteNonExistentResult.error,
+      `Post with ID '${nonExistentPostId}' not found.`,
+      "Deleting non-existent post should return an error",
+    );
+
+    // Case 2: Edit a non-existent post
+    const editNonExistentResult = await postingConcept.edit({
+      user: userAlice,
+      post: nonExistentPostId,
+      new_caption: "Attempt to edit non-existent post",
+    });
+    console.log(
+      `Alice tries to edit non-existent post ${nonExistentPostId}: -> `,
+      editNonExistentResult,
+    );
+    assertEquals(
+      editNonExistentResult.error,
+      `Post with ID '${nonExistentPostId}' not found.`,
+      "Editing non-existent post should return an error",
+    );
+  });
+
+  await t.step("Scenario: Multiple users and multiple posts, using queries", async () => {
+    console.log("\n--- Scenario: Multiple Users and Posts ---");
+
+    // Alice creates two posts
+    const postA1Result = await postingConcept.create({
+      user: userAlice,
+      images: [image1],
+      caption: "Alice's first post",
+    });
+    const postA1Id = (postA1Result as { post: ID }).post;
+    console.log(`Alice creates post A1 (${postA1Id}): `, postA1Result);
+
+    const postA2Result = await postingConcept.create({
+      user: userAlice,
+      images: [image2, image3],
+      caption: "Alice's second post",
+    });
+    const postA2Id = (postA2Result as { post: ID }).post;
+    console.log(`Alice creates post A2 (${postA2Id}): `, postA2Result);
+
+    // Bob creates one post
+    const postB1Result = await postingConcept.create({
+      user: userBob,
+      images: [image3],
+      caption: "Bob's only post",
+    });
+    const postB1Id = (postB1Result as { post: ID }).post;
+    console.log(`Bob creates post B1 (${postB1Id}): `, postB1Result);
+
+    // Query for Alice's posts
+    const alicePostsResult = await postingConcept._getPostsByAuthor({ user: userAlice });
+    console.log(`Query posts by Alice (${userAlice}): `, alicePostsResult);
+    assertEquals(alicePostsResult.error, undefined, "Query for Alice's posts should succeed");
+    assertEquals(alicePostsResult.posts?.length, 2, "Alice should have 2 posts");
+    assertEquals(
+      alicePostsResult.posts?.some((p) => p._id === postA1Id),
+      true,
+      "Alice's posts should include A1",
+    );
+    assertEquals(
+      alicePostsResult.posts?.some((p) => p._id === postA2Id),
+      true,
+      "Alice's posts should include A2",
+    );
+
+    // Query for Bob's posts
+    const bobPostsResult = await postingConcept._getPostsByAuthor({ user: userBob });
+    console.log(`Query posts by Bob (${userBob}): `, bobPostsResult);
+    assertEquals(bobPostsResult.error, undefined, "Query for Bob's posts should succeed");
+    assertEquals(bobPostsResult.posts?.length, 1, "Bob should have 1 post");
+    assertEquals(
+      bobPostsResult.posts?.some((p) => p._id === postB1Id),
+      true,
+      "Bob's posts should include B1",
+    );
+
+    // Query for a user with no posts
+    const userCharlie = "user:Charlie" as ID;
+    const charliePostsResult = await postingConcept._getPostsByAuthor({ user: userCharlie });
+    console.log(`Query posts by Charlie (${userCharlie}): `, charliePostsResult);
+    assertEquals(charliePostsResult.error, undefined, "Query for Charlie's posts should succeed");
+    assertEquals(charliePostsResult.posts?.length, 0, "Charlie should have 0 posts");
+
+    // Clean up
+    await postingConcept.delete({ user: userAlice, post: postA1Id });
+    await postingConcept.delete({ user: userAlice, post: postA2Id });
+    await postingConcept.delete({ user: userBob, post: postB1Id });
+  });
+
+  await client.close();
+});
+```
+
+```trace
+--- Principle Test: Create, Edit, Delete ---
+Alice creates post: user=user:Alice, images=[image:unsplash_abc1, image:unsplash_xyz2], caption='My first post about nature!' -> { post: "id:..." }
+Query post by ID id:...: { postDetails: { _id: "id:...", caption: "My first post about nature!", images: [ "image:unsplash_abc1", "image:unsplash_xyz2" ], author: "user:Alice" } }
+Alice edits post id:...: user=user:Alice, new_caption='My updated post about beautiful nature!' -> {}
+Query post by ID id:... after edit: { postDetails: { _id: "id:...", caption: "My updated post about beautiful nature!", images: [ "image:unsplash_abc1", "image:unsplash_xyz2" ], author: "user:Alice" } }
+Alice deletes post id:...: user=user:Alice -> {}
+Query post by ID id:... after delete: { error: "Post with ID 'id:...' not found." }
+
+--- Scenario: Invalid Create Calls ---
+Alice tries to create post with no images: user=user:Alice, images=[], caption='Post with no images' -> { error: "Images cannot be empty for a post." }
+Alice tries to create post with empty caption: user=user:Alice, images=[image:unsplash_abc1], caption='   ' -> { error: "Caption cannot be empty." }
+Tries to create post with no user: user='', images=[image:unsplash_abc1], caption='Post by no user' -> { error: "User ID must be provided." }
+
+--- Scenario: Unauthorized Actions ---
+Alice creates test post id:...: { post: "id:..." }
+Bob tries to delete Alice's post id:...: user=user:Bob -> { error: "Unauthorized: User is not the author of this post." }
+Bob tries to edit Alice's post id:...: user=user:Bob, new_caption='Bob tries to change caption' -> { error: "Unauthorized: User is not the author of this post." }
+
+--- Scenario: Actions on Non-existent Posts ---
+Alice tries to delete non-existent post id:...: -> { error: "Post with ID 'id:...' not found." }
+Alice tries to edit non-existent post id:...: -> { error: "Post with ID 'id:...' not found." }
+
+--- Scenario: Multiple Users and Posts ---
+Alice creates post A1 (id:...): { post: "id:..." }
+Alice creates post A2 (id:...): { post: "id:..." }
+Bob creates post B1 (id:...): { post: "id:..." }
+Query posts by Alice (user:Alice): { posts: [ { _id: "id:...", caption: "Alice's first post", images: [ "image:unsplash_abc1" ], author: "user:Alice" }, { _id: "id:...", caption: "Alice's second post", images: [ "image:unsplash_xyz2", "image:unsplash_def3" ], author: "user:Alice" } ] }
+Query posts by Bob (user:Bob): { posts: [ { _id: "id:...", caption: "Bob's only post", images: [ "image:unsplash_def3" ], author: "user:Bob" } ] }
+Query posts by Charlie (user:Charlie): { posts: [] }
+```
