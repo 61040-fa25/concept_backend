@@ -1,0 +1,219 @@
+[@concept-design-overview](../../background/concept-design-overview.md)
+
+[@concept-specifications](../../background/concept-specifications.md)
+
+[@implementing-concepts](../../background/implementing-concepts.md)
+
+[@concept-spec](SessionLogging.md)
+
+# implement: SessionLogging
+
+# response:
+
+```typescript
+// file: src/SessionLogging/SessionLoggingConcept.ts
+
+import { Collection, Db } from "npm:mongodb";
+import { ID, Empty } from "../../utils/types.ts"; // Assuming utils is at a higher level
+import { freshID } from "../../utils/database.ts"; // Assuming utils is at a higher level
+
+// Declare collection prefix, use concept name
+const PREFIX = "SessionLogging" + ".";
+
+// Generic types of this concept as per the concept definition
+type User = ID;
+type Image = ID;
+type Session = ID; // The ID for a session instance
+
+/**
+ * Represents the state of a single Session in the SessionLogging concept.
+ *
+ * State description:
+ * a set of Sessions with
+ *   an owner User
+ *   a set of Images
+ *   an active Flag
+ */
+interface SessionState {
+  _id: Session;
+  owner: User;
+  images: Image[];
+  active: boolean; // Corresponds to the 'active Flag' in the specification
+}
+
+/**
+ * Concept: SessionLogging [User, Image]
+ *
+ * purpose: capture photo records of a user's activity during a trip session
+ *
+ * principle: users can start sessions during which they can log image entries.
+ * Entries for a session cannot be recorded once the session is ended. Recorded
+ * entries will remain associated with the session even after it is ended.
+ */
+export default class SessionLoggingConcept {
+  private sessions: Collection<SessionState>;
+
+  /**
+   * Initializes the SessionLoggingConcept with a MongoDB database instance.
+   *
+   * @param db The MongoDB database connection.
+   */
+  constructor(private readonly db: Db) {
+    // Map the "set of Sessions" from the state declaration to a MongoDB collection.
+    this.sessions = this.db.collection(PREFIX + "sessions");
+  }
+
+  /**
+   * startSession (user: User): (session: Session)
+   *
+   * requires: user to exist (as a valid ID in the system context)
+   * effects: creates a new session (active = true) under the specified user,
+   *          returning the ID of the new session.
+   */
+  async startSession(input: { user: User }): Promise<{ session: Session } | { error: string }> {
+    const { user } = input;
+
+    // As per concept independence, this concept assumes 'user' is a valid ID.
+    // External validation (e.g., from a UserAuthentication concept) would be
+    // handled by a synchronization rule.
+
+    const newSessionId = freshID();
+    const newSession: SessionState = {
+      _id: newSessionId,
+      owner: user,
+      images: [],
+      active: true,
+    };
+
+    try {
+      await this.sessions.insertOne(newSession);
+      return { session: newSessionId };
+    } catch (e) {
+      console.error(`SessionLogging: Failed to start session for user ${user}:`, e);
+      return { error: "Failed to start session due to a database error." };
+    }
+  }
+
+  /**
+   * addEntry (user: User, session: Session, image: Image)
+   *
+   * requires: user to exist, session must exist, image must exist (as a valid ID),
+   *           session must be active, and session must belong to the user.
+   *           The image must not already be associated with the session.
+   * effects: adds the specified image to the set of images associated with the session.
+   */
+  async addEntry(input: { user: User; session: Session; image: Image }): Promise<Empty | { error: string }> {
+    const { user, session, image } = input;
+
+    // Precondition: Session must exist, be active, and belong to the user.
+    const existingSession = await this.sessions.findOne({ _id: session });
+
+    if (!existingSession) {
+      return { error: `SessionLogging: Session with ID ${session} not found.` };
+    }
+    if (existingSession.owner !== user) {
+      return { error: `SessionLogging: User ${user} is not the owner of session ${session}.` };
+    }
+    if (!existingSession.active) {
+      return { error: `SessionLogging: Session with ID ${session} is not active. Cannot add entries.` };
+    }
+    // Precondition: Image must not already be in the session
+    if (existingSession.images.includes(image)) {
+        return { error: `SessionLogging: Image ${image} is already an entry in session ${session}.` };
+    }
+
+    // Similar to 'user', 'image' is assumed to be a valid ID here.
+
+    try {
+      // Effects: add image to the set of images associated with the session
+      await this.sessions.updateOne(
+        { _id: session },
+        { $push: { images: image } }
+      );
+      return {};
+    } catch (e) {
+      console.error(`SessionLogging: Failed to add entry ${image} to session ${session}:`, e);
+      return { error: "Failed to add entry due to a database error." };
+    }
+  }
+
+  /**
+   * endSession (user: User, session: Session)
+   *
+   * requires: user to exist, session must exist, and session must belong to the user.
+   * effects: sets the 'active' flag of the specified session to false.
+   *          If the session is already inactive, no change occurs (idempotent).
+   */
+  async endSession(input: { user: User; session: Session }): Promise<Empty | { error: string }> {
+    const { user, session } = input;
+
+    // Precondition: Session must exist and belong to the user.
+    const existingSession = await this.sessions.findOne({ _id: session });
+
+    if (!existingSession) {
+      return { error: `SessionLogging: Session with ID ${session} not found.` };
+    }
+    if (existingSession.owner !== user) {
+      return { error: `SessionLogging: User ${user} is not the owner of session ${session}.` };
+    }
+
+    // Effects: end the session (active = false)
+    // If it's already inactive, it's an idempotent operation.
+    if (!existingSession.active) {
+        return {}; // Session is already inactive, no action needed.
+    }
+
+    try {
+      await this.sessions.updateOne(
+        { _id: session },
+        { $set: { active: false } }
+      );
+      return {};
+    } catch (e) {
+      console.error(`SessionLogging: Failed to end session ${session}:`, e);
+      return { error: "Failed to end session due to a database error." };
+    }
+  }
+
+  // --- Concept Queries (prefixed with an underscore) ---
+
+  /**
+   * _getSessionsByUser (user: User): (sessions: Session[])
+   * effects: Returns a list of IDs for all sessions owned by the given user.
+   */
+  async _getSessionsByUser(input: { user: User }): Promise<Session[]> {
+    const { user } = input;
+    const userSessions = await this.sessions.find({ owner: user }).toArray();
+    return userSessions.map(s => s._id);
+  }
+
+  /**
+   * _getSessionDetails (session: Session): (details: SessionState | null)
+   * effects: Returns the full details of a specific session, or null if not found.
+   */
+  async _getSessionDetails(input: { session: Session }): Promise<SessionState | null> {
+    const { session } = input;
+    return this.sessions.findOne({ _id: session });
+  }
+
+  /**
+   * _getEntriesInSession (session: Session): (images: Image[])
+   * effects: Returns the list of image entry IDs for a given session.
+   */
+  async _getEntriesInSession(input: { session: Session }): Promise<Image[]> {
+    const { session } = input;
+    const foundSession = await this.sessions.findOne({ _id: session });
+    return foundSession ? foundSession.images : [];
+  }
+
+  /**
+   * _isSessionActive (session: Session): (active: boolean)
+   * effects: Returns true if the session is active, false otherwise or if not found.
+   */
+  async _isSessionActive(input: { session: Session }): Promise<boolean> {
+    const { session } = input;
+    const foundSession = await this.sessions.findOne({ _id: session });
+    return foundSession ? foundSession.active : false;
+  }
+}
+```
