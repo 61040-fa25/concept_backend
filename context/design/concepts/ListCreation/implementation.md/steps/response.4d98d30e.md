@@ -1,3 +1,14 @@
+---
+timestamp: 'Sun Oct 12 2025 20:36:50 GMT-0400 (Eastern Daylight Time)'
+parent: '[[..\20251012_203650.ae2949e1.md]]'
+content_id: 4d98d30eabc90340d2022a35d7fd55dc97d00159010694168457fe45b8936210
+---
+
+# response:
+
+```typescript
+// file: src/ListCreation/ListCreationConcept.ts
+
 import { Collection, Db } from "npm:mongodb";
 import { Empty, ID } from "@utils/types.ts"; // Assuming @utils/types.ts provides ID and Empty
 import { freshID } from "@utils/database.ts"; // Assuming @utils/database.ts provides freshID
@@ -69,19 +80,11 @@ export default class ListCreationConcept {
    * @requires no List with listName exists in set of Lists with owner = listOwner
    * @effects new List with title = listName, owner = listOwner, itemCount = 0, and an empty set of ListItems is returned and added to set of Lists
    */
-  async newList(
-    { listName, listOwner }: { listName: string; listOwner: User },
-  ): Promise<{ list: List } | { error: string }> {
+  async newList({ listName, listOwner }: { listName: string; listOwner: User }): Promise<{ list: List } | { error: string }> {
     // Requires: no List with listName exists in set of Lists with owner = listOwner
-    const existingList = await this.lists.findOne({
-      title: listName,
-      owner: listOwner,
-    });
+    const existingList = await this.lists.findOne({ title: listName, owner: listOwner });
     if (existingList) {
-      return {
-        error:
-          `List with name '${listName}' already exists for user '${listOwner}'.`,
-      };
+      return { error: `List with name '${listName}' already exists for user '${listOwner}'.` };
     }
 
     const newListId = freshID();
@@ -115,9 +118,7 @@ export default class ListCreationConcept {
    * @effects a new listItem is created with task = task, taskStatus = incomplete, and orderNumber = itemCount+1.
    *          itemCount is incremented. The new listItem is returned and added to list's set of listItems.
    */
-  async addTask(
-    { list: listId, task, adder }: { list: List; task: Task; adder: User },
-  ): Promise<{ listItem: ListItem } | { error: string }> {
+  async addTask({ list: listId, task, adder }: { list: List; task: Task; adder: User }): Promise<{ listItem: ListItem } | { error: string }> {
     const targetList = await this.lists.findOne({ _id: listId });
 
     if (!targetList) {
@@ -130,9 +131,7 @@ export default class ListCreationConcept {
     }
 
     // Requires: listItem containing task is not already in list
-    const existingListItem = targetList.listItems.find((item) =>
-      item.task === task
-    );
+    const existingListItem = targetList.listItems.find((item) => item.task === task);
     if (existingListItem) {
       return { error: `Task '${task}' is already in list '${listId}'.` };
     }
@@ -172,9 +171,7 @@ export default class ListCreationConcept {
    * @effects the listItem containing task is removed from list's set of listItems.
    *          orderNumbers of subsequent items are decremented. itemCount is decremented.
    */
-  async deleteTask(
-    { list: listId, task, deleter }: { list: List; task: Task; deleter: User },
-  ): Promise<Empty | { error: string }> {
+  async deleteTask({ list: listId, task, deleter }: { list: List; task: Task; deleter: User }): Promise<Empty | { error: string }> {
     const targetList = await this.lists.findOne({ _id: listId });
 
     if (!targetList) {
@@ -183,15 +180,11 @@ export default class ListCreationConcept {
 
     // Requires: deleter = owner of list
     if (targetList.owner !== deleter) {
-      return {
-        error: `User '${deleter}' is not the owner of list '${listId}'.`,
-      };
+      return { error: `User '${deleter}' is not the owner of list '${listId}'.` };
     }
 
     // Requires: a listItem containing task is in list's set of listItems
-    const listItemIndex = targetList.listItems.findIndex((item) =>
-      item.task === task
-    );
+    const listItemIndex = targetList.listItems.findIndex((item) => item.task === task);
     if (listItemIndex === -1) {
       return { error: `Task '${task}' not found in list '${listId}'.` };
     }
@@ -238,14 +231,7 @@ export default class ListCreationConcept {
    * @effects task's ListItem gets orderNumber set to newOrder and the ListItems with
    *          orderNumbers between the old value and new value are offset by one accordingly.
    */
-  async assignOrder(
-    { list: listId, task, newOrder, assigner }: {
-      list: List;
-      task: Task;
-      newOrder: number;
-      assigner: User;
-    },
-  ): Promise<Empty | { error: string }> {
+  async assignOrder({ list: listId, task, newOrder, assigner }: { list: List; task: Task; newOrder: number; assigner: User }): Promise<Empty | { error: string }> {
     const targetList = await this.lists.findOne({ _id: listId });
 
     if (!targetList) {
@@ -254,14 +240,10 @@ export default class ListCreationConcept {
 
     // Requires: assigner = owner of list
     if (targetList.owner !== assigner) {
-      return {
-        error: `User '${assigner}' is not the owner of list '${listId}'.`,
-      };
+      return { error: `User '${assigner}' is not the owner of list '${listId}'.` };
     }
 
-    const listItemIndex = targetList.listItems.findIndex((item) =>
-      item.task === task
-    );
+    const listItemIndex = targetList.listItems.findIndex((item) => item.task === task);
     if (listItemIndex === -1) {
       return { error: `Task '${task}' not found in list '${listId}'.` };
     }
@@ -270,10 +252,7 @@ export default class ListCreationConcept {
 
     // Validate newOrder against the current itemCount
     if (newOrder < 1 || newOrder > targetList.itemCount) {
-      return {
-        error:
-          `New order '${newOrder}' is out of bounds (1 to ${targetList.itemCount}).`,
-      };
+      return { error: `New order '${newOrder}' is out of bounds (1 to ${targetList.itemCount}).` };
     }
 
     if (newOrder === oldOrder) {
@@ -337,9 +316,7 @@ export default class ListCreationConcept {
    * @param {List} params.listId - The ID of the list to retrieve.
    * @returns {Promise<ListDocument | null>} - The ListDocument if found, otherwise null.
    */
-  async _getListById(
-    { listId }: { listId: List },
-  ): Promise<ListDocument | null> {
+  async _getListById({ listId }: { listId: List }): Promise<ListDocument | null> {
     return this.lists.findOne({ _id: listId });
   }
 
@@ -351,9 +328,7 @@ export default class ListCreationConcept {
    * @param {User} params.ownerId - The ID of the user whose lists to retrieve.
    * @returns {Promise<ListDocument[]>} - An array of ListDocuments owned by the user.
    */
-  async _getListsByOwner(
-    { ownerId }: { ownerId: User },
-  ): Promise<ListDocument[]> {
+  async _getListsByOwner({ ownerId }: { ownerId: User }): Promise<ListDocument[]> {
     return this.lists.find({ owner: ownerId }).toArray();
   }
 
@@ -365,9 +340,7 @@ export default class ListCreationConcept {
    * @param {List} params.listId - The ID of the list to retrieve tasks from.
    * @returns {Promise<ListItem[] | null>} - An array of ListItems sorted by order, or null if the list is not found.
    */
-  async _getTasksInList(
-    { listId }: { listId: List },
-  ): Promise<ListItem[] | null> {
+  async _getTasksInList({ listId }: { listId: List }): Promise<ListItem[] | null> {
     const list = await this.lists.findOne({ _id: listId });
     if (!list) {
       return null;
@@ -377,3 +350,4 @@ export default class ListCreationConcept {
     return [...list.listItems].sort((a, b) => a.orderNumber - b.orderNumber);
   }
 }
+```

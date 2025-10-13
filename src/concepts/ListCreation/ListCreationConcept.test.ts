@@ -1,458 +1,502 @@
-import { assertEquals, assertExists, assertNotEquals } from "jsr:@std/assert";
-import { testDb } from "@utils/database.ts";
-import ListCreationConcept from "@concepts/ListCreation/ListCreationConcept.ts";
-import { ID } from "@utils/types.ts";
+import {
+  assertArrayIncludes,
+  assertEquals,
+  assertExists,
+  assertNotEquals,
+} from "jsr:@std/assert";
+import { testDb } from "@utils/database.ts"; // Assuming @utils/database.ts provides testDb
+import { Empty, ID } from "@utils/types.ts"; // Assuming @utils/types.ts provides ID and Empty
+import ListCreationConcept from "./ListCreationConcept.ts";
+
+// Define some mock IDs for testing
+const userAlice = "user:Alice" as ID;
+const userBob = "user:Bob" as ID;
+const userChris = "user:Chris" as ID;
+const taskA = "task:Alpha" as ID;
+const taskB = "task:Beta" as ID;
+const taskC = "task:Gamma" as ID;
+const taskD = "task:Delta" as ID;
 
 Deno.test("ListCreationConcept", async (t) => {
   const [db, client] = await testDb();
   const concept = new ListCreationConcept(db);
 
-  // Mock Task IDs (external to this concept)
-  const taskA = "task:Alpha" as ID;
-  const taskB = "task:Beta" as ID;
-  const taskC = "task:Gamma" as ID;
-  const taskD = "task:Delta" as ID;
-  const taskE = "task:Epsilon" as ID;
-
-  await t.step("newList: should create a new list successfully", async () => {
-    const listName = "My First List";
-    const result = await concept.newList({ listName });
-    assertExists(result);
-    assertNotEquals(
-      (result as { error: string }).error,
-      `List with name '${listName}' already exists.`,
-      "Should not return an error for a new list.",
-    );
+  await t.step("should successfully create a new list", async () => {
+    const result = await concept.newList({
+      listName: "My To-Do List",
+      listOwner: userAlice,
+    });
     assertExists(
       (result as { list: ID }).list,
-      "Should return the ID of the new list.",
+      "Should return a list ID on success",
     );
-
     const listId = (result as { list: ID }).list;
-    const retrievedList = await concept._getListById({ listId });
-    assertExists(retrievedList);
-    assertEquals(retrievedList.title, listName);
-    assertEquals(retrievedList.itemCount, 0);
-    assertEquals(retrievedList.listItems.length, 0);
 
-    const allLists = await concept._getLists();
-    assertEquals(allLists.length, 1);
+    const createdList = await concept._getListById({ listId });
+    assertExists(createdList, "Created list should be retrievable");
+    assertEquals(createdList?.title, "My To-Do List");
+    assertEquals(createdList?.owner, userAlice);
+    assertEquals(createdList?.itemCount, 0);
+    assertEquals(createdList?.listItems.length, 0);
   });
 
   await t.step(
-    "newList: should not create a list with a duplicate name",
+    "should prevent creating a list with the same name for the same owner",
     async () => {
-      const listName = "My First List"; // Use the same name as before
-      const result = await concept.newList({ listName });
-      assertExists(result);
+      await concept.newList({
+        listName: "Shopping List",
+        listOwner: userAlice,
+      }); // First creation
+      const result = await concept.newList({
+        listName: "Shopping List",
+        listOwner: userAlice,
+      }); // Attempt duplicate
+
       assertExists(
         (result as { error: string }).error,
-        "Should return an error for a duplicate list name.",
+        "Should return an error for duplicate list name/owner",
       );
       assertEquals(
         (result as { error: string }).error,
-        `List with name '${listName}' already exists.`,
+        "List with name 'Shopping List' already exists for user 'user:Alice'.",
       );
-
-      const allLists = await concept._getLists();
-      assertEquals(allLists.length, 1, "No new list should be created.");
     },
   );
 
-  let listId: ID;
-  await t.step("Setup: Create a second list for subsequent tests", async () => {
-    const listName = "My Second List";
-    const result = await concept.newList({ listName });
-    assertExists(result);
-    listId = (result as { list: ID }).list;
-    assertExists(listId);
-    const allLists = await concept._getLists();
-    assertEquals(allLists.length, 2);
-  });
+  await t.step(
+    "should allow creating a list with the same name for a different owner",
+    async () => {
+      const result = await concept.newList({
+        listName: "Shopping List",
+        listOwner: userBob,
+      }); // Alice already has "Shopping List"
+      assertExists(
+        (result as { list: ID }).list,
+        "Should succeed for a different owner",
+      );
+
+      const createdList = await concept._getListById({
+        listId: (result as { list: ID }).list,
+      });
+      assertExists(createdList, "List for Bob should be retrievable");
+      assertEquals(createdList?.owner, userBob);
+    },
+  );
+
+  let aliceListId: ID;
 
   await t.step(
-    "addTask: should add a task to a list successfully",
+    "should add tasks to a list, incrementing itemCount and assigning default order",
     async () => {
-      const resultA = await concept.addTask({ list: listId, task: taskA });
-      assertExists(resultA);
+      const listResult = await concept.newList({
+        listName: "Alice's Daily Tasks",
+        listOwner: userAlice,
+      });
+      aliceListId = (listResult as { list: ID }).list;
+
+      // Add first task
+      const addTask1Result = await concept.addTask({
+        list: aliceListId,
+        task: taskA,
+        adder: userAlice,
+      });
       assertExists(
-        (resultA as { listItem: any }).listItem,
-        "Should return the new list item.",
+        (addTask1Result as { listItem: any }).listItem,
+        "Should return a listItem on success",
       );
-      assertEquals((resultA as { listItem: any }).listItem.task, taskA);
-      assertEquals((resultA as { listItem: any }).listItem.orderNumber, 1);
+      assertEquals((addTask1Result as { listItem: any }).listItem.task, taskA);
       assertEquals(
-        (resultA as { listItem: any }).listItem.taskStatus,
+        (addTask1Result as { listItem: any }).listItem.orderNumber,
+        1,
+      );
+      assertEquals(
+        (addTask1Result as { listItem: any }).listItem.taskStatus,
         "incomplete",
       );
 
-      const resultB = await concept.addTask({ list: listId, task: taskB });
-      assertExists(resultB);
-      assertExists(
-        (resultB as { listItem: any }).listItem,
-        "Should return the new list item.",
-      );
-      assertEquals((resultB as { listItem: any }).listItem.task, taskB);
-      assertEquals((resultB as { listItem: any }).listItem.orderNumber, 2);
+      let updatedList = await concept._getListById({ listId: aliceListId });
+      assertEquals(updatedList?.itemCount, 1);
+      assertEquals(updatedList?.listItems.length, 1);
+      assertEquals(updatedList?.listItems[0].task, taskA);
+      assertEquals(updatedList?.listItems[0].orderNumber, 1);
 
-      const retrievedList = await concept._getListById({ listId });
-      assertExists(retrievedList);
-      assertEquals(retrievedList.itemCount, 2);
-      assertEquals(retrievedList.listItems.length, 2);
-      assertEquals(retrievedList.listItems[0].task, taskA);
-      assertEquals(retrievedList.listItems[0].orderNumber, 1);
-      assertEquals(retrievedList.listItems[1].task, taskB);
-      assertEquals(retrievedList.listItems[1].orderNumber, 2);
-
-      const tasksInList = await concept._getTasksInList({ listId });
-      assertExists(tasksInList);
-      assertEquals(tasksInList.length, 2);
-      assertEquals(tasksInList[0].task, taskA);
-      assertEquals(tasksInList[1].task, taskB);
-    },
-  );
-
-  await t.step(
-    "addTask: should not add a duplicate task to the same list",
-    async () => {
-      const result = await concept.addTask({ list: listId, task: taskA });
-      assertExists(result);
-      assertExists(
-        (result as { error: string }).error,
-        "Should return an error for adding a duplicate task.",
-      );
-      assertEquals(
-        (result as { error: string }).error,
-        `Task '${taskA}' is already in list '${listId}'.`,
-      );
-
-      const retrievedList = await concept._getListById({ listId });
-      assertExists(retrievedList);
-      assertEquals(retrievedList.itemCount, 2, "Item count should not change.");
-    },
-  );
-
-  await t.step(
-    "addTask: should return error if list does not exist",
-    async () => {
-      const nonExistentList = "list:NonExistent" as ID;
-      const result = await concept.addTask({
-        list: nonExistentList,
-        task: taskC,
+      // Add second task
+      const addTask2Result = await concept.addTask({
+        list: aliceListId,
+        task: taskB,
+        adder: userAlice,
       });
-      assertExists(result);
-      assertExists(
-        (result as { error: string }).error,
-        "Should return an error for a non-existent list.",
-      );
+      assertExists((addTask2Result as { listItem: any }).listItem);
+      assertEquals((addTask2Result as { listItem: any }).listItem.task, taskB);
       assertEquals(
-        (result as { error: string }).error,
-        `List with ID '${nonExistentList}' not found.`,
-      );
-    },
-  );
-
-  await t.step(
-    "deleteTask: should delete an existing task and reorder others",
-    async () => {
-      await concept.addTask({ list: listId, task: taskC }); // Add taskC at order 3
-      await concept.addTask({ list: listId, task: taskD }); // Add taskD at order 4
-
-      let retrievedList = await concept._getListById({ listId });
-      assertEquals(retrievedList?.itemCount, 4);
-      assertEquals(retrievedList?.listItems.map((item) => item.orderNumber), [
-        1,
+        (addTask2Result as { listItem: any }).listItem.orderNumber,
         2,
-        3,
-        4,
-      ]);
-
-      const result = await concept.deleteTask({ list: listId, task: taskB }); // taskB was order 2
-      assertEquals(result, {});
-
-      retrievedList = await concept._getListById({ listId });
-      assertExists(retrievedList);
-      assertEquals(retrievedList.itemCount, 3);
-      assertEquals(retrievedList.listItems.length, 3);
-
-      const tasks = retrievedList.listItems.sort((a, b) =>
-        a.orderNumber - b.orderNumber
-      ); // Ensure sorted for verification
-      assertEquals(tasks[0].task, taskA, "taskA should remain at order 1");
-      assertEquals(tasks[0].orderNumber, 1);
-      assertEquals(
-        tasks[1].task,
-        taskC,
-        "taskC should shift from order 3 to 2",
-      );
-      assertEquals(tasks[1].orderNumber, 2);
-      assertEquals(
-        tasks[2].task,
-        taskD,
-        "taskD should shift from order 4 to 3",
-      );
-      assertEquals(tasks[2].orderNumber, 3);
-    },
-  );
-
-  await t.step(
-    "deleteTask: should return error if task does not exist in list",
-    async () => {
-      const result = await concept.deleteTask({ list: listId, task: taskE }); // taskE was never added
-      assertExists(result);
-      assertExists(
-        (result as { error: string }).error,
-        "Should return an error for deleting non-existent task.",
-      );
-      assertEquals(
-        (result as { error: string }).error,
-        `Task '${taskE}' not found in list '${listId}'.`,
       );
 
-      const retrievedList = await concept._getListById({ listId });
-      assertEquals(
-        retrievedList?.itemCount,
-        3,
-        "Item count should not change.",
-      );
-    },
-  );
-
-  await t.step(
-    "deleteTask: should return error if list does not exist",
-    async () => {
-      const nonExistentList = "list:NonExistent" as ID;
-      const result = await concept.deleteTask({
-        list: nonExistentList,
-        task: taskA,
-      });
-      assertExists(result);
-      assertExists(
-        (result as { error: string }).error,
-        "Should return an error for a non-existent list.",
-      );
-      assertEquals(
-        (result as { error: string }).error,
-        `List with ID '${nonExistentList}' not found.`,
-      );
-    },
-  );
-
-  await t.step(
-    "assignOrder: should reassign order and shift other items correctly (move up)",
-    async () => {
-      // Current tasks: taskA (1), taskC (2), taskD (3)
-      let retrievedList = await concept._getListById({ listId });
-      assertEquals(
-        retrievedList?.listItems.map((item) => ({
-          task: item.task,
-          order: item.orderNumber,
-        })).sort((a, b) => a.order - b.order),
-        [
-          { task: taskA, order: 1 },
-          { task: taskC, order: 2 },
-          { task: taskD, order: 3 },
-        ],
-      );
-
-      await concept.assignOrder({ list: listId, task: taskD, newOrder: 1 }); // Move taskD from 3 to 1
-      retrievedList = await concept._getListById({ listId });
-      assertExists(retrievedList);
-      assertEquals(retrievedList.itemCount, 3);
-
-      const tasks = retrievedList.listItems.sort((a, b) =>
-        a.orderNumber - b.orderNumber
-      );
-      assertEquals(tasks[0].task, taskD, "taskD should be at order 1");
-      assertEquals(tasks[0].orderNumber, 1);
-      assertEquals(tasks[1].task, taskA, "taskA should shift from 1 to 2");
-      assertEquals(tasks[1].orderNumber, 2);
-      assertEquals(tasks[2].task, taskC, "taskC should shift from 2 to 3");
-      assertEquals(tasks[2].orderNumber, 3);
-    },
-  );
-
-  await t.step(
-    "assignOrder: should reassign order and shift other items correctly (move down)",
-    async () => {
-      // Current tasks: taskD (1), taskA (2), taskC (3)
-      let retrievedList = await concept._getListById({ listId });
-      assertEquals(
-        retrievedList?.listItems.map((item) => ({
-          task: item.task,
-          order: item.orderNumber,
-        })).sort((a, b) => a.order - b.order),
-        [
-          { task: taskD, order: 1 },
-          { task: taskA, order: 2 },
-          { task: taskC, order: 3 },
-        ],
-      );
-
-      await concept.assignOrder({ list: listId, task: taskD, newOrder: 3 }); // Move taskD from 1 to 3
-      retrievedList = await concept._getListById({ listId });
-      assertExists(retrievedList);
-      assertEquals(retrievedList.itemCount, 3);
-
-      const tasks = retrievedList.listItems.sort((a, b) =>
-        a.orderNumber - b.orderNumber
-      );
-      assertEquals(tasks[0].task, taskA, "taskA should shift from 2 to 1");
-      assertEquals(tasks[0].orderNumber, 1);
-      assertEquals(tasks[1].task, taskC, "taskC should shift from 3 to 2");
-      assertEquals(tasks[1].orderNumber, 2);
-      assertEquals(tasks[2].task, taskD, "taskD should be at order 3");
-      assertEquals(tasks[2].orderNumber, 3);
-    },
-  );
-
-  await t.step(
-    "assignOrder: should do nothing if new order is same as old order",
-    async () => {
-      // Current tasks: taskA (1), taskC (2), taskD (3)
-      let retrievedListBefore = await concept._getListById({ listId });
-      assertExists(retrievedListBefore);
-      const originalItems = [...retrievedListBefore.listItems];
-
-      await concept.assignOrder({ list: listId, task: taskA, newOrder: 1 }); // TaskA is already at order 1
-      let retrievedListAfter = await concept._getListById({ listId });
-      assertExists(retrievedListAfter);
-      assertEquals(
-        retrievedListAfter.listItems.sort((a, b) =>
-          a.orderNumber - b.orderNumber
-        ),
-        originalItems.sort((a, b) => a.orderNumber - b.orderNumber),
-        "List items should not change",
-      );
-    },
-  );
-
-  await t.step(
-    "assignOrder: should return error if task does not exist in list",
-    async () => {
-      const result = await concept.assignOrder({
-        list: listId,
-        task: taskE,
-        newOrder: 1,
-      });
-      assertExists(result);
-      assertExists(
-        (result as { error: string }).error,
-        "Should return an error for non-existent task.",
-      );
-      assertEquals(
-        (result as { error: string }).error,
-        `Task '${taskE}' not found in list '${listId}'.`,
-      );
-    },
-  );
-
-  await t.step(
-    "assignOrder: should return error if new order is out of bounds",
-    async () => {
-      const retrievedList = await concept._getListById({ listId });
-      assertExists(retrievedList);
-      const itemCount = retrievedList.itemCount;
-
-      const resultLow = await concept.assignOrder({
-        list: listId,
-        task: taskA,
-        newOrder: 0,
-      });
-      assertExists(resultLow);
-      assertExists(
-        (resultLow as { error: string }).error,
-        "Should return an error for newOrder < 1.",
-      );
-      assertEquals(
-        (resultLow as { error: string }).error,
-        `New order '0' is out of bounds (1 to ${itemCount}).`,
-      );
-
-      const resultHigh = await concept.assignOrder({
-        list: listId,
-        task: taskA,
-        newOrder: itemCount + 1,
-      });
-      assertExists(resultHigh);
-      assertExists(
-        (resultHigh as { error: string }).error,
-        "Should return an error for newOrder > itemCount.",
-      );
-      assertEquals(
-        (resultHigh as { error: string }).error,
-        `New order '${itemCount + 1}' is out of bounds (1 to ${itemCount}).`,
-      );
-    },
-  );
-
-  await t.step(
-    "assignOrder: should return error if list does not exist",
-    async () => {
-      const nonExistentList = "list:NonExistent" as ID;
-      const result = await concept.assignOrder({
-        list: nonExistentList,
-        task: taskA,
-        newOrder: 1,
-      });
-      assertExists(result);
-      assertExists(
-        (result as { error: string }).error,
-        "Should return an error for a non-existent list.",
-      );
-      assertEquals(
-        (result as { error: string }).error,
-        `List with ID '${nonExistentList}' not found.`,
-      );
-    },
-  );
-
-  await t.step(
-    "Principle Trace: users can create a to-do list, select tasks from their task bank to add to it, and set a default ordering of the tasks according to their dependencies",
-    async () => {
-      // 1. Create a to-do list
-      const { list: myTodoListId } =
-        (await concept.newList({ listName: "My To-Do List" })) as { list: ID };
-      assertExists(myTodoListId);
-
-      // 2. Select tasks from their task bank to add to it (using taskA, taskB, taskC)
-      await concept.addTask({ list: myTodoListId, task: taskA }); // order 1
-      await concept.addTask({ list: myTodoListId, task: taskB }); // order 2
-      await concept.addTask({ list: myTodoListId, task: taskC }); // order 3
-
-      let myTodoList = await concept._getListById({ listId: myTodoListId });
-      assertExists(myTodoList);
-      assertEquals(myTodoList.itemCount, 3);
-      let tasks = myTodoList.listItems.sort((a, b) =>
-        a.orderNumber - b.orderNumber
-      );
+      updatedList = await concept._getListById({ listId: aliceListId });
+      assertEquals(updatedList?.itemCount, 2);
+      assertEquals(updatedList?.listItems.length, 2);
+      const tasks = (await concept._getTasksInList({ listId: aliceListId })) ||
+        [];
       assertEquals(tasks[0].task, taskA);
       assertEquals(tasks[0].orderNumber, 1);
       assertEquals(tasks[1].task, taskB);
       assertEquals(tasks[1].orderNumber, 2);
-      assertEquals(tasks[2].task, taskC);
-      assertEquals(tasks[2].orderNumber, 3);
-
-      // 3. Set a default ordering of the tasks according to their dependencies (e.g., move taskC to be first)
-      await concept.assignOrder({
-        list: myTodoListId,
-        task: taskC,
-        newOrder: 1,
-      });
-
-      myTodoList = await concept._getListById({ listId: myTodoListId });
-      assertExists(myTodoList);
-      tasks = myTodoList.listItems.sort((a, b) =>
-        a.orderNumber - b.orderNumber
-      );
-      assertEquals(tasks[0].task, taskC, "taskC should be first");
-      assertEquals(tasks[0].orderNumber, 1);
-      assertEquals(tasks[1].task, taskA, "taskA should have shifted to second");
-      assertEquals(tasks[1].orderNumber, 2);
-      assertEquals(tasks[2].task, taskB, "taskB should have shifted to third");
-      assertEquals(tasks[2].orderNumber, 3);
     },
   );
 
+  await t.step(
+    "should prevent adding a task that already exists in the list",
+    async () => {
+      const result = await concept.addTask({
+        list: aliceListId,
+        task: taskA,
+        adder: userAlice,
+      });
+      assertExists(
+        (result as { error: string }).error,
+        "Should return an error for adding existing task",
+      );
+      assertEquals(
+        (result as { error: string }).error,
+        `Task '${taskA}' is already in list '${aliceListId}'.`,
+      );
+    },
+  );
+
+  await t.step(
+    "should prevent non-owners from adding tasks to a list",
+    async () => {
+      const result = await concept.addTask({
+        list: aliceListId,
+        task: taskC,
+        adder: userBob,
+      });
+      assertExists(
+        (result as { error: string }).error,
+        "Should return an error for non-owner",
+      );
+      assertEquals(
+        (result as { error: string }).error,
+        `User '${userBob}' is not the owner of list '${aliceListId}'.`,
+      );
+
+      const updatedList = await concept._getListById({ listId: aliceListId });
+      assertEquals(updatedList?.itemCount, 2, "Item count should not change");
+    },
+  );
+
+  await t.step(
+    "should delete tasks from a list and adjust order numbers",
+    async () => {
+      // Add taskC to have 3 items: A(1), B(2), C(3)
+      await concept.addTask({
+        list: aliceListId,
+        task: taskC,
+        adder: userAlice,
+      });
+      let updatedList = await concept._getListById({ listId: aliceListId });
+      assertEquals(updatedList?.itemCount, 3);
+      let tasks = (await concept._getTasksInList({ listId: aliceListId })) ||
+        [];
+      assertEquals(tasks.map((t) => t.task), [taskA, taskB, taskC]);
+      assertEquals(tasks.map((t) => t.orderNumber), [1, 2, 3]);
+
+      // Delete taskB (middle item)
+      const deleteResult = await concept.deleteTask({
+        list: aliceListId,
+        task: taskB,
+        deleter: userAlice,
+      });
+      assertEquals(deleteResult, {}, "Should return empty object on success");
+
+      updatedList = await concept._getListById({ listId: aliceListId });
+      assertEquals(updatedList?.itemCount, 2);
+      assertEquals(updatedList?.listItems.length, 2);
+
+      tasks = (await concept._getTasksInList({ listId: aliceListId })) || [];
+      assertEquals(
+        tasks.map((t) => t.task),
+        [taskA, taskC],
+        "Task B should be removed",
+      );
+      assertEquals(
+        tasks.map((t) => t.orderNumber),
+        [1, 2],
+        "Order numbers should be adjusted: C moves from 3 to 2",
+      );
+    },
+  );
+
+  await t.step("should prevent deleting a non-existent task", async () => {
+    const result = await concept.deleteTask({
+      list: aliceListId,
+      task: taskD,
+      deleter: userAlice,
+    });
+    assertExists(
+      (result as { error: string }).error,
+      "Should return an error for non-existent task",
+    );
+    assertEquals(
+      (result as { error: string }).error,
+      `Task '${taskD}' not found in list '${aliceListId}'.`,
+    );
+  });
+
+  await t.step("should prevent non-owners from deleting tasks", async () => {
+    const result = await concept.deleteTask({
+      list: aliceListId,
+      task: taskA,
+      deleter: userBob,
+    });
+    assertExists(
+      (result as { error: string }).error,
+      "Should return an error for non-owner deleting",
+    );
+    assertEquals(
+      (result as { error: string }).error,
+      `User '${userBob}' is not the owner of list '${aliceListId}'.`,
+    );
+
+    const updatedList = await concept._getListById({ listId: aliceListId });
+    assertEquals(updatedList?.itemCount, 2, "Item count should not change");
+    const tasks = (await concept._getTasksInList({ listId: aliceListId })) ||
+      [];
+    assertEquals(
+      tasks.map((t) => t.task),
+      [taskA, taskC],
+      "Tasks should remain unchanged",
+    );
+  });
+
+  await t.step("should reassign task order (move up)", async () => {
+    // Current state: A(1), C(2)
+    // Add D to make it: A(1), C(2), D(3)
+    await concept.addTask({ list: aliceListId, task: taskD, adder: userAlice });
+    let tasksBefore =
+      (await concept._getTasksInList({ listId: aliceListId })) || [];
+    assertEquals(tasksBefore.map((t) => t.task), [taskA, taskC, taskD]);
+    assertEquals(tasksBefore.map((t) => t.orderNumber), [1, 2, 3]);
+
+    // Move D (currently at order 3) to order 1
+    const assignResult = await concept.assignOrder({
+      list: aliceListId,
+      task: taskD,
+      newOrder: 1,
+      assigner: userAlice,
+    });
+    assertEquals(assignResult, {}, "Should return empty object on success");
+
+    let tasksAfter = (await concept._getTasksInList({ listId: aliceListId })) ||
+      [];
+    assertEquals(
+      tasksAfter.map((t) => t.task),
+      [taskD, taskA, taskC],
+      "Task D should be first",
+    );
+    assertEquals(
+      tasksAfter.map((t) => t.orderNumber),
+      [1, 2, 3],
+      "Order numbers should be adjusted correctly",
+    );
+  });
+
+  await t.step("should reassign task order (move down)", async () => {
+    // Current state: D(1), A(2), C(3)
+    // Move D (currently at order 1) to order 3
+    const assignResult = await concept.assignOrder({
+      list: aliceListId,
+      task: taskD,
+      newOrder: 3,
+      assigner: userAlice,
+    });
+    assertEquals(assignResult, {}, "Should return empty object on success");
+
+    let tasksAfter = (await concept._getTasksInList({ listId: aliceListId })) ||
+      [];
+    assertEquals(
+      tasksAfter.map((t) => t.task),
+      [taskA, taskC, taskD],
+      "Task D should be last",
+    );
+    assertEquals(
+      tasksAfter.map((t) => t.orderNumber),
+      [1, 2, 3],
+      "Order numbers should be adjusted correctly",
+    );
+  });
+
+  await t.step(
+    "should prevent assigning order to a non-existent task",
+    async () => {
+      const result = await concept.assignOrder({
+        list: aliceListId,
+        task: taskB,
+        newOrder: 1,
+        assigner: userAlice,
+      });
+      assertExists(
+        (result as { error: string }).error,
+        "Should return an error for non-existent task",
+      );
+      assertEquals(
+        (result as { error: string }).error,
+        `Task '${taskB}' not found in list '${aliceListId}'.`,
+      );
+    },
+  );
+
+  await t.step(
+    "should prevent non-owners from assigning task order",
+    async () => {
+      const result = await concept.assignOrder({
+        list: aliceListId,
+        task: taskA,
+        newOrder: 2,
+        assigner: userBob,
+      });
+      assertExists(
+        (result as { error: string }).error,
+        "Should return an error for non-owner assigning order",
+      );
+      assertEquals(
+        (result as { error: string }).error,
+        `User '${userBob}' is not the owner of list '${aliceListId}'.`,
+      );
+    },
+  );
+
+  await t.step("should prevent assigning an order out of bounds", async () => {
+    // Current itemCount is 3 (tasks A, C, D)
+    const outOfBoundsLow = await concept.assignOrder({
+      list: aliceListId,
+      task: taskA,
+      newOrder: 0,
+      assigner: userAlice,
+    });
+    assertExists((outOfBoundsLow as { error: string }).error);
+    assertEquals(
+      (outOfBoundsLow as { error: string }).error,
+      `New order '0' is out of bounds (1 to 3).`,
+    );
+
+    const outOfBoundsHigh = await concept.assignOrder({
+      list: aliceListId,
+      task: taskA,
+      newOrder: 4,
+      assigner: userAlice,
+    });
+    assertExists((outOfBoundsHigh as { error: string }).error);
+    assertEquals(
+      (outOfBoundsHigh as { error: string }).error,
+      `New order '4' is out of bounds (1 to 3).`,
+    );
+  });
+
+  await t.step("should handle no change in order gracefully", async () => {
+    // Current state: A(1), C(2), D(3). Task A is at order 1.
+    const result = await concept.assignOrder({
+      list: aliceListId,
+      task: taskA,
+      newOrder: 1,
+      assigner: userAlice,
+    });
+    assertEquals(
+      result,
+      {},
+      "Should return empty object for no effective change",
+    );
+
+    const tasksAfter =
+      (await concept._getTasksInList({ listId: aliceListId })) || [];
+    assertEquals(tasksAfter.map((t) => t.task), [taskA, taskC, taskD]);
+    assertEquals(tasksAfter.map((t) => t.orderNumber), [1, 2, 3]);
+  });
+
+  await t.step(
+    "# trace: Principle - Users can create a to-do list, add tasks, and set their ordering.",
+    async () => {
+      // 1. User creates a to-do list
+      const listResult = await concept.newList({
+        listName: "Shopping List",
+        listOwner: userChris,
+      });
+      const shoppingListId = (listResult as { list: ID }).list;
+      assertExists(shoppingListId, "Shopping list should be created");
+
+      // 2. User selects tasks from their task bank to add to it (and they get default ordering)
+      await concept.addTask({
+        list: shoppingListId,
+        task: "task:Milk" as ID,
+        adder: userChris,
+      });
+      await concept.addTask({
+        list: shoppingListId,
+        task: "task:Bread" as ID,
+        adder: userChris,
+      });
+      await concept.addTask({
+        list: shoppingListId,
+        task: "task:Eggs" as ID,
+        adder: userChris,
+      });
+
+      let currentTasks =
+        (await concept._getTasksInList({ listId: shoppingListId })) || [];
+      assertEquals(currentTasks.length, 3, "All tasks should be added");
+      assertEquals(currentTasks.map((t) => t.task), [
+        "task:Milk",
+        "task:Bread",
+        "task:Eggs",
+      ]);
+      assertEquals(
+        currentTasks.map((t) => t.orderNumber),
+        [1, 2, 3],
+        "Tasks should have default ascending order",
+      );
+
+      // 3. User sets a default ordering of the tasks (by reordering them)
+      // Let's say user wants Eggs first, then Milk, then Bread
+      await concept.assignOrder({
+        list: shoppingListId,
+        task: "task:Eggs" as ID,
+        newOrder: 1,
+        assigner: userChris,
+      });
+      await concept.assignOrder({
+        list: shoppingListId,
+        task: "task:Milk" as ID,
+        newOrder: 2,
+        assigner: userChris,
+      });
+      // Bread should automatically be at 3 after the above two moves.
+
+      currentTasks =
+        (await concept._getTasksInList({ listId: shoppingListId })) || [];
+      assertEquals(currentTasks.map((t) => t.task), [
+        "task:Eggs",
+        "task:Milk",
+        "task:Bread",
+      ], "Tasks should be in the new user-defined order");
+      assertEquals(
+        currentTasks.map((t) => t.orderNumber),
+        [1, 2, 3],
+        "Order numbers should remain contiguous and reflect the new logical order",
+      );
+
+      // Verification of internal state (optional, but good for understanding effect)
+      const finalShoppingList = await concept._getListById({
+        listId: shoppingListId,
+      });
+      assertArrayIncludes(finalShoppingList?.listItems || [], [
+        { task: "task:Eggs" as ID, orderNumber: 1, taskStatus: "incomplete" },
+        { task: "task:Milk" as ID, orderNumber: 2, taskStatus: "incomplete" },
+        { task: "task:Bread" as ID, orderNumber: 3, taskStatus: "incomplete" },
+      ]);
+    },
+  );
+
+  // Close the database connection after all tests in this suite
   await client.close();
 });

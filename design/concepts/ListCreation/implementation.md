@@ -10,8 +10,6 @@
 
 # response:
 
-Here's the implementation for the `ListCreation` concept, following the detailed guidelines provided.
-
 ```typescript
 // file: src/ListCreation/ListCreationConcept.ts
 
@@ -24,34 +22,37 @@ const PREFIX = "ListCreation" + ".";
 
 // Generic types of this concept
 type List = ID; // The ID of a List document created by this concept
-type Task = ID; // e.g., an ID from a Task concept, external to ListCreation
+type User = ID; // The ID of a User, e.g., from a UserAuthentication concept, external to ListCreation
+type Task = ID; // The ID of a Task, e.g., from a TaskManagement concept, external to ListCreation
 
 /**
  * @interface ListItem
- * A member of a list.
+ * A member of a list, representing a task within that list.
  *
  * @state a set of ListItems with
  *   a task of type Task
  *   an orderNumber of type Number
- *   a taskStatus of type String // Inferred from addTask action
+ *   a taskStatus of type String ("incomplete" or "complete")
  */
 interface ListItem {
   task: Task;
   orderNumber: number;
-  taskStatus: "incomplete" | "complete"; // Assuming these are the possible statuses
+  taskStatus: "incomplete" | "complete"; // Defaulted to "incomplete" on addition
 }
 
 /**
  * @interface ListDocument
- * Represents a user-created list.
+ * Represents a user-created list, which groups tasks.
  *
  * @state a set of Lists with
+ *   an owner of type User
  *   a title of type String
  *   a set of ListItems (embedded within the list)
  *   an itemCount of type Number
  */
 interface ListDocument {
   _id: List;
+  owner: User;
   title: string;
   listItems: ListItem[];
   itemCount: number;
@@ -73,25 +74,27 @@ export default class ListCreationConcept {
    * @principle users can create a to-do list, select tasks from their task bank to add to it,
    *            and set a default ordering of the tasks according to their dependencies.
    *
-   * Creates a new list with the specified name.
+   * Creates a new list with the specified name and owner.
    *
    * @param {object} params - The action arguments.
    * @param {string} params.listName - The title of the new list.
+   * @param {User} params.listOwner - The ID of the user who owns this list.
    * @returns {{list: List} | {error: string}} - An object containing the ID of the new list on success, or an error message.
    *
-   * @requires no List with listName exists in set of Lists
-   * @effects new List with title = listName, itemCount = 0, and an empty set of ListItems is returned and added to set of Lists
+   * @requires no List with listName exists in set of Lists with owner = listOwner
+   * @effects new List with title = listName, owner = listOwner, itemCount = 0, and an empty set of ListItems is returned and added to set of Lists
    */
-  async newList({ listName }: { listName: string }): Promise<{ list: List } | { error: string }> {
-    // Requires: no List with listName exists
-    const existingList = await this.lists.findOne({ title: listName });
+  async newList({ listName, listOwner }: { listName: string; listOwner: User }): Promise<{ list: List } | { error: string }> {
+    // Requires: no List with listName exists in set of Lists with owner = listOwner
+    const existingList = await this.lists.findOne({ title: listName, owner: listOwner });
     if (existingList) {
-      return { error: `List with name '${listName}' already exists.` };
+      return { error: `List with name '${listName}' already exists for user '${listOwner}'.` };
     }
 
     const newListId = freshID();
     const newList: ListDocument = {
       _id: newListId,
+      owner: listOwner,
       title: listName,
       listItems: [], // Initialize with an empty array of list items
       itemCount: 0, // Initialize item count to 0
@@ -112,17 +115,23 @@ export default class ListCreationConcept {
    * @param {object} params - The action arguments.
    * @param {List} params.list - The ID of the list to add the task to.
    * @param {Task} params.task - The ID of the task to add.
+   * @param {User} params.adder - The ID of the user attempting to add the task (must be the owner).
    * @returns {{listItem: ListItem} | {error: string}} - An object containing the newly created ListItem on success, or an error message.
    *
-   * @requires listItem containing task is not already in list
+   * @requires listItem containing task is not already in list and adder = owner of list
    * @effects a new listItem is created with task = task, taskStatus = incomplete, and orderNumber = itemCount+1.
    *          itemCount is incremented. The new listItem is returned and added to list's set of listItems.
    */
-  async addTask({ list: listId, task }: { list: List; task: Task }): Promise<{ listItem: ListItem } | { error: string }> {
+  async addTask({ list: listId, task, adder }: { list: List; task: Task; adder: User }): Promise<{ listItem: ListItem } | { error: string }> {
     const targetList = await this.lists.findOne({ _id: listId });
 
     if (!targetList) {
       return { error: `List with ID '${listId}' not found.` };
+    }
+
+    // Requires: adder = owner of list
+    if (targetList.owner !== adder) {
+      return { error: `User '${adder}' is not the owner of list '${listId}'.` };
     }
 
     // Requires: listItem containing task is not already in list
@@ -159,17 +168,23 @@ export default class ListCreationConcept {
    * @param {object} params - The action arguments.
    * @param {List} params.list - The ID of the list to delete the task from.
    * @param {Task} params.task - The ID of the task to delete.
+   * @param {User} params.deleter - The ID of the user attempting to delete the task (must be the owner).
    * @returns {Empty | {error: string}} - An empty object on success, or an error message.
    *
-   * @requires a listItem containing task is in list's set of listItems
+   * @requires a listItem containing task is in list's set of listItems and deleter = owner of list
    * @effects the listItem containing task is removed from list's set of listItems.
    *          orderNumbers of subsequent items are decremented. itemCount is decremented.
    */
-  async deleteTask({ list: listId, task }: { list: List; task: Task }): Promise<Empty | { error: string }> {
+  async deleteTask({ list: listId, task, deleter }: { list: List; task: Task; deleter: User }): Promise<Empty | { error: string }> {
     const targetList = await this.lists.findOne({ _id: listId });
 
     if (!targetList) {
       return { error: `List with ID '${listId}' not found.` };
+    }
+
+    // Requires: deleter = owner of list
+    if (targetList.owner !== deleter) {
+      return { error: `User '${deleter}' is not the owner of list '${listId}'.` };
     }
 
     // Requires: a listItem containing task is in list's set of listItems
@@ -212,17 +227,24 @@ export default class ListCreationConcept {
    * @param {List} params.list - The ID of the list containing the task.
    * @param {Task} params.task - The ID of the task whose order is to be assigned.
    * @param {number} params.newOrder - The new order number for the task (1-indexed).
+   * @param {User} params.assigner - The ID of the user attempting to assign the order (must be the owner).
    * @returns {Empty | {error: string}} - An empty object on success, or an error message.
    *
-   * @requires task belongs to a ListItem in list and newOrder is valid (1 to itemCount)
+   * @requires task belongs to a ListItem in list and assigner = owner of list
+   * @requires newOrder is valid (1 to itemCount)
    * @effects task's ListItem gets orderNumber set to newOrder and the ListItems with
    *          orderNumbers between the old value and new value are offset by one accordingly.
    */
-  async assignOrder({ list: listId, task, newOrder }: { list: List; task: Task; newOrder: number }): Promise<Empty | { error: string }> {
+  async assignOrder({ list: listId, task, newOrder, assigner }: { list: List; task: Task; newOrder: number; assigner: User }): Promise<Empty | { error: string }> {
     const targetList = await this.lists.findOne({ _id: listId });
 
     if (!targetList) {
       return { error: `List with ID '${listId}' not found.` };
+    }
+
+    // Requires: assigner = owner of list
+    if (targetList.owner !== assigner) {
+      return { error: `User '${assigner}' is not the owner of list '${listId}'.` };
     }
 
     const listItemIndex = targetList.listItems.findIndex((item) => item.task === task);
@@ -250,13 +272,13 @@ export default class ListCreationConcept {
 
       if (newOrder < oldOrder) {
         // Item is moving UP (to a smaller order number)
-        // Items between newOrder and oldOrder (exclusive) should shift DOWN (+1)
+        // Items between newOrder (inclusive) and oldOrder (exclusive) should shift DOWN (+1)
         if (item.orderNumber >= newOrder && item.orderNumber < oldOrder) {
           return { ...item, orderNumber: item.orderNumber + 1 };
         }
       } else { // newOrder > oldOrder
         // Item is moving DOWN (to a larger order number)
-        // Items between oldOrder (exclusive) and newOrder should shift UP (-1)
+        // Items between oldOrder (exclusive) and newOrder (inclusive) should shift UP (-1)
         if (item.orderNumber > oldOrder && item.orderNumber <= newOrder) {
           return { ...item, orderNumber: item.orderNumber - 1 };
         }
@@ -303,6 +325,18 @@ export default class ListCreationConcept {
   }
 
   /**
+   * @query _getListsByOwner
+   * Returns all lists owned by a specific user.
+   *
+   * @param {object} params - The query arguments.
+   * @param {User} params.ownerId - The ID of the user whose lists to retrieve.
+   * @returns {Promise<ListDocument[]>} - An array of ListDocuments owned by the user.
+   */
+  async _getListsByOwner({ ownerId }: { ownerId: User }): Promise<ListDocument[]> {
+    return this.lists.find({ owner: ownerId }).toArray();
+  }
+
+  /**
    * @query _getTasksInList
    * Returns all list items (tasks) for a given list, sorted by their orderNumber.
    *
@@ -315,7 +349,7 @@ export default class ListCreationConcept {
     if (!list) {
       return null;
     }
-    // Return the list items sorted by orderNumber as per the concept's ordering principle.
+    // Return the list items sorted by orderNumber.
     // A shallow copy is made before sorting to avoid modifying the original array if it were stored directly.
     return [...list.listItems].sort((a, b) => a.orderNumber - b.orderNumber);
   }

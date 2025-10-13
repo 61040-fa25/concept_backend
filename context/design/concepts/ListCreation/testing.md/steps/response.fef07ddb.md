@@ -1,8 +1,8 @@
-[@implementation](implementation.md)
-
-[@testing-concepts](../../background/testing-concepts.md)
-
-# test: ListCreation
+---
+timestamp: 'Sun Oct 12 2025 23:06:41 GMT-0400 (Eastern Daylight Time)'
+parent: '[[..\20251012_230641.d4877a4f.md]]'
+content_id: fef07ddb8ff9ef6ef1ae087ec68ee265014b8c58463b14e5f101b72beeddbec6
+---
 
 # response:
 
