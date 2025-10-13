@@ -1,4 +1,4 @@
-[@implementation](implementation.md)
+[@implementation](../../../context/design/concepts/PasswordAuthentication/implementation.md/steps/response.041edbfe.md)
 
 [@testing-concepts](../../background/testing-concepts.md)
 
@@ -7,205 +7,227 @@
 
 ```typescript
 // file: src/PasswordAuthentication/PasswordAuthenticationConcept.test.ts
+import { assertEquals } from "jsr:@std/assert";
 import { testDb } from "@utils/database.ts";
-import { assertEquals, assertObjectMatch } from "jsr:@std/assert";
 import PasswordAuthenticationConcept from "./PasswordAuthenticationConcept.ts";
-import { ID } from "@utils/types.ts";
 
-Deno.test("PasswordAuthenticationConcept Tests", async (test) => {
+Deno.test("PasswordAuthenticationConcept", async (t) => {
   const [db, client] = await testDb();
   const concept = new PasswordAuthenticationConcept(db);
 
-  Deno.test(
-    "Operational Principle: User registration and successful authentication",
-    async () => {
-      console.log("\n--- Trace: Operational Principle ---");
+  // Helper function for logging
+  const log = (message: string, data?: unknown) => {
+    console.log(`\n--- ${message} ---`);
+    if (data) {
+      console.log(JSON.stringify(data, null, 2));
+    }
+  };
 
-      // 1. Register a user
-      console.log("Action: register (username: 'alice', password: 'password123')");
-      const registerResult = await concept.register({
-        username: "alice",
-        password: "password123",
-      });
-      console.log("Result:", registerResult);
-      assertObjectMatch(registerResult, { user: {} as ID }); // Expecting a user ID
-      const aliceId = (registerResult as { user: ID }).user;
-      console.log(`Registered user Alice with ID: ${aliceId}`);
+  await t.step("Operational Principle: Register and Authenticate", async () => {
+    log("Running operational principle: register a user, then authenticate.");
 
-      // 2. Authenticate with the same username and password
-      console.log("Action: authenticate (username: 'alice', password: 'password123')");
-      const authResult = await concept.authenticate({
-        username: "alice",
-        password: "password123",
-      });
-      console.log("Result:", authResult);
-      assertObjectMatch(authResult, { user: aliceId }); // Expecting Alice's ID
-      const authenticatedUserId = (authResult as { user: ID }).user;
-      assertEquals(authenticatedUserId, aliceId);
-      console.log(`Successfully authenticated Alice. User ID: ${authenticatedUserId}`);
+    const username = "alice";
+    const password = "password123";
 
-      // Verify the principle: Alice can authenticate and is treated as the same user.
-      const fetchedUser = await concept._getUserById(aliceId);
-      assertEquals(fetchedUser?.username, "alice");
-      assertEquals(fetchedUser?.password, "password123"); // (Remember, plain text for this example)
-    },
-  );
+    log("Action: register", { username, password });
+    const registerResult = await concept.register({ username, password });
+    assertEquals("user" in registerResult, true, "Registration should succeed");
+    const aliceId = (registerResult as { user: string }).user;
+    log("Result: register", registerResult);
 
-  Deno.test("Scenario 1: Registering with an existing username should fail", async () => {
-    console.log("\n--- Trace: Scenario 1 ---");
+    log("Action: authenticate", { username, password });
+    const authResult = await concept.authenticate({ username, password });
+    assertEquals("user" in authResult, true, "Authentication should succeed");
+    assertEquals(
+      (authResult as { user: string }).user,
+      aliceId,
+      "Authenticated user ID should match registered user ID",
+    );
+    log("Result: authenticate", authResult);
 
-    // 1. Register Alice
-    console.log("Action: register (username: 'bob', password: 'pass')");
-    const registerBobResult = await concept.register({
-      username: "bob",
-      password: "pass",
-    });
-    console.log("Result:", registerBobResult);
-    assertObjectMatch(registerBobResult, { user: {} as ID });
-    const bobId = (registerBobResult as { user: ID }).user;
-    console.log(`Registered user Bob with ID: ${bobId}`);
-
-    // 2. Attempt to register another user with the same username "bob"
-    console.log("Action: register (username: 'bob', password: 'differentpass')");
-    const duplicateRegisterResult = await concept.register({
-      username: "bob",
-      password: "differentpass",
-    });
-    console.log("Result:", duplicateRegisterResult);
-
-    // Expect an error
-    assertObjectMatch(duplicateRegisterResult, { error: "Username already taken." });
-    console.log("Attempt to register 'bob' again failed as expected: Username already taken.");
-
-    // Ensure only one "bob" exists in the database
-    const users = await concept._getAllUsers();
-    const bobs = users.filter((u) => u.username === "bob");
-    assertEquals(bobs.length, 1);
+    // Verify internal state for completeness
+    const storedUser = await concept._getUserByUsername(username);
+    assertEquals(storedUser?.username, username, "User should be found by username");
+    assertEquals(storedUser?._id, aliceId, "Stored user ID should match");
+    assertEquals(storedUser?.password, password, "Stored password should match (plain text in this example)");
   });
 
-  Deno.test(
-    "Scenario 2: Authenticating with an incorrect password should fail",
+  await t.step(
+    "Scenario 1: Attempt to register with an already existing username",
     async () => {
-      console.log("\n--- Trace: Scenario 2 ---");
-
-      // 1. Register Charlie
-      console.log("Action: register (username: 'charlie', password: 'charliepass')");
-      const registerCharlieResult = await concept.register({
-        username: "charlie",
-        password: "charliepass",
-      });
-      console.log("Result:", registerCharlieResult);
-      assertObjectMatch(registerCharlieResult, { user: {} as ID });
-      const charlieId = (registerCharlieResult as { user: ID }).user;
-      console.log(`Registered user Charlie with ID: ${charlieId}`);
-
-      // 2. Attempt to authenticate with correct username but wrong password
-      console.log("Action: authenticate (username: 'charlie', password: 'wrongpass')");
-      const wrongPasswordAuthResult = await concept.authenticate({
-        username: "charlie",
-        password: "wrongpass",
-      });
-      console.log("Result:", wrongPasswordAuthResult);
-
-      // Expect an error
-      assertObjectMatch(wrongPasswordAuthResult, {
-        error: "Invalid username or password.",
-      });
-      console.log(
-        "Attempt to authenticate Charlie with wrong password failed as expected: Invalid username or password.",
+      log(
+        "Running scenario 1: attempt to register with an already existing username.",
       );
 
-      // 3. Authenticate with correct password to ensure the user still exists and is correct
-      console.log("Action: authenticate (username: 'charlie', password: 'charliepass')");
-      const correctAuthResult = await concept.authenticate({
-        username: "charlie",
-        password: "charliepass",
+      const username = "bob";
+      const password = "bobpassword";
+
+      log("Action: register (first time)", { username, password });
+      const firstRegisterResult = await concept.register({
+        username,
+        password,
       });
-      console.log("Result:", correctAuthResult);
-      assertObjectMatch(correctAuthResult, { user: charlieId });
-      console.log(
-        "Successfully authenticated Charlie with correct password to confirm user integrity.",
+      assertEquals(
+        "user" in firstRegisterResult,
+        true,
+        "First registration should succeed",
       );
+      log("Result: first register", firstRegisterResult);
+
+      log("Action: register (second time with same username)", {
+        username,
+        password,
+      });
+      const secondRegisterResult = await concept.register({
+        username,
+        password,
+      });
+      assertEquals(
+        "error" in secondRegisterResult,
+        true,
+        "Second registration with same username should return an error",
+      );
+      assertEquals(
+        (secondRegisterResult as { error: string }).error,
+        "Username already taken.",
+        "Error message should indicate username is taken",
+      );
+      log("Result: second register", secondRegisterResult);
     },
   );
 
-  Deno.test(
-    "Scenario 3: Authenticating with a non-existent username should fail",
-    async () => {
-      console.log("\n--- Trace: Scenario 3 ---");
+  await t.step("Scenario 2: Authenticate with incorrect password", async () => {
+    log("Running scenario 2: authenticate with incorrect password.");
 
-      // 1. Attempt to authenticate with a username that was never registered
-      console.log("Action: authenticate (username: 'david', password: 'anypass')");
-      const nonExistentAuthResult = await concept.authenticate({
-        username: "david",
-        password: "anypass",
-      });
-      console.log("Result:", nonExistentAuthResult);
+    const username = "charlie";
+    const correctPassword = "charliepassword";
+    const incorrectPassword = "wrongpassword";
 
-      // Expect an error
-      assertObjectMatch(nonExistentAuthResult, {
-        error: "Invalid username or password.",
-      });
-      console.log(
-        "Attempt to authenticate non-existent user 'david' failed as expected: Invalid username or password.",
-      );
-    },
-  );
+    log("Action: register", { username, password: correctPassword });
+    const registerResult = await concept.register({
+      username,
+      password: correctPassword,
+    });
+    assertEquals("user" in registerResult, true, "Registration should succeed");
+    log("Result: register", registerResult);
 
-  Deno.test(
-    "Scenario 4: Multiple users can register and authenticate independently",
-    async () => {
-      console.log("\n--- Trace: Scenario 4 ---");
+    log("Action: authenticate with incorrect password", {
+      username,
+      password: incorrectPassword,
+    });
+    const authResult = await concept.authenticate({
+      username,
+      password: incorrectPassword,
+    });
+    assertEquals(
+      "error" in authResult,
+      true,
+      "Authentication with incorrect password should return an error",
+    );
+    assertEquals(
+      (authResult as { error: string }).error,
+      "Invalid username or password.",
+      "Error message should indicate invalid credentials",
+    );
+    log("Result: authenticate (incorrect password)", authResult);
 
-      // 1. Register User X
-      console.log("Action: register (username: 'userX', password: 'xpass')");
-      const registerXResult = await concept.register({
-        username: "userX",
-        password: "xpass",
-      });
-      console.log("Result:", registerXResult);
-      assertObjectMatch(registerXResult, { user: {} as ID });
-      const userXId = (registerXResult as { user: ID }).user;
-      console.log(`Registered user X with ID: ${userXId}`);
+    // Verify that correct password still works
+    log("Action: authenticate with correct password", {
+      username,
+      password: correctPassword,
+    });
+    const correctAuthResult = await concept.authenticate({
+      username,
+      password: correctPassword,
+    });
+    assertEquals(
+      "user" in correctAuthResult,
+      true,
+      "Authentication with correct password should succeed",
+    );
+    log("Result: authenticate (correct password)", correctAuthResult);
+  });
 
-      // 2. Register User Y
-      console.log("Action: register (username: 'userY', password: 'ypass')");
-      const registerYResult = await concept.register({
-        username: "userY",
-        password: "ypass",
-      });
-      console.log("Result:", registerYResult);
-      assertObjectMatch(registerYResult, { user: {} as ID });
-      const userYId = (registerYResult as { user: ID }).user;
-      console.log(`Registered user Y with ID: ${userYId}`);
+  await t.step("Scenario 3: Authenticate with non-existent username", async () => {
+    log("Running scenario 3: authenticate with non-existent username.");
 
-      // 3. Authenticate User X
-      console.log("Action: authenticate (username: 'userX', password: 'xpass')");
-      const authXResult = await concept.authenticate({
-        username: "userX",
-        password: "xpass",
-      });
-      console.log("Result:", authXResult);
-      assertObjectMatch(authXResult, { user: userXId });
-      console.log(`Successfully authenticated User X. User ID: ${authXResult.user}`);
+    const username = "nonexistent";
+    const password = "anypassword";
 
-      // 4. Authenticate User Y
-      console.log("Action: authenticate (username: 'userY', password: 'ypass')");
-      const authYResult = await concept.authenticate({
-        username: "userY",
-        password: "ypass",
-      });
-      console.log("Result:", authYResult);
-      assertObjectMatch(authYResult, { user: userYId });
-      console.log(`Successfully authenticated User Y. User ID: ${authYResult.user}`);
+    log("Action: authenticate", { username, password });
+    const authResult = await concept.authenticate({ username, password });
+    assertEquals(
+      "error" in authResult,
+      true,
+      "Authentication with non-existent username should return an error",
+    );
+    assertEquals(
+      (authResult as { error: string }).error,
+      "Invalid username or password.",
+      "Error message should indicate invalid credentials",
+    );
+    log("Result: authenticate", authResult);
+  });
 
-      // Ensure that authentication of one user doesn't affect another
-      const allUsers = await concept._getAllUsers();
-      assertEquals(allUsers.length, 2); // Assuming other tests cleared the database or this is run in isolation.
-    },
-  );
+  await t.step("Scenario 4: Register and authenticate multiple users", async () => {
+    log("Running scenario 4: register and authenticate multiple users.");
 
-  // Close the database client after all tests in this file are done
+    const user1 = { username: "diana", password: "diana_password" };
+    const user2 = { username: "eve", password: "eve_password" };
+
+    log("Action: register user1", user1);
+    const register1Result = await concept.register(user1);
+    assertEquals("user" in register1Result, true, "User1 registration should succeed");
+    const dianaId = (register1Result as { user: string }).user;
+    log("Result: register user1", register1Result);
+
+    log("Action: register user2", user2);
+    const register2Result = await concept.register(user2);
+    assertEquals("user" in register2Result, true, "User2 registration should succeed");
+    const eveId = (register2Result as { user: string }).user;
+    log("Result: register user2", register2Result);
+
+    log("Action: authenticate user1", user1);
+    const auth1Result = await concept.authenticate(user1);
+    assertEquals("user" in auth1Result, true, "User1 authentication should succeed");
+    assertEquals(
+      (auth1Result as { user: string }).user,
+      dianaId,
+      "User1 authenticated ID should match",
+    );
+    log("Result: authenticate user1", auth1Result);
+
+    log("Action: authenticate user2", user2);
+    const auth2Result = await concept.authenticate(user2);
+    assertEquals("user" in auth2Result, true, "User2 authentication should succeed");
+    assertEquals(
+      (auth2Result as { user: string }).user,
+      eveId,
+      "User2 authenticated ID should match",
+    );
+    log("Result: authenticate user2", auth2Result);
+
+    // Verify all users count using _getAllUsers
+    log("Query: _getAllUsers");
+    const allUsers = await concept._getAllUsers();
+    log("Result: _getAllUsers", allUsers);
+    // Note: The previous tests also created users, so the count will be cumulative.
+    // For a clean count in this specific step, one might want to reset the DB,
+    // but the instruction is to not setup state except by actions.
+    // We can at least assert that the two new users are present.
+    const registeredUsernames = allUsers.map((u) => u.username);
+    assertEquals(
+      registeredUsernames.includes(user1.username),
+      true,
+      "User1 should be in _getAllUsers",
+    );
+    assertEquals(
+      registeredUsernames.includes(user2.username),
+      true,
+      "User2 should be in _getAllUsers",
+    );
+  });
+
   await client.close();
 });
 ```
