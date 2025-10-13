@@ -85,7 +85,7 @@ export default class PostingConcept {
   /**
    * action: delete (user: User, post: Post): Empty
    *
-   * requires: post to exist and belong to user.
+   * requires: user to exist, post to exist and belong to user.
    * effects: deletes the post.
    */
   async delete(
@@ -123,7 +123,7 @@ export default class PostingConcept {
   /**
    * action: edit (user: User, post: Post, new_caption: String): Empty
    *
-   * requires: post to exist and belong to user.
+   * requires: user to exist, post to exist and belong to user.
    * effects: edits the caption of the post to be that of the new one.
    */
   async edit(
@@ -198,7 +198,7 @@ export default class PostingConcept {
   /**
    * query: _getPostsByAuthor (user: User): (posts: PostDocument[])
    *
-   * effects: Returns all posts authored by a specific user.
+   * effects: Returns all posts authored by a specific user from most recent to oldest.
    */
   async _getPostsByAuthor(
     { user }: { user: User },

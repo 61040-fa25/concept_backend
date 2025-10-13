@@ -14,6 +14,6 @@
     * delete (user: User, post: Post):
         * *requires* user to exist, post to exist and belong to user
         * *effects* deletes the post for the author and their friends
-    * edit (user: User, post: Post, new_caption: String): (post: Post) 
+    * edit (user: User, post: Post, new_caption: String)
         * *requires* user to exist, post to exist and belong to user
         * *effects* edits the caption of the post to be that of the new one
