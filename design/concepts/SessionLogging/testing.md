@@ -4,230 +4,14 @@
 
 [@sessionlogging-testing](../../../src/concepts/SessionLogging/SessionLoggingConcept.test.ts)
 
-# prompt: Please edit the testing such that if the user tries to end an already inactive session, we check that an error is returned rather than an idempotent check.
+# prompt: Modifications have been made such that _getSessionDetails returns SessionState[] and _isSessionActive returns boolean[]. Please adjust tests accordingly.
 # response:
 
-Okay, I understand. The request is to align the `endSession` behavior with its `requires` clause: "Session must be active". This means that attempting to end an *already inactive* session should result in an error, rather than being an idempotent no-op.
+Here's the updated `src/concepts/SessionLogging/SessionLoggingConcept.test.ts` file, adjusted to correctly handle the array return types for `_getSessionDetails` and `_isSessionActive` queries as per the latest concept implementation.
 
-Here are the necessary changes:
+The key changes involve accessing the first element of the array returned by these queries (e.g., `sessionDetails[0]` and `sessionActiveStatus[0]`).
 
-1.  **Modify `src/SessionLogging/SessionLoggingConcept.ts`**: Update the `endSession` method to return an error if the session is already inactive, and adjust its JSDoc.
-2.  **Modify `src/concepts/SessionLogging/SessionLoggingConcept.test.ts`**: Update the test case for ending an already inactive session to expect an error.
-
----
-
-### `# file: src/SessionLogging/SessionLoggingConcept.ts` (Modified)
-
-```typescript
-import { Collection, Db } from "npm:mongodb";
-import { ID, Empty } from "../../utils/types.ts"; // Assuming utils is at a higher level
-import { freshID } from "../../utils/database.ts"; // Assuming utils is at a higher level
-
-// Declare collection prefix, use concept name
-const PREFIX = "SessionLogging" + ".";
-
-// Generic types of this concept as per the concept definition
-type User = ID;
-type Image = ID;
-type Session = ID; // The ID for a session instance
-
-/**
- * Represents the state of a single Session in the SessionLogging concept.
- *
- * State description:
- * a set of Sessions with
- *   an owner User
- *   a set of Images
- *   an active Flag
- */
-interface SessionState {
-  _id: Session;
-  owner: User;
-  images: Image[];
-  active: boolean; // Corresponds to the 'active Flag' in the specification
-}
-
-/**
- * Concept: SessionLogging [User, Image]
- *
- * purpose: capture photo records of a user's activity during a trip session
- *
- * principle: users can start sessions during which they can log image entries.
- * Entries for a session cannot be recorded once the session is ended. Recorded
- * entries will remain associated with the session even after it is ended.
- */
-export default class SessionLoggingConcept {
-  private sessions: Collection<SessionState>;
-
-  /**
-   * Initializes the SessionLoggingConcept with a MongoDB database instance.
-   *
-   * @param db The MongoDB database connection.
-   */
-  constructor(private readonly db: Db) {
-    // Map the "set of Sessions" from the state declaration to a MongoDB collection.
-    this.sessions = this.db.collection(PREFIX + "sessions");
-  }
-
-  /**
-   * startSession (user: User): (session: Session)
-   *
-   * requires: user to exist (as a valid ID in the system context)
-   * effects: creates a new session (active = true) under the specified user,
-   *          returning the ID of the new session.
-   */
-  async startSession(input: { user: User }): Promise<{ session: Session } | { error: string }> {
-    const { user } = input;
-
-    // As per concept independence, this concept assumes 'user' is a valid ID.
-    // External validation (e.g., from a UserAuthentication concept) would be
-    // handled by a synchronization rule.
-
-    const newSessionId = freshID();
-    const newSession: SessionState = {
-      _id: newSessionId,
-      owner: user,
-      images: [],
-      active: true,
-    };
-
-    try {
-      await this.sessions.insertOne(newSession);
-      return { session: newSessionId };
-    } catch (e) {
-      console.error(`SessionLogging: Failed to start session for user ${user}:`, e);
-      return { error: "Failed to start session due to a database error." };
-    }
-  }
-
-  /**
-   * addEntry (user: User, session: Session, image: Image)
-   *
-   * requires: user to exist, session must exist, image must exist (as a valid ID),
-   *           session must be active, and session must belong to the user.
-   *           The image must not already be associated with the session.
-   * effects: adds the specified image to the set of images associated with the session.
-   */
-  async addEntry(input: { user: User; session: Session; image: Image }): Promise<Empty | { error: string }> {
-    const { user, session, image } = input;
-
-    // Precondition: Session must exist, be active, and belong to the user.
-    const existingSession = await this.sessions.findOne({ _id: session });
-
-    if (!existingSession) {
-      return { error: `SessionLogging: Session with ID ${session} not found.` };
-    }
-    if (existingSession.owner !== user) {
-      return { error: `SessionLogging: User ${user} is not the owner of session ${session}.` };
-    }
-    if (!existingSession.active) {
-      return { error: `SessionLogging: Session with ID ${session} is not active. Cannot add entries.` };
-    }
-    // Precondition: Image must not already be in the session
-    if (existingSession.images.includes(image)) {
-        return { error: `SessionLogging: Image ${image} is already an entry in session ${session}.` };
-    }
-
-    // Similar to 'user', 'image' is assumed to be a valid ID here.
-
-    try {
-      // Effects: add image to the set of images associated with the session
-      await this.sessions.updateOne(
-        { _id: session },
-        { $push: { images: image } }
-      );
-      return {};
-    } catch (e) {
-      console.error(`SessionLogging: Failed to add entry ${image} to session ${session}:`, e);
-      return { error: "Failed to add entry due to a database error." };
-    }
-  }
-
-  /**
-   * endSession (user: User, session: Session)
-   *
-   * requires: user to exist, session must exist and belong to user. Session must be active.
-   * effects: sets the 'active' flag of the specified session to false.
-   *          If the session is already inactive, an error is returned as per precondition.
-   */
-  async endSession(input: { user: User; session: Session }): Promise<Empty | { error: string }> {
-    const { user, session } = input;
-
-    // Precondition: Session must exist and belong to the user.
-    const existingSession = await this.sessions.findOne({ _id: session });
-
-    if (!existingSession) {
-      return { error: `SessionLogging: Session with ID ${session} not found.` };
-    }
-    if (existingSession.owner !== user) {
-      return { error: `SessionLogging: User ${user} is not the owner of session ${session}.` };
-    }
-
-    // Precondition: Session must be active.
-    if (!existingSession.active) {
-        // As per the 'requires' clause, an inactive session cannot be 'ended' again.
-        return { error: `SessionLogging: Session with ID ${session} is already inactive.` };
-    }
-
-    try {
-      // Effects: end the session (active = false)
-      await this.sessions.updateOne(
-        { _id: session },
-        { $set: { active: false } }
-      );
-      return {};
-    } catch (e) {
-      console.error(`SessionLogging: Failed to end session ${session}:`, e);
-      return { error: "Failed to end session due to a database error." };
-    }
-  }
-
-  // --- Concept Queries (prefixed with an underscore) ---
-
-  /**
-   * _getSessionsByUser (user: User): (sessions: Session[])
-   * effects: Returns a list of IDs for all sessions owned by the given user.
-   */
-  async _getSessionsByUser(input: { user: User }): Promise<Session[]> {
-    const { user } = input;
-    const userSessions = await this.sessions.find({ owner: user }).toArray();
-    return userSessions.map(s => s._id);
-  }
-
-  /**
-   * _getSessionDetails (session: Session): (details: SessionState | null)
-   * effects: Returns the full details of a specific session, or null if not found.
-   */
-  async _getSessionDetails(input: { session: Session }): Promise<SessionState | null> {
-    const { session } = input;
-    return this.sessions.findOne({ _id: session });
-  }
-
-  /**
-   * _getEntriesInSession (session: Session): (images: Image[])
-   * effects: Returns the list of image entry IDs for a given session.
-   */
-  async _getEntriesInSession(input: { session: Session }): Promise<Image[]> {
-    const { session } = input;
-    const foundSession = await this.sessions.findOne({ _id: session });
-    return foundSession ? foundSession.images : [];
-  }
-
-  /**
-   * _isSessionActive (session: Session): (active: boolean)
-   * effects: Returns true if the session is active, false otherwise or if not found.
-   */
-  async _isSessionActive(input: { session: Session }): Promise<boolean> {
-    const { session } = input;
-    const foundSession = await this.sessions.findOne({ _id: session });
-    return foundSession ? foundSession.active : false;
-  }
-}
-```
-
----
-
-### `# file: src/concepts/SessionLogging/SessionLoggingConcept.test.ts` (Modified)
+# file: src/concepts/SessionLogging/SessionLoggingConcept.test.ts
 
 ```typescript
 import { assertEquals, assertExists, assertNotEquals } from "jsr:@std/assert";
@@ -288,19 +72,20 @@ Deno.test("SessionLogging Concept Tests", async (t) => {
       let sessionDetails = await concept._getSessionDetails({
         session: sessionAlice1,
       });
-      assertExists(sessionDetails, "Session details should be retrievable.");
+      assertExists(sessionDetails, "Session details array should be retrievable.");
+      assertEquals(sessionDetails.length, 1, "Should return exactly one session detail.");
       assertEquals(
-        sessionDetails?.owner,
+        sessionDetails[0]?.owner, // Access first element
         userAlice,
         "Session owner should be Alice.",
       );
       assertEquals(
-        sessionDetails?.active,
+        sessionDetails[0]?.active, // Access first element
         true,
         "Session should be active upon creation.",
       );
       assertEquals(
-        sessionDetails?.images.length,
+        sessionDetails[0]?.images.length, // Access first element
         0,
         "Session should start with no images.",
       );
@@ -384,13 +169,16 @@ Deno.test("SessionLogging Concept Tests", async (t) => {
       sessionDetails = await concept._getSessionDetails({
         session: sessionAlice1,
       });
+      assertEquals(sessionDetails.length, 1, "Should return exactly one session detail after ending.");
       assertEquals(
-        sessionDetails?.active,
+        sessionDetails[0]?.active, // Access first element
         false,
         "Session should be inactive after ending.",
       );
+      const isActiveQueryResult = await concept._isSessionActive({ session: sessionAlice1 });
+      assertEquals(isActiveQueryResult.length, 1, "Should return exactly one boolean for active status.");
       assertEquals(
-        await concept._isSessionActive({ session: sessionAlice1 }),
+        isActiveQueryResult[0], // Access first element
         false,
         "Query for active status should confirm inactive.",
       );
@@ -632,11 +420,12 @@ Deno.test("SessionLogging Concept Tests", async (t) => {
         user: userAlice,
         session: sessionAlice3,
       }, {});
-      let sessionActiveStatus = await concept._isSessionActive({
+      let sessionActiveStatusArray = await concept._isSessionActive({ // Renamed to avoid confusion with single boolean
         session: sessionAlice3,
       });
+      assertEquals(sessionActiveStatusArray.length, 1, "Should return exactly one boolean for active status.");
       assertEquals(
-        sessionActiveStatus,
+        sessionActiveStatusArray[0], // Access first element
         false,
         "Session should be inactive after first end call.",
       );
@@ -651,7 +440,7 @@ Deno.test("SessionLogging Concept Tests", async (t) => {
       }, endSessionAgainResult);
       assertEquals(
         isError(endSessionAgainResult),
-        true, // Changed to expect an error
+        true,
         "Ending an already inactive session should now return an error as per 'requires' clause.",
       );
       assertEquals(
@@ -660,11 +449,12 @@ Deno.test("SessionLogging Concept Tests", async (t) => {
         "Expected specific error message for inactive session.",
       );
 
-      sessionActiveStatus = await concept._isSessionActive({
+      sessionActiveStatusArray = await concept._isSessionActive({ // Renamed
         session: sessionAlice3,
       });
+      assertEquals(sessionActiveStatusArray.length, 1, "Should still return one boolean for active status.");
       assertEquals(
-        sessionActiveStatus,
+        sessionActiveStatusArray[0], // Access first element
         false,
         "Session should still be inactive after failed second end call.", // Updated message
       );
@@ -750,6 +540,11 @@ Deno.test("SessionLogging Concept Tests", async (t) => {
         false,
         "Alice's session should not contain Bob's image3.",
       );
+      assertEquals(
+        aliceImages.includes(image5),
+        false,
+        "Alice's session should not contain Bob's image5.",
+      );
 
       const bobSessions = await concept._getSessionsByUser({ user: userBob });
       assertEquals(
@@ -776,6 +571,11 @@ Deno.test("SessionLogging Concept Tests", async (t) => {
         bobImages.includes(image1),
         false,
         "Bob's session should not contain Alice's image1.",
+      );
+      assertEquals(
+        bobImages.includes(image2),
+        false,
+        "Bob's session should not contain Alice's image2.",
       );
 
       // User Alice tries to mess with User Bob's session (should fail)
@@ -821,8 +621,10 @@ Deno.test("SessionLogging Concept Tests", async (t) => {
       );
 
       // Verify Bob's session is still active and unmodified after Alice's attempts
+      const bobSessionActiveStatusArray = await concept._isSessionActive({ session: sessionBob3 });
+      assertEquals(bobSessionActiveStatusArray.length, 1, "Should return one boolean for Bob's session active status.");
       assertEquals(
-        await concept._isSessionActive({ session: sessionBob3 }),
+        bobSessionActiveStatusArray[0], // Access first element
         true,
         "Bob's session should still be active.",
       );

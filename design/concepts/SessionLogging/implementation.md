@@ -6,16 +6,17 @@
 
 [@concept-spec](SessionLogging.md)
 
-# implement: SessionLogging
+[@concept-implementation](../../../src/concepts/SessionLogging/SessionLoggingConcept.ts)
 
+# prompt: Please modify _getSessionDetails to return SessionState[] and _isSessionActive to return boolean[].
 # response:
 
-```typescript
-// file: src/SessionLogging/SessionLoggingConcept.ts
+Here's the modified `SessionLoggingConcept.ts` file with the requested changes to `_getSessionDetails` and `_isSessionActive`.
 
+```typescript
 import { Collection, Db } from "npm:mongodb";
-import { ID, Empty } from "../../utils/types.ts"; // Assuming utils is at a higher level
-import { freshID } from "../../utils/database.ts"; // Assuming utils is at a higher level
+import { Empty, ID } from "../../utils/types.ts";
+import { freshID } from "../../utils/database.ts";
 
 // Declare collection prefix, use concept name
 const PREFIX = "SessionLogging" + ".";
@@ -70,7 +71,9 @@ export default class SessionLoggingConcept {
    * effects: creates a new session (active = true) under the specified user,
    *          returning the ID of the new session.
    */
-  async startSession(input: { user: User }): Promise<{ session: Session } | { error: string }> {
+  async startSession(
+    input: { user: User },
+  ): Promise<{ session: Session } | { error: string }> {
     const { user } = input;
 
     // As per concept independence, this concept assumes 'user' is a valid ID.
@@ -89,7 +92,10 @@ export default class SessionLoggingConcept {
       await this.sessions.insertOne(newSession);
       return { session: newSessionId };
     } catch (e) {
-      console.error(`SessionLogging: Failed to start session for user ${user}:`, e);
+      console.error(
+        `SessionLogging: Failed to start session for user ${user}:`,
+        e,
+      );
       return { error: "Failed to start session due to a database error." };
     }
   }
@@ -102,7 +108,9 @@ export default class SessionLoggingConcept {
    *           The image must not already be associated with the session.
    * effects: adds the specified image to the set of images associated with the session.
    */
-  async addEntry(input: { user: User; session: Session; image: Image }): Promise<Empty | { error: string }> {
+  async addEntry(
+    input: { user: User; session: Session; image: Image },
+  ): Promise<Empty | { error: string }> {
     const { user, session, image } = input;
 
     // Precondition: Session must exist, be active, and belong to the user.
@@ -112,14 +120,23 @@ export default class SessionLoggingConcept {
       return { error: `SessionLogging: Session with ID ${session} not found.` };
     }
     if (existingSession.owner !== user) {
-      return { error: `SessionLogging: User ${user} is not the owner of session ${session}.` };
+      return {
+        error:
+          `SessionLogging: User ${user} is not the owner of session ${session}.`,
+      };
     }
     if (!existingSession.active) {
-      return { error: `SessionLogging: Session with ID ${session} is not active. Cannot add entries.` };
+      return {
+        error:
+          `SessionLogging: Session with ID ${session} is not active. Cannot add entries.`,
+      };
     }
     // Precondition: Image must not already be in the session
     if (existingSession.images.includes(image)) {
-        return { error: `SessionLogging: Image ${image} is already an entry in session ${session}.` };
+      return {
+        error:
+          `SessionLogging: Image ${image} is already an entry in session ${session}.`,
+      };
     }
 
     // Similar to 'user', 'image' is assumed to be a valid ID here.
@@ -128,11 +145,14 @@ export default class SessionLoggingConcept {
       // Effects: add image to the set of images associated with the session
       await this.sessions.updateOne(
         { _id: session },
-        { $push: { images: image } }
+        { $push: { images: image } },
       );
       return {};
     } catch (e) {
-      console.error(`SessionLogging: Failed to add entry ${image} to session ${session}:`, e);
+      console.error(
+        `SessionLogging: Failed to add entry ${image} to session ${session}:`,
+        e,
+      );
       return { error: "Failed to add entry due to a database error." };
     }
   }
@@ -140,11 +160,12 @@ export default class SessionLoggingConcept {
   /**
    * endSession (user: User, session: Session)
    *
-   * requires: user to exist, session must exist, and session must belong to the user.
+   * requires: user to exist, session must exist, and session must belong to the user. Session must be active
    * effects: sets the 'active' flag of the specified session to false.
-   *          If the session is already inactive, no change occurs (idempotent).
    */
-  async endSession(input: { user: User; session: Session }): Promise<Empty | { error: string }> {
+  async endSession(
+    input: { user: User; session: Session },
+  ): Promise<Empty | { error: string }> {
     const { user, session } = input;
 
     // Precondition: Session must exist and belong to the user.
@@ -154,19 +175,24 @@ export default class SessionLoggingConcept {
       return { error: `SessionLogging: Session with ID ${session} not found.` };
     }
     if (existingSession.owner !== user) {
-      return { error: `SessionLogging: User ${user} is not the owner of session ${session}.` };
+      return {
+        error:
+          `SessionLogging: User ${user} is not the owner of session ${session}.`,
+      };
+    }
+
+    if (!existingSession.active) {
+      return {
+        error:
+          `SessionLogging: Session with ID ${session} is already inactive.`,
+      };
     }
 
     // Effects: end the session (active = false)
-    // If it's already inactive, it's an idempotent operation.
-    if (!existingSession.active) {
-        return {}; // Session is already inactive, no action needed.
-    }
-
     try {
       await this.sessions.updateOne(
         { _id: session },
-        { $set: { active: false } }
+        { $set: { active: false } },
       );
       return {};
     } catch (e) {
@@ -184,16 +210,20 @@ export default class SessionLoggingConcept {
   async _getSessionsByUser(input: { user: User }): Promise<Session[]> {
     const { user } = input;
     const userSessions = await this.sessions.find({ owner: user }).toArray();
-    return userSessions.map(s => s._id);
+    return userSessions.map((s) => s._id);
   }
 
   /**
-   * _getSessionDetails (session: Session): (details: SessionState | null)
-   * effects: Returns the full details of a specific session, or null if not found.
+   * _getSessionDetails (session: Session): (details: SessionState[])
+   * effects: Returns an array containing the full details of a specific session,
+   *          or an empty array if not found.
    */
-  async _getSessionDetails(input: { session: Session }): Promise<SessionState | null> {
+  async _getSessionDetails(
+    input: { session: Session },
+  ): Promise<SessionState[]> {
     const { session } = input;
-    return this.sessions.findOne({ _id: session });
+    const foundSession = await this.sessions.findOne({ _id: session });
+    return foundSession ? [foundSession] : [];
   }
 
   /**
@@ -207,13 +237,14 @@ export default class SessionLoggingConcept {
   }
 
   /**
-   * _isSessionActive (session: Session): (active: boolean)
-   * effects: Returns true if the session is active, false otherwise or if not found.
+   * _isSessionActive (session: Session): (active: boolean[])
+   * effects: Returns an array containing a single boolean (true if the session is active,
+   *          false if inactive) or an empty array if the session is not found.
    */
-  async _isSessionActive(input: { session: Session }): Promise<boolean> {
+  async _isSessionActive(input: { session: Session }): Promise<boolean[]> {
     const { session } = input;
     const foundSession = await this.sessions.findOne({ _id: session });
-    return foundSession ? foundSession.active : false;
+    return foundSession ? [foundSession.active] : [];
   }
 }
 ```

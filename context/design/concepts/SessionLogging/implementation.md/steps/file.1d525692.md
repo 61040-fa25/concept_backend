@@ -1,3 +1,12 @@
+---
+timestamp: 'Tue Oct 14 2025 00:55:46 GMT-0400 (Eastern Daylight Time)'
+parent: '[[../20251014_005546.de1943d6.md]]'
+content_id: 1d5256928fabaf010d7f714e1bd3b8c4620af665e0b1d8c8d0e3dd48accc3ea5
+---
+
+# file: src/concepts/SessionLogging/SessionLoggingConcept.ts
+
+```typescript
 import { Collection, Db } from "npm:mongodb";
 import { Empty, ID } from "../../utils/types.ts"; // Assuming utils is at a higher level
 import { freshID } from "../../utils/database.ts"; // Assuming utils is at a higher level
@@ -198,16 +207,14 @@ export default class SessionLoggingConcept {
   }
 
   /**
-   * _getSessionDetails (session: Session): (details: SessionState[])
-   * effects: Returns an array containing the full details of a specific session,
-   *          or an empty array if not found.
+   * _getSessionDetails (session: Session): (details: SessionState | null)
+   * effects: Returns the full details of a specific session, or null if not found.
    */
   async _getSessionDetails(
     input: { session: Session },
-  ): Promise<SessionState[]> {
+  ): Promise<SessionState | null> {
     const { session } = input;
-    const foundSession = await this.sessions.findOne({ _id: session });
-    return foundSession ? [foundSession] : [];
+    return this.sessions.findOne({ _id: session });
   }
 
   /**
@@ -221,13 +228,14 @@ export default class SessionLoggingConcept {
   }
 
   /**
-   * _isSessionActive (session: Session): (active: boolean[])
-   * effects: Returns an array containing a single boolean (true if the session is active,
-   *          false if inactive) or an empty array if the session is not found.
+   * _isSessionActive (session: Session): (active: boolean)
+   * effects: Returns true if the session is active, false otherwise or if not found.
    */
-  async _isSessionActive(input: { session: Session }): Promise<boolean[]> {
+  async _isSessionActive(input: { session: Session }): Promise<boolean> {
     const { session } = input;
     const foundSession = await this.sessions.findOne({ _id: session });
-    return foundSession ? [foundSession.active] : [];
+    return foundSession ? foundSession.active : false;
   }
 }
+
+```

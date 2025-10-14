@@ -1,3 +1,12 @@
+---
+timestamp: 'Tue Oct 14 2025 00:58:53 GMT-0400 (Eastern Daylight Time)'
+parent: '[[../20251014_005853.6ce12081.md]]'
+content_id: 1069c91eafb8da6cd9d490f64f78c5c24c131cfd9f238641934cc2a5d80fd043
+---
+
+# file: src/concepts/SessionLogging/SessionLoggingConcept.test.ts
+
+```typescript
 import { assertEquals, assertExists, assertNotEquals } from "jsr:@std/assert";
 import { freshID, testDb } from "../../utils/database.ts"; // Adjust path as needed for your project structure
 import { Empty, ID } from "../../utils/types.ts"; // Adjust path as needed for your project structure
@@ -56,15 +65,8 @@ Deno.test("SessionLogging Concept Tests", async (t) => {
       let sessionDetails = await concept._getSessionDetails({
         session: sessionAlice1,
       });
-      assertExists(
-        sessionDetails,
-        "Session details array should be retrievable.",
-      );
-      assertEquals(
-        sessionDetails.length,
-        1,
-        "Should return exactly one session detail.",
-      );
+      assertExists(sessionDetails, "Session details array should be retrievable.");
+      assertEquals(sessionDetails.length, 1, "Should return exactly one session detail.");
       assertEquals(
         sessionDetails[0]?.owner, // Access first element
         userAlice,
@@ -160,24 +162,14 @@ Deno.test("SessionLogging Concept Tests", async (t) => {
       sessionDetails = await concept._getSessionDetails({
         session: sessionAlice1,
       });
-      assertEquals(
-        sessionDetails.length,
-        1,
-        "Should return exactly one session detail after ending.",
-      );
+      assertEquals(sessionDetails.length, 1, "Should return exactly one session detail after ending.");
       assertEquals(
         sessionDetails[0]?.active, // Access first element
         false,
         "Session should be inactive after ending.",
       );
-      const isActiveQueryResult = await concept._isSessionActive({
-        session: sessionAlice1,
-      });
-      assertEquals(
-        isActiveQueryResult.length,
-        1,
-        "Should return exactly one boolean for active status.",
-      );
+      const isActiveQueryResult = await concept._isSessionActive({ session: sessionAlice1 });
+      assertEquals(isActiveQueryResult.length, 1, "Should return exactly one boolean for active status.");
       assertEquals(
         isActiveQueryResult[0], // Access first element
         false,
@@ -424,11 +416,7 @@ Deno.test("SessionLogging Concept Tests", async (t) => {
       let sessionActiveStatusArray = await concept._isSessionActive({ // Renamed to avoid confusion with single boolean
         session: sessionAlice3,
       });
-      assertEquals(
-        sessionActiveStatusArray.length,
-        1,
-        "Should return exactly one boolean for active status.",
-      );
+      assertEquals(sessionActiveStatusArray.length, 1, "Should return exactly one boolean for active status.");
       assertEquals(
         sessionActiveStatusArray[0], // Access first element
         false,
@@ -457,11 +445,7 @@ Deno.test("SessionLogging Concept Tests", async (t) => {
       sessionActiveStatusArray = await concept._isSessionActive({ // Renamed
         session: sessionAlice3,
       });
-      assertEquals(
-        sessionActiveStatusArray.length,
-        1,
-        "Should still return one boolean for active status.",
-      );
+      assertEquals(sessionActiveStatusArray.length, 1, "Should still return one boolean for active status.");
       assertEquals(
         sessionActiveStatusArray[0], // Access first element
         false,
@@ -630,14 +614,8 @@ Deno.test("SessionLogging Concept Tests", async (t) => {
       );
 
       // Verify Bob's session is still active and unmodified after Alice's attempts
-      const bobSessionActiveStatusArray = await concept._isSessionActive({
-        session: sessionBob3,
-      });
-      assertEquals(
-        bobSessionActiveStatusArray.length,
-        1,
-        "Should return one boolean for Bob's session active status.",
-      );
+      const bobSessionActiveStatusArray = await concept._isSessionActive({ session: sessionBob3 });
+      assertEquals(bobSessionActiveStatusArray.length, 1, "Should return one boolean for Bob's session active status.");
       assertEquals(
         bobSessionActiveStatusArray[0], // Access first element
         true,
@@ -654,3 +632,4 @@ Deno.test("SessionLogging Concept Tests", async (t) => {
   // Close the database client after all tests in this file are complete
   await client.close();
 });
+```

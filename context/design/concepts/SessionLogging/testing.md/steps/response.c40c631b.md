@@ -1,6 +1,17 @@
+---
+timestamp: 'Tue Oct 14 2025 00:58:25 GMT-0400 (Eastern Daylight Time)'
+parent: '[[../20251014_005825.96027354.md]]'
+content_id: c40c631b24a29101339c7c42e8552e47fe3a336cb07c9766709ebfebe884d88e
+---
+
+# response:
+
+Here's the modified `SessionLoggingConcept.ts` file with the requested changes to `_getSessionDetails` and `_isSessionActive`.
+
+```typescript
 import { Collection, Db } from "npm:mongodb";
-import { Empty, ID } from "../../utils/types.ts"; // Assuming utils is at a higher level
-import { freshID } from "../../utils/database.ts"; // Assuming utils is at a higher level
+import { Empty, ID } from "../../utils/types.ts";
+import { freshID } from "../../utils/database.ts";
 
 // Declare collection prefix, use concept name
 const PREFIX = "SessionLogging" + ".";
@@ -231,3 +242,4 @@ export default class SessionLoggingConcept {
     return foundSession ? [foundSession.active] : [];
   }
 }
+```
