@@ -1,10 +1,9 @@
-[@implementation](../../../src/concepts/PasswordAuthentication/PasswordAuthenticationConcept.ts)
+---
+timestamp: 'Tue Oct 14 2025 00:46:45 GMT-0400 (Eastern Daylight Time)'
+parent: '[[../20251014_004645.11afb622.md]]'
+content_id: 10edce01a285ea6535322416ef80e4f7e266e032b78ae1b19179820de0d71748
+---
 
-[@testing-concepts](../../background/testing-concepts.md)
-
-[@concept-testcases](../../../src/concepts/PasswordAuthentication/PasswordAuthenticationConcept.test.ts)
-
-# prompt: Please edit tests to also use getUserById where appropriate. getUserById is expected to return UserDocument[]
 # response:
 
 ```typescript

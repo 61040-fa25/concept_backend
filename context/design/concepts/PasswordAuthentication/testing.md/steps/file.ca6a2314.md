@@ -1,16 +1,10 @@
-[@concept-design-overview](../../background/concept-design-overview.md)
+---
+timestamp: 'Tue Oct 14 2025 00:46:23 GMT-0400 (Eastern Daylight Time)'
+parent: '[[../20251014_004623.cef04cff.md]]'
+content_id: ca6a231470f9d18124c3f6b6f80b885326cea846da58ec2e3d68baecff545d8f
+---
 
-[@concept-specifications](../../background/concept-specifications.md)
-
-[@implementing-concepts](../../background/implementing-concepts.md)
-
-[@concept-spec](PasswordAuthentication.md)
-
-[@PasswordAuthenticationConcept.ts](../../../src/concepts/PasswordAuthentication/PasswordAuthenticationConcept.ts)
-
-# prompt: Modify the _getUserByUsername and _getUserById queries to return UserDocument[] instead of UserDocument.
-
-# response:
+# file: src/concepts/PasswordAuthentication/PasswordAuthenticationConcept.ts
 
 ```typescript
 import { Collection, Db } from "npm:mongodb";
@@ -107,7 +101,7 @@ export default class PasswordAuthenticationConcept {
    */
   async _getUserByUsername(
     username: string,
-  ): Promise<UserDocument[]> { // Modified return type to UserDocument[]
+  ): Promise<UserDocument[]> {
     const user = await this.users.findOne({ username: username });
     return user ? [user] : []; // Wrap the found user in an array, or return an empty array
   }
@@ -118,7 +112,7 @@ export default class PasswordAuthenticationConcept {
    *
    * @effects returns an array containing the user document if found, otherwise an empty array.
    */
-  async _getUserById(id: User): Promise<UserDocument[]> { // Modified return type to UserDocument[]
+  async _getUserById(id: User): Promise<UserDocument[]> {
     const user = await this.users.findOne({ _id: id });
     return user ? [user] : []; // Wrap the found user in an array, or return an empty array
   }
@@ -133,4 +127,5 @@ export default class PasswordAuthenticationConcept {
     return await this.users.find({}).toArray();
   }
 }
+
 ```

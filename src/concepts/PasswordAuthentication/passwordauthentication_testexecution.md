@@ -9,7 +9,7 @@
 
 --- Result: register ---
 {
-  "user": "0199dca3-5841-765d-b536-ec277fbda501"
+  "user": "0199e10d-21f0-75bd-942a-040f5a8123da"
 }
 
 --- Action: authenticate ---
@@ -20,7 +20,31 @@
 
 --- Result: authenticate ---
 {
-  "user": "0199dca3-5841-765d-b536-ec277fbda501"
+  "user": "0199e10d-21f0-75bd-942a-040f5a8123da"
+}
+
+--- Query: _getUserByUsername ---
+{
+  "username": "alice"
+}
+
+--- Result: _getUserByUsername ---
+{
+  "_id": "0199e10d-21f0-75bd-942a-040f5a8123da",
+  "username": "alice",
+  "password": "password123"
+}
+
+--- Query: _getUserById ---
+{
+  "id": "0199e10d-21f0-75bd-942a-040f5a8123da"
+}
+
+--- Result: _getUserById ---
+{
+  "_id": "0199e10d-21f0-75bd-942a-040f5a8123da",
+  "username": "alice",
+  "password": "password123"
 }
 
 --- Running scenario 1: attempt to register with an already existing username. ---
@@ -33,7 +57,19 @@
 
 --- Result: first register ---
 {
-  "user": "0199dca3-58ad-7c6f-9cc2-f1aeb5ebb300"
+  "user": "0199e10d-2267-75df-97b5-209bd1db5168"
+}
+
+--- Query: _getUserById ---
+{
+  "id": "0199e10d-2267-75df-97b5-209bd1db5168"
+}
+
+--- Result: _getUserById (Bob) ---
+{
+  "_id": "0199e10d-2267-75df-97b5-209bd1db5168",
+  "username": "bob",
+  "password": "bobpassword"
 }
 
 --- Action: register (second time with same username) ---
@@ -57,7 +93,19 @@
 
 --- Result: register ---
 {
-  "user": "0199dca3-593d-7c61-8019-055b34aa7aaf"
+  "user": "0199e10d-22aa-79aa-92de-436fe9f0f5a5"
+}
+
+--- Query: _getUserById ---
+{
+  "id": "0199e10d-22aa-79aa-92de-436fe9f0f5a5"
+}
+
+--- Result: _getUserById (Charlie) ---
+{
+  "_id": "0199e10d-22aa-79aa-92de-436fe9f0f5a5",
+  "username": "charlie",
+  "password": "charliepassword"
 }
 
 --- Action: authenticate with incorrect password ---
@@ -79,7 +127,7 @@
 
 --- Result: authenticate (correct password) ---
 {
-  "user": "0199dca3-593d-7c61-8019-055b34aa7aaf"
+  "user": "0199e10d-22aa-79aa-92de-436fe9f0f5a5"
 }
 
 --- Running scenario 3: authenticate with non-existent username. ---
@@ -105,7 +153,7 @@
 
 --- Result: register user1 ---
 {
-  "user": "0199dca3-59ee-7f63-bbd8-5408dcbb19ff"
+  "user": "0199e10d-230a-7361-bb8c-e3ef99088584"
 }
 
 --- Action: register user2 ---
@@ -116,7 +164,7 @@
 
 --- Result: register user2 ---
 {
-  "user": "0199dca3-5a16-74a1-b97e-2c6b0c514002"
+  "user": "0199e10d-232c-72d7-8d79-12d733c8b9c9"
 }
 
 --- Action: authenticate user1 ---
@@ -127,7 +175,7 @@
 
 --- Result: authenticate user1 ---
 {
-  "user": "0199dca3-59ee-7f63-bbd8-5408dcbb19ff"
+  "user": "0199e10d-230a-7361-bb8c-e3ef99088584"
 }
 
 --- Action: authenticate user2 ---
@@ -138,7 +186,7 @@
 
 --- Result: authenticate user2 ---
 {
-  "user": "0199dca3-5a16-74a1-b97e-2c6b0c514002"
+  "user": "0199e10d-232c-72d7-8d79-12d733c8b9c9"
 }
 
 --- Query: _getAllUsers ---
@@ -146,27 +194,27 @@
 --- Result: _getAllUsers ---
 [
   {
-    "_id": "0199dca3-5841-765d-b536-ec277fbda501",
+    "_id": "0199e10d-21f0-75bd-942a-040f5a8123da",
     "username": "alice",
     "password": "password123"
   },
   {
-    "_id": "0199dca3-58ad-7c6f-9cc2-f1aeb5ebb300",
+    "_id": "0199e10d-2267-75df-97b5-209bd1db5168",
     "username": "bob",
     "password": "bobpassword"
   },
   {
-    "_id": "0199dca3-593d-7c61-8019-055b34aa7aaf",
+    "_id": "0199e10d-22aa-79aa-92de-436fe9f0f5a5",
     "username": "charlie",
     "password": "charliepassword"
   },
   {
-    "_id": "0199dca3-59ee-7f63-bbd8-5408dcbb19ff",
+    "_id": "0199e10d-230a-7361-bb8c-e3ef99088584",
     "username": "diana",
     "password": "diana_password"
   },
   {
-    "_id": "0199dca3-5a16-74a1-b97e-2c6b0c514002",
+    "_id": "0199e10d-232c-72d7-8d79-12d733c8b9c9",
     "username": "eve",
     "password": "eve_password"
   }

@@ -88,22 +88,24 @@ export default class PasswordAuthenticationConcept {
    * Query: _getUserByUsername
    * Internal query to retrieve a user document by username.
    *
-   * @effects returns the user document if found, otherwise null.
+   * @effects returns an array containing the user document if found, otherwise an empty array.
    */
   async _getUserByUsername(
     username: string,
-  ): Promise<UserDocument | null> {
-    return await this.users.findOne({ username: username });
+  ): Promise<UserDocument[]> {
+    const user = await this.users.findOne({ username: username });
+    return user ? [user] : []; // Wrap the found user in an array, or return an empty array
   }
 
   /**
    * Query: _getUserById
    * Internal query to retrieve a user document by ID.
    *
-   * @effects returns the user document if found, otherwise null.
+   * @effects returns an array containing the user document if found, otherwise an empty array.
    */
-  async _getUserById(id: User): Promise<UserDocument | null> {
-    return await this.users.findOne({ _id: id });
+  async _getUserById(id: User): Promise<UserDocument[]> {
+    const user = await this.users.findOne({ _id: id });
+    return user ? [user] : []; // Wrap the found user in an array, or return an empty array
   }
 
   /**

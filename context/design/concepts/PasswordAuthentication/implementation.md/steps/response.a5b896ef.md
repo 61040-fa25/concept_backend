@@ -1,14 +1,8 @@
-[@concept-design-overview](../../background/concept-design-overview.md)
-
-[@concept-specifications](../../background/concept-specifications.md)
-
-[@implementing-concepts](../../background/implementing-concepts.md)
-
-[@concept-spec](PasswordAuthentication.md)
-
-[@PasswordAuthenticationConcept.ts](../../../src/concepts/PasswordAuthentication/PasswordAuthenticationConcept.ts)
-
-# prompt: Modify the _getUserByUsername and _getUserById queries to return UserDocument[] instead of UserDocument.
+---
+timestamp: 'Tue Oct 14 2025 00:35:54 GMT-0400 (Eastern Daylight Time)'
+parent: '[[../20251014_003554.d7af487d.md]]'
+content_id: a5b896ef17187adfd713a4937c64989d7262e03009f62cf7f860f454f4f0dcd0
+---
 
 # response:
 

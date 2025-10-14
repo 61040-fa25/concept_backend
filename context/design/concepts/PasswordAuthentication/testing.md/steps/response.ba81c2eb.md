@@ -1,16 +1,19 @@
-[@implementation](../../../src/concepts/PasswordAuthentication/PasswordAuthenticationConcept.ts)
+---
+timestamp: 'Tue Oct 14 2025 00:44:21 GMT-0400 (Eastern Daylight Time)'
+parent: '[[../20251014_004421.034cd684.md]]'
+content_id: ba81c2eb3c3637300a103d65691c8b0f4590393083dbd9ff9041c0696c96eb71
+---
 
-[@testing-concepts](../../background/testing-concepts.md)
-
-[@concept-testcases](../../../src/concepts/PasswordAuthentication/PasswordAuthenticationConcept.test.ts)
-
-# prompt: Please edit tests to also use getUserById where appropriate. getUserById is expected to return UserDocument[]
 # response:
 
 ```typescript
+// file: src/PasswordAuthentication/PasswordAuthenticationConcept.test.ts
 import { assertEquals } from "jsr:@std/assert";
 import { testDb } from "@utils/database.ts";
 import PasswordAuthenticationConcept from "./PasswordAuthenticationConcept.ts";
+// Note: As per the concept implementation, _getUserById and _getUserByUsername
+// return `UserDocument | null` (using findOne), not `UserDocument[]`.
+// The tests will reflect this `UserDocument | null` return type.
 
 Deno.test("PasswordAuthenticationConcept", async (t) => {
   const [db, client] = await testDb();
@@ -36,6 +39,26 @@ Deno.test("PasswordAuthenticationConcept", async (t) => {
     const aliceId = (registerResult as { user: string }).user;
     log("Result: register", registerResult);
 
+    // Verify user by ID immediately after registration
+    log("Query: _getUserById (after register)", { id: aliceId });
+    const userByIdAfterRegister = await concept._getUserById(aliceId);
+    assertEquals(
+      userByIdAfterRegister !== null,
+      true,
+      "User should be found by ID after registration",
+    );
+    assertEquals(
+      userByIdAfterRegister?._id,
+      aliceId,
+      "User ID from _getUserById should match registered ID",
+    );
+    assertEquals(
+      userByIdAfterRegister?.username,
+      username,
+      "User username from _getUserById should match registered username",
+    );
+    log("Result: _getUserById (after register)", userByIdAfterRegister);
+
     log("Action: authenticate", { username, password });
     const authResult = await concept.authenticate({ username, password });
     assertEquals("user" in authResult, true, "Authentication should succeed");
@@ -46,59 +69,45 @@ Deno.test("PasswordAuthenticationConcept", async (t) => {
     );
     log("Result: authenticate", authResult);
 
-    // Verify internal state using _getUserByUsername
+    // Verify internal state using both queries for completeness
     log("Query: _getUserByUsername", { username });
-    const storedUsersByUsername = await concept._getUserByUsername(username); // Returns an array
+    const storedUserByUsername = await concept._getUserByUsername(username);
     assertEquals(
-      storedUsersByUsername.length,
-      1,
+      storedUserByUsername !== null,
+      true,
       "Expected one user to be found by username",
     );
-    const storedUserByUsername = storedUsersByUsername[0]; // Access the first (and only) user
     log("Result: _getUserByUsername", storedUserByUsername);
 
     assertEquals(
-      storedUserByUsername.username,
+      storedUserByUsername?.username,
       username,
-      "User's username should match the registered username (by username query)",
+      "User's username should match the registered username",
     );
     assertEquals(
-      storedUserByUsername._id,
+      storedUserByUsername?._id,
       aliceId,
-      "Stored user ID should match the registered user ID (by username query)",
+      "Stored user ID should match the registered user ID",
     );
     assertEquals(
-      storedUserByUsername.password,
+      storedUserByUsername?.password,
       password,
-      "Stored password should match (plain text in this example, by username query)",
+      "Stored password should match (plain text in this example)",
     );
 
-    // Verify internal state using _getUserById
-    log("Query: _getUserById", { id: aliceId });
-    const storedUsersById = await concept._getUserById(aliceId); // Returns an array
+    log("Query: _getUserById (after authenticate)", { id: aliceId });
+    const userByIdAfterAuth = await concept._getUserById(aliceId);
     assertEquals(
-      storedUsersById.length,
-      1,
-      "Expected one user to be found by ID",
+      userByIdAfterAuth !== null,
+      true,
+      "User should still be found by ID after authentication",
     );
-    const storedUserById = storedUsersById[0];
-    log("Result: _getUserById", storedUserById);
-
     assertEquals(
-      storedUserById._id,
+      userByIdAfterAuth?._id,
       aliceId,
-      "User's ID should match the registered user ID (by ID query)",
+      "User ID from _getUserById should match registered ID after auth",
     );
-    assertEquals(
-      storedUserById.username,
-      username,
-      "Stored username should match the registered username (by ID query)",
-    );
-    assertEquals(
-      storedUserById.password,
-      password,
-      "Stored password should match (plain text in this example, by ID query)",
-    );
+    log("Result: _getUserById (after authenticate)", userByIdAfterAuth);
   });
 
   await t.step(
@@ -124,21 +133,25 @@ Deno.test("PasswordAuthenticationConcept", async (t) => {
       const bobId = (firstRegisterResult as { user: string }).user;
       log("Result: first register", firstRegisterResult);
 
-      // Verify the registered user by ID
-      log("Query: _getUserById", { id: bobId });
+      // Verify Bob's registration via ID
+      log("Query: _getUserById (Bob after first register)", { id: bobId });
       const bobUserById = await concept._getUserById(bobId);
-      assertEquals(bobUserById.length, 1, "Expected Bob to be found by ID");
       assertEquals(
-        bobUserById[0].username,
+        bobUserById !== null,
+        true,
+        "Bob should be found by ID after first registration",
+      );
+      assertEquals(
+        bobUserById?._id,
+        bobId,
+        "Bob's ID from _getUserById should match",
+      );
+      assertEquals(
+        bobUserById?.username,
         username,
-        "Bob's username should match",
+        "Bob's username from _getUserById should match",
       );
-      assertEquals(
-        bobUserById[0].password,
-        password,
-        "Bob's password should match",
-      );
-      log("Result: _getUserById (Bob)", bobUserById[0]);
+      log("Result: _getUserById (Bob after first register)", bobUserById);
 
       log("Action: register (second time with same username)", {
         username,
@@ -178,25 +191,20 @@ Deno.test("PasswordAuthenticationConcept", async (t) => {
     const charlieId = (registerResult as { user: string }).user;
     log("Result: register", registerResult);
 
-    // Verify the registered user by ID
-    log("Query: _getUserById", { id: charlieId });
+    // Verify Charlie's registration via ID
+    log("Query: _getUserById (Charlie after register)", { id: charlieId });
     const charlieUserById = await concept._getUserById(charlieId);
     assertEquals(
-      charlieUserById.length,
-      1,
-      "Expected Charlie to be found by ID",
+      charlieUserById !== null,
+      true,
+      "Charlie should be found by ID after registration",
     );
     assertEquals(
-      charlieUserById[0].username,
-      username,
-      "Charlie's username should match",
+      charlieUserById?._id,
+      charlieId,
+      "Charlie's ID from _getUserById should match",
     );
-    assertEquals(
-      charlieUserById[0].password,
-      correctPassword,
-      "Charlie's password should match",
-    );
-    log("Result: _getUserById (Charlie)", charlieUserById[0]);
+    log("Result: _getUserById (Charlie after register)", charlieUserById);
 
     log("Action: authenticate with incorrect password", {
       username,
@@ -232,6 +240,11 @@ Deno.test("PasswordAuthenticationConcept", async (t) => {
       true,
       "Authentication with correct password should succeed",
     );
+    assertEquals(
+      (correctAuthResult as { user: string }).user,
+      charlieId,
+      "Authenticated user ID should match Charlie's ID",
+    );
     log("Result: authenticate (correct password)", correctAuthResult);
   });
 
@@ -242,6 +255,7 @@ Deno.test("PasswordAuthenticationConcept", async (t) => {
 
       const username = "nonexistent";
       const password = "anypassword";
+      const nonExistentId = "someNonExistentId"; // Example ID, shouldn't exist
 
       log("Action: authenticate", { username, password });
       const authResult = await concept.authenticate({ username, password });
@@ -257,28 +271,15 @@ Deno.test("PasswordAuthenticationConcept", async (t) => {
       );
       log("Result: authenticate", authResult);
 
-      // Verify that _getUserByUsername also returns empty for non-existent user
-      log("Query: _getUserByUsername (non-existent)", { username });
-      const nonexistentUserByUsername = await concept._getUserByUsername(
-        username,
-      );
+      // Verify that _getUserById for a non-existent ID returns null
+      log("Query: _getUserById (non-existent ID)", { id: nonExistentId });
+      const userByNonExistentId = await concept._getUserById(nonExistentId);
       assertEquals(
-        nonexistentUserByUsername.length,
-        0,
-        "Expected no user to be found by non-existent username",
+        userByNonExistentId,
+        null,
+        "Query by non-existent ID should return null",
       );
-      log("Result: _getUserByUsername (non-existent)", nonexistentUserByUsername);
-
-      // Verify that _getUserById also returns empty for a random/non-existent ID
-      const randomId = "random_non_existent_id_123" as any; // Cast as ID for type compatibility
-      log("Query: _getUserById (non-existent)", { id: randomId });
-      const nonexistentUserById = await concept._getUserById(randomId);
-      assertEquals(
-        nonexistentUserById.length,
-        0,
-        "Expected no user to be found by non-existent ID",
-      );
-      log("Result: _getUserById (non-existent)", nonexistentUserById);
+      log("Result: _getUserById (non-existent ID)", userByNonExistentId);
     },
   );
 
@@ -300,20 +301,20 @@ Deno.test("PasswordAuthenticationConcept", async (t) => {
       const dianaId = (register1Result as { user: string }).user;
       log("Result: register user1", register1Result);
 
-      // Verify Diana by ID
-      log("Query: _getUserById (Diana)", { id: dianaId });
+      // Verify Diana's registration via ID
+      log("Query: _getUserById (Diana after register)", { id: dianaId });
       const dianaUserById = await concept._getUserById(dianaId);
       assertEquals(
-        dianaUserById.length,
-        1,
-        "Expected Diana to be found by ID",
+        dianaUserById !== null,
+        true,
+        "Diana should be found by ID after registration",
       );
       assertEquals(
-        dianaUserById[0].username,
-        user1.username,
-        "Diana's username should match",
+        dianaUserById?._id,
+        dianaId,
+        "Diana's ID from _getUserById should match",
       );
-      log("Result: _getUserById (Diana)", dianaUserById[0]);
+      log("Result: _getUserById (Diana after register)", dianaUserById);
 
       log("Action: register user2", user2);
       const register2Result = await concept.register(user2);
@@ -325,16 +326,20 @@ Deno.test("PasswordAuthenticationConcept", async (t) => {
       const eveId = (register2Result as { user: string }).user;
       log("Result: register user2", register2Result);
 
-      // Verify Eve by ID
-      log("Query: _getUserById (Eve)", { id: eveId });
+      // Verify Eve's registration via ID
+      log("Query: _getUserById (Eve after register)", { id: eveId });
       const eveUserById = await concept._getUserById(eveId);
-      assertEquals(eveUserById.length, 1, "Expected Eve to be found by ID");
       assertEquals(
-        eveUserById[0].username,
-        user2.username,
-        "Eve's username should match",
+        eveUserById !== null,
+        true,
+        "Eve should be found by ID after registration",
       );
-      log("Result: _getUserById (Eve)", eveUserById[0]);
+      assertEquals(
+        eveUserById?._id,
+        eveId,
+        "Eve's ID from _getUserById should match",
+      );
+      log("Result: _getUserById (Eve after register)", eveUserById);
 
       log("Action: authenticate user1", user1);
       const auth1Result = await concept.authenticate(user1);
@@ -368,25 +373,33 @@ Deno.test("PasswordAuthenticationConcept", async (t) => {
       log("Query: _getAllUsers");
       const allUsers = await concept._getAllUsers();
       log("Result: _getAllUsers", allUsers);
-      // Note: The previous tests also created users, so the count will be cumulative.
-      // For a clean count in this specific step, one might want to reset the DB,
-      // but the instruction is to not setup state except by actions.
-      // We can at least assert that the two new users are present.
-      const registeredUsernames = allUsers.map((u) => u.username);
+
+      const allUserIds = allUsers.map((u) => u._id);
       assertEquals(
-        registeredUsernames.includes(user1.username),
+        allUserIds.includes(dianaId),
         true,
-        "User1 should be in _getAllUsers",
+        "Diana's ID should be in _getAllUsers",
       );
       assertEquals(
-        registeredUsernames.includes(user2.username),
+        allUserIds.includes(eveId),
         true,
-        "User2 should be in _getAllUsers",
+        "Eve's ID should be in _getAllUsers",
       );
+
+      // Additionally verify the presence of users registered in previous steps
+      // (assuming tests run sequentially and database isn't reset per step)
+      const expectedEarlierUsernames = ["alice", "bob", "charlie"];
+      const actualUsernames = allUsers.map((u) => u.username);
+      for (const uname of expectedEarlierUsernames) {
+        assertEquals(
+          actualUsernames.includes(uname),
+          true,
+          `User '${uname}' should be present from earlier tests`,
+        );
+      }
     },
   );
 
   await client.close();
 });
-
 ```

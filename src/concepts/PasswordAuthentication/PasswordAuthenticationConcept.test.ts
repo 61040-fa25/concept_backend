@@ -1,6 +1,7 @@
 import { assertEquals } from "jsr:@std/assert";
 import { testDb } from "@utils/database.ts";
 import PasswordAuthenticationConcept from "./PasswordAuthenticationConcept.ts";
+import { ID } from "@utils/types.ts";
 
 Deno.test("PasswordAuthenticationConcept", async (t) => {
   const [db, client] = await testDb();
@@ -37,17 +38,57 @@ Deno.test("PasswordAuthenticationConcept", async (t) => {
     log("Result: authenticate", authResult);
 
     // Verify internal state for completeness
-    const storedUser = await concept._getUserByUsername(username);
+    log("Query: _getUserByUsername", { username });
+    const storedUsers = await concept._getUserByUsername(username); // Now returns an array
     assertEquals(
-      storedUser?.username,
-      username,
-      "User should be found by username",
+      storedUsers.length,
+      1,
+      "Expected one user to be found by username",
     );
-    assertEquals(storedUser?._id, aliceId, "Stored user ID should match");
+    const storedUser = storedUsers[0]; // Access the first (and only) user
+    log("Result: _getUserByUsername", storedUser);
+
     assertEquals(
-      storedUser?.password,
+      storedUser.username, // Access directly, as it's an object in the array
+      username,
+      "User's username should match the registered username",
+    );
+    assertEquals(
+      storedUser._id,
+      aliceId,
+      "Stored user ID should match the registered user ID",
+    );
+    assertEquals(
+      storedUser.password, // Access directly
       password,
       "Stored password should match (plain text in this example)",
+    );
+
+    // Verify internal state using _getUserById
+    log("Query: _getUserById", { id: aliceId });
+    const storedUsersById = await concept._getUserById(aliceId as ID); // Returns an array
+    assertEquals(
+      storedUsersById.length,
+      1,
+      "Expected one user to be found by ID",
+    );
+    const storedUserById = storedUsersById[0];
+    log("Result: _getUserById", storedUserById);
+
+    assertEquals(
+      storedUserById._id,
+      aliceId,
+      "User's ID should match the registered user ID (by ID query)",
+    );
+    assertEquals(
+      storedUserById.username,
+      username,
+      "Stored username should match the registered username (by ID query)",
+    );
+    assertEquals(
+      storedUserById.password,
+      password,
+      "Stored password should match (plain text in this example, by ID query)",
     );
   });
 
@@ -71,7 +112,24 @@ Deno.test("PasswordAuthenticationConcept", async (t) => {
         true,
         "First registration should succeed",
       );
+      const bobId = (firstRegisterResult as { user: string }).user;
       log("Result: first register", firstRegisterResult);
+
+      // Verify the registered user by ID
+      log("Query: _getUserById", { id: bobId });
+      const bobUserById = await concept._getUserById(bobId as ID);
+      assertEquals(bobUserById.length, 1, "Expected Bob to be found by ID");
+      assertEquals(
+        bobUserById[0].username,
+        username,
+        "Bob's username should match",
+      );
+      assertEquals(
+        bobUserById[0].password,
+        password,
+        "Bob's password should match",
+      );
+      log("Result: _getUserById (Bob)", bobUserById[0]);
 
       log("Action: register (second time with same username)", {
         username,
@@ -108,7 +166,28 @@ Deno.test("PasswordAuthenticationConcept", async (t) => {
       password: correctPassword,
     });
     assertEquals("user" in registerResult, true, "Registration should succeed");
+    const charlieId = (registerResult as { user: string }).user;
     log("Result: register", registerResult);
+
+    // Verify the registered user by ID
+    log("Query: _getUserById", { id: charlieId });
+    const charlieUserById = await concept._getUserById(charlieId as ID);
+    assertEquals(
+      charlieUserById.length,
+      1,
+      "Expected Charlie to be found by ID",
+    );
+    assertEquals(
+      charlieUserById[0].username,
+      username,
+      "Charlie's username should match",
+    );
+    assertEquals(
+      charlieUserById[0].password,
+      correctPassword,
+      "Charlie's password should match",
+    );
+    log("Result: _getUserById (Charlie)", charlieUserById[0]);
 
     log("Action: authenticate with incorrect password", {
       username,
