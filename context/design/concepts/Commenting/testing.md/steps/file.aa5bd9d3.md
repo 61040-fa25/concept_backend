@@ -1,15 +1,10 @@
-[@concept-design-overview](../../background/concept-design-overview.md)
+---
+timestamp: 'Tue Oct 14 2025 00:30:56 GMT-0400 (Eastern Daylight Time)'
+parent: '[[../20251014_003056.079a63ed.md]]'
+content_id: aa5bd9d31ea96ef85f4bd398fe84333d8ddc3e8f659355c6e55338875fb61f77
+---
 
-[@concept-specifications](../../background/concept-specifications.md)
-
-[@implementing-concepts](../../background/implementing-concepts.md)
-
-[@concept-spec](Commenting.md)
-
-[@concept-implementation](../../../src/concepts/Commenting/CommentingConcept.ts)
-
-# prompt: Modify the getComment query to return CommentDocument[] instead of CommentDocument.
-# response:
+# file: src/concepts/Commenting/CommentingConcept.ts
 
 ```typescript
 import { Collection, Db, ObjectId } from "npm:mongodb";
@@ -211,4 +206,5 @@ export default class CommentingConcept {
     return { comments: foundComments };
   }
 }
+
 ```

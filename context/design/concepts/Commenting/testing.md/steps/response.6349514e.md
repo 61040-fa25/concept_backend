@@ -1,14 +1,9 @@
-[@concept-design-overview](../../background/concept-design-overview.md)
+---
+timestamp: 'Tue Oct 14 2025 00:30:56 GMT-0400 (Eastern Daylight Time)'
+parent: '[[../20251014_003056.079a63ed.md]]'
+content_id: 6349514e67d729697ebffe903fb11c3a7aa3692d6010be39ebf1e22c9eb6b54f
+---
 
-[@concept-specifications](../../background/concept-specifications.md)
-
-[@implementing-concepts](../../background/implementing-concepts.md)
-
-[@concept-spec](Commenting.md)
-
-[@concept-implementation](../../../src/concepts/Commenting/CommentingConcept.ts)
-
-# prompt: Modify the getComment query to return CommentDocument[] instead of CommentDocument.
 # response:
 
 ```typescript

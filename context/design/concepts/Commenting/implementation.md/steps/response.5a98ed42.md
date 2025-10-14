@@ -1,14 +1,9 @@
-[@concept-design-overview](../../background/concept-design-overview.md)
+---
+timestamp: 'Tue Oct 14 2025 00:27:29 GMT-0400 (Eastern Daylight Time)'
+parent: '[[../20251014_002729.93935d13.md]]'
+content_id: 5a98ed42eb6637bec3d62b631a394ac7df34d955c4c1d42a15e75d849ddfdb51
+---
 
-[@concept-specifications](../../background/concept-specifications.md)
-
-[@implementing-concepts](../../background/implementing-concepts.md)
-
-[@concept-spec](Commenting.md)
-
-[@concept-implementation](../../../src/concepts/Commenting/CommentingConcept.ts)
-
-# prompt: Modify the getComment query to return CommentDocument[] instead of CommentDocument.
 # response:
 
 ```typescript
@@ -36,6 +31,8 @@ interface CommentDocument {
   content: string;
   post: Post;
   createdAt: Date;
+  // Adding updatedAt for edit action as per implementation
+  updatedAt?: Date;
 }
 
 /**
@@ -171,44 +168,46 @@ export default class CommentingConcept {
   }
 
   /**
-   * _getComment (comment: Comment): (comments: CommentDocument[])
-   * Query to retrieve a specific comment. Returns an array for consistency with other queries.
+   * _getComment (comment: Comment): (comment: CommentDocument)
+   * Query to retrieve a specific comment. Returns an array of dictionaries,
+   * where each dictionary has a 'comment' field.
    */
   async _getComment(
     { comment }: { comment: Comment },
-  ): Promise<{ comments: CommentDocument[] } | { error: string }> {
+  ): Promise<Array<{ comment: CommentDocument }>> {
     const foundComment = await this.comments.findOne({ _id: comment });
     if (foundComment) {
-      // Wrap the single found comment in an array to match the desired return type
-      return { comments: [foundComment] };
+      return [{ comment: foundComment }]; // Wrap single result in an array
     }
-    return { error: `Comment with ID '${comment}' not found.` };
+    return []; // Return empty array if not found
   }
 
   /**
    * _getCommentsForPost (post: Post): (comments: CommentDocument[])
    * Query to retrieve all comments for a given post, sorted from most recent to oldest.
+   * As per documentation, queries must return an array of dictionaries.
    */
   async _getCommentsForPost(
     { post }: { post: Post },
-  ): Promise<{ comments: CommentDocument[] }> {
+  ): Promise<Array<{ comments: CommentDocument[] }>> { // Modified return type
     const foundComments = await this.comments.find({ post }).sort({
       createdAt: -1,
     }).toArray();
-    return { comments: foundComments };
+    return [{ comments: foundComments }]; // Modified to return an array containing one dictionary
   }
 
   /**
    * _getCommentsByAuthor (author: User): (comments: CommentDocument[])
    * Query to retrieve all comments made by a given user, sorted from most recent to oldest.
+   * As per documentation, queries must return an array of dictionaries.
    */
   async _getCommentsByAuthor(
     { author }: { author: User },
-  ): Promise<{ comments: CommentDocument[] }> {
+  ): Promise<Array<{ comments: CommentDocument[] }>> { // Modified return type
     const foundComments = await this.comments.find({ author }).sort({
       createdAt: -1,
     }).toArray();
-    return { comments: foundComments };
+    return [{ comments: foundComments }]; // Modified to return an array containing one dictionary
   }
 }
 ```

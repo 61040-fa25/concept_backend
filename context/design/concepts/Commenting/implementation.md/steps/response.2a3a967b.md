@@ -1,15 +1,19 @@
-[@concept-design-overview](../../background/concept-design-overview.md)
+---
+timestamp: 'Tue Oct 14 2025 00:24:49 GMT-0400 (Eastern Daylight Time)'
+parent: '[[../20251014_002449.6f683775.md]]'
+content_id: 2a3a967be8b805f67ade4818044e10e564f03b7ee9fa2caa99d7e07df85da285
+---
 
-[@concept-specifications](../../background/concept-specifications.md)
-
-[@implementing-concepts](../../background/implementing-concepts.md)
-
-[@concept-spec](Commenting.md)
-
-[@concept-implementation](../../../src/concepts/Commenting/CommentingConcept.ts)
-
-# prompt: Modify the getComment query to return CommentDocument[] instead of CommentDocument.
 # response:
+
+To align with the specified rule that "queries always return an array of dictionaries," I will modify the `_getComment`, `_getCommentsForPost`, and `_getCommentsByAuthor` methods in the `CommentingConcept.ts` file.
+
+The key changes are:
+
+1. **`_getComment`**: This query, which typically returns a single object, will now return an array containing that single object if found, or an empty array if not found. Its return type will be `Promise<Array<{ comment: CommentDocument }>>`. The error return for "not found" is removed, as "not found" for queries should result in an empty array according to the guidelines, rather than an explicit error object.
+2. **`_getCommentsForPost` and `_getCommentsByAuthor`**: These queries already return a collection of items. However, their current return type is `Promise<{ comments: CommentDocument[] }>`. According to the rule "Queries always return an array of dictionaries so if the specification has this signature: `_query (a: A, b: B): (c: C)` ... the implementation should return an array of dictionaries each with a field called `c`", the return should be `Promise<Array<{ comments: CommentDocument[] }>>`. This means the array of comments will be wrapped inside a single dictionary, which is then wrapped in an outer array.
+
+Here's the updated `CommentingConcept.ts`:
 
 ```typescript
 import { Collection, Db, ObjectId } from "npm:mongodb";
@@ -171,44 +175,46 @@ export default class CommentingConcept {
   }
 
   /**
-   * _getComment (comment: Comment): (comments: CommentDocument[])
-   * Query to retrieve a specific comment. Returns an array for consistency with other queries.
+   * _getComment (comment: Comment): (comment: CommentDocument)
+   * Query to retrieve a specific comment. Returns an array of dictionaries,
+   * where each dictionary has a 'comment' field.
    */
   async _getComment(
     { comment }: { comment: Comment },
-  ): Promise<{ comments: CommentDocument[] } | { error: string }> {
+  ): Promise<Array<{ comment: CommentDocument }>> {
     const foundComment = await this.comments.findOne({ _id: comment });
     if (foundComment) {
-      // Wrap the single found comment in an array to match the desired return type
-      return { comments: [foundComment] };
+      return [{ comment: foundComment }]; // Wrap single result in an array
     }
-    return { error: `Comment with ID '${comment}' not found.` };
+    return []; // Return empty array if not found
   }
 
   /**
    * _getCommentsForPost (post: Post): (comments: CommentDocument[])
    * Query to retrieve all comments for a given post, sorted from most recent to oldest.
+   * Returns an array of dictionaries, where each dictionary has a 'comments' field holding an array of CommentDocuments.
    */
   async _getCommentsForPost(
     { post }: { post: Post },
-  ): Promise<{ comments: CommentDocument[] }> {
+  ): Promise<Array<{ comments: CommentDocument[] }>> {
     const foundComments = await this.comments.find({ post }).sort({
       createdAt: -1,
     }).toArray();
-    return { comments: foundComments };
+    return [{ comments: foundComments }]; // Wrap the dictionary in an outer array
   }
 
   /**
    * _getCommentsByAuthor (author: User): (comments: CommentDocument[])
    * Query to retrieve all comments made by a given user, sorted from most recent to oldest.
+   * Returns an array of dictionaries, where each dictionary has a 'comments' field holding an array of CommentDocuments.
    */
   async _getCommentsByAuthor(
     { author }: { author: User },
-  ): Promise<{ comments: CommentDocument[] }> {
+  ): Promise<Array<{ comments: CommentDocument[] }>> {
     const foundComments = await this.comments.find({ author }).sort({
       createdAt: -1,
     }).toArray();
-    return { comments: foundComments };
+    return [{ comments: foundComments }]; // Wrap the dictionary in an outer array
   }
 }
 ```

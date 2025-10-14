@@ -1,3 +1,12 @@
+---
+timestamp: 'Tue Oct 14 2025 00:30:56 GMT-0400 (Eastern Daylight Time)'
+parent: '[[../20251014_003056.079a63ed.md]]'
+content_id: 6ebd3c22cff30f3e64b317c754a5fa5ff73e848fafaf67120c13624b470d2242
+---
+
+# file: src/concepts/Commenting/CommentingConcept.test.ts
+
+```typescript
 import {
   assertEquals,
   assertNotEquals,
@@ -54,17 +63,10 @@ Deno.test("Commenting Concept Tests", async (test) => {
     );
     if ("error" in getCommentResult1) {
       throw new AssertionError({
-        message:
-          `Comment ${commentId} should be found, but an error was returned: ${getCommentResult1.error}`,
+        message: "Comment should be found",
       });
     }
-    // Access the first element of the 'comments' array as per the updated return type
-    assertEquals(
-      getCommentResult1.comments.length,
-      1,
-      `Expected 1 comment for ID ${commentId}, got ${getCommentResult1.comments.length}`,
-    );
-    assertObjectMatch(getCommentResult1.comments[0], {
+    assertObjectMatch((getCommentResult1 as { comment: any }).comment, {
       _id: commentId,
       author: mockUserA,
       content: initialContent,
@@ -92,19 +94,7 @@ Deno.test("Commenting Concept Tests", async (test) => {
       "Query: _getComment(" + commentId + ") Result:",
       getCommentResult2,
     );
-    if ("error" in getCommentResult2) {
-      throw new AssertionError({
-        message:
-          `Edited comment ${commentId} should be found, but an error was returned: ${getCommentResult2.error}`,
-      });
-    }
-    // Access the first element of the 'comments' array as per the updated return type
-    assertEquals(
-      getCommentResult2.comments.length,
-      1,
-      `Expected 1 comment for ID ${commentId} after edit, got ${getCommentResult2.comments.length}`,
-    );
-    assertObjectMatch(getCommentResult2.comments[0], {
+    assertObjectMatch((getCommentResult2 as { comment: any }).comment, {
       _id: commentId,
       author: mockUserA,
       content: updatedContent,
@@ -459,3 +449,5 @@ Deno.test("Commenting Concept Tests", async (test) => {
 
   await client.close();
 });
+
+```

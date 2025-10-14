@@ -157,15 +157,16 @@ export default class CommentingConcept {
   }
 
   /**
-   * _getComment (comment: Comment): (comment: CommentDocument)
-   * Query to retrieve a specific comment.
+   * _getComment (comment: Comment): (comments: CommentDocument[])
+   * Query to retrieve a specific comment. Returns an array for consistency with other queries.
    */
   async _getComment(
     { comment }: { comment: Comment },
-  ): Promise<{ comment: CommentDocument } | { error: string }> {
+  ): Promise<{ comments: CommentDocument[] } | { error: string }> {
     const foundComment = await this.comments.findOne({ _id: comment });
     if (foundComment) {
-      return { comment: foundComment };
+      // Wrap the single found comment in an array to match the desired return type
+      return { comments: [foundComment] };
     }
     return { error: `Comment with ID '${comment}' not found.` };
   }
