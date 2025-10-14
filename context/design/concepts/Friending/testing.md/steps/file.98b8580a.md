@@ -1,19 +1,8 @@
-[@concept-design-overview](../../background/concept-design-overview.md)
-
-[@concept-specifications](../../background/concept-specifications.md)
-
-[@implementing-concepts](../../background/implementing-concepts.md)
-
-[@concept-spec](Friending.md)
-
-[@concept-implementation](../../../src/concepts/Friending/FriendingConcept.ts)
-
-# Please split the getFriendRequests query into getSentFriendRequests and getReceivedFriendRequests
-# response:
-
-Okay, I will refactor the `_getFriendRequests` query into `_getSentFriendRequests` and `_getReceivedFriendRequests` as requested.
-
-Here's the updated `FriendingConcept.ts` file:
+---
+timestamp: 'Tue Oct 14 2025 01:17:52 GMT-0400 (Eastern Daylight Time)'
+parent: '[[../20251014_011752.3d738a02.md]]'
+content_id: 98b8580a2947a9109fe47dfd11d65a6b76330937d92f943c7cebd604f5cf06a6
+---
 
 # file: src/concepts/Friending/FriendingConcept.ts
 

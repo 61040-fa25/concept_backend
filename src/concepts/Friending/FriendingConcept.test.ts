@@ -24,28 +24,33 @@ Deno.test("Friending Concept Tests", async (t) => {
     });
     assertEquals(sendResult, {}, "sendRequest should succeed");
 
-    let requests = await friendingConcept._getFriendRequests({ user: userB });
+    // Verify request exists for B
+    const bReceivedRequests = await friendingConcept._getReceivedFriendRequests(
+      { user: userB },
+    );
     assertEquals(
-      requests.received.length,
+      bReceivedRequests.length,
       1,
       "User B should have 1 received request",
     );
     assertEquals(
-      requests.received[0].sender,
+      bReceivedRequests[0].sender,
       userA,
-      "User B's received request sender should be A",
-    );
-    requests = await friendingConcept._getFriendRequests({ user: userA });
-    assertEquals(
-      requests.sent.length,
-      1,
-      "User A should have 1 sent request",
+      "User B received request from A",
     );
     assertEquals(
-      requests.sent[0].receiver,
+      bReceivedRequests[0].receiver,
       userB,
-      "User A's sent request receiver should be B",
+      "User B received request for B",
     );
+
+    // Verify request exists for A
+    const aSentRequests = await friendingConcept._getSentFriendRequests({
+      user: userA,
+    });
+    assertEquals(aSentRequests.length, 1, "User A should have 1 sent request");
+    assertEquals(aSentRequests[0].sender, userA, "User A sent request from A");
+    assertEquals(aSentRequests[0].receiver, userB, "User A sent request for B");
 
     console.log(`Action: ${userB} accepts request from ${userA}`);
     const acceptResult = await friendingConcept.acceptRequest({
@@ -54,18 +59,20 @@ Deno.test("Friending Concept Tests", async (t) => {
     });
     assertEquals(acceptResult, {}, "acceptRequest should succeed");
 
-    // Verify request is gone
-    requests = await friendingConcept._getFriendRequests({ user: userA });
+    // Verify request is removed
+    const bReceivedRequestsAfterAccept = await friendingConcept
+      ._getReceivedFriendRequests({ user: userB });
     assertEquals(
-      requests.sent.length,
+      bReceivedRequestsAfterAccept.length,
       0,
-      "User A should have no sent requests",
+      "User B should have 0 received requests after accept",
     );
-    requests = await friendingConcept._getFriendRequests({ user: userB });
+    const aSentRequestsAfterAccept = await friendingConcept
+      ._getSentFriendRequests({ user: userA });
     assertEquals(
-      requests.received.length,
+      aSentRequestsAfterAccept.length,
       0,
-      "User B should have no received requests",
+      "User A should have 0 sent requests after accept",
     );
 
     // Verify friendship exists
@@ -111,11 +118,31 @@ Deno.test("Friending Concept Tests", async (t) => {
     });
     assertEquals(sendResult, {}, "sendRequest should succeed");
 
-    let requests = await friendingConcept._getFriendRequests({ user: userB });
+    // Verify request exists for A
+    const aSentRequests = await friendingConcept._getSentFriendRequests({
+      user: userA,
+    });
+    assertEquals(aSentRequests.length, 1, "User A should have 1 sent request");
+    assertEquals(aSentRequests[0].sender, userA, "User A sent request from A");
+    assertEquals(aSentRequests[0].receiver, userB, "User A sent request for B");
+    // Verify request exists for B
+    const bReceivedRequests = await friendingConcept._getSentFriendRequests({
+      user: userA,
+    });
     assertEquals(
-      requests.received.length,
+      bReceivedRequests.length,
       1,
       "User B should have 1 received request",
+    );
+    assertEquals(
+      bReceivedRequests[0].sender,
+      userA,
+      "User A sent request from A",
+    );
+    assertEquals(
+      bReceivedRequests[0].receiver,
+      userB,
+      "User A sent request for B",
     );
 
     // User B denies the request from User A
@@ -126,18 +153,23 @@ Deno.test("Friending Concept Tests", async (t) => {
     });
     assertEquals(denyResult, {}, "denyRequest should succeed");
 
-    // Verify request is gone
-    requests = await friendingConcept._getFriendRequests({ user: userA });
+    // Verify request is removed
+    const bReceivedRequests2 = await friendingConcept
+      ._getReceivedFriendRequests(
+        { user: userC },
+      );
     assertEquals(
-      requests.sent.length,
+      bReceivedRequests2.length,
       0,
-      "User A should have no sent requests",
+      "User B should have 0 received requests after deny",
     );
-    requests = await friendingConcept._getFriendRequests({ user: userB });
+    const aSentRequests2 = await friendingConcept._getSentFriendRequests({
+      user: userA,
+    });
     assertEquals(
-      requests.received.length,
+      aSentRequests2.length,
       0,
-      "User B should have no received requests",
+      "User A should have 0 sent requests after deny",
     );
 
     // Verify no friendship was created

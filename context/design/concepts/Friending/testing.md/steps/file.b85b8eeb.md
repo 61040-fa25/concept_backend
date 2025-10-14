@@ -1,19 +1,8 @@
-[@concept-design-overview](../../background/concept-design-overview.md)
-
-[@concept-specifications](../../background/concept-specifications.md)
-
-[@implementing-concepts](../../background/implementing-concepts.md)
-
-[@concept-spec](Friending.md)
-
-[@concept-implementation](../../../src/concepts/Friending/FriendingConcept.ts)
-
-# Please split the getFriendRequests query into getSentFriendRequests and getReceivedFriendRequests
-# response:
-
-Okay, I will refactor the `_getFriendRequests` query into `_getSentFriendRequests` and `_getReceivedFriendRequests` as requested.
-
-Here's the updated `FriendingConcept.ts` file:
+---
+timestamp: 'Tue Oct 14 2025 01:17:52 GMT-0400 (Eastern Daylight Time)'
+parent: '[[../20251014_011752.3d738a02.md]]'
+content_id: b85b8eeb90a2bed408bd48ff2c07317f462ddab87403f70be417d9e04aa68f53
+---
 
 # file: src/concepts/Friending/FriendingConcept.ts
 
@@ -180,8 +169,6 @@ export default class FriendingConcept {
   /**
    * Query: _getFriends
    * Returns a list of users who are friends with the given user.
-   * @requires user to exist (implicitly, as it's an ID)
-   * @effects returns an array of users who are friends with the given user
    */
   async _getFriends(
     { user }: { user: User },
@@ -224,4 +211,5 @@ export default class FriendingConcept {
     return receivedRequests;
   }
 }
+
 ```

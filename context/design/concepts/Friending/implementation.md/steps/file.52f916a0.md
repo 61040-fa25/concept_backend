@@ -1,19 +1,8 @@
-[@concept-design-overview](../../background/concept-design-overview.md)
-
-[@concept-specifications](../../background/concept-specifications.md)
-
-[@implementing-concepts](../../background/implementing-concepts.md)
-
-[@concept-spec](Friending.md)
-
-[@concept-implementation](../../../src/concepts/Friending/FriendingConcept.ts)
-
-# Please split the getFriendRequests query into getSentFriendRequests and getReceivedFriendRequests
-# response:
-
-Okay, I will refactor the `_getFriendRequests` query into `_getSentFriendRequests` and `_getReceivedFriendRequests` as requested.
-
-Here's the updated `FriendingConcept.ts` file:
+---
+timestamp: 'Tue Oct 14 2025 01:16:54 GMT-0400 (Eastern Daylight Time)'
+parent: '[[../20251014_011654.ef97d611.md]]'
+content_id: 52f916a0b66fd3a74342949b4f144a43b395ba22a8859db3ef4d51e45fd5b753
+---
 
 # file: src/concepts/Friending/FriendingConcept.ts
 
@@ -180,8 +169,6 @@ export default class FriendingConcept {
   /**
    * Query: _getFriends
    * Returns a list of users who are friends with the given user.
-   * @requires user to exist (implicitly, as it's an ID)
-   * @effects returns an array of users who are friends with the given user
    */
   async _getFriends(
     { user }: { user: User },
@@ -197,31 +184,18 @@ export default class FriendingConcept {
   }
 
   /**
-   * Query: _getSentFriendRequests
-   * Returns an array of pending friend requests sent by the given user.
-   * @requires user to exist (implicitly, as it's an ID)
-   * @effects returns an array of FriendRequestDoc objects where the user is the sender
+   * Query: _getFriendRequests
+   * Returns a list of pending friend requests where the given user is either sender or receiver.
    */
-  async _getSentFriendRequests(
+  async _getFriendRequests(
     { user }: { user: User },
-  ): Promise<FriendRequestDoc[]> {
+  ): Promise<{ sent: FriendRequestDoc[]; received: FriendRequestDoc[] }> {
     const sentRequests = await this.friendRequests.find({ sender: user })
       .toArray();
-    return sentRequests;
-  }
-
-  /**
-   * Query: _getReceivedFriendRequests
-   * Returns an array of pending friend requests received by the given user.
-   * @requires user to exist (implicitly, as it's an ID)
-   * @effects returns an array of FriendRequestDoc objects where the user is the receiver
-   */
-  async _getReceivedFriendRequests(
-    { user }: { user: User },
-  ): Promise<FriendRequestDoc[]> {
     const receivedRequests = await this.friendRequests.find({ receiver: user })
       .toArray();
-    return receivedRequests;
+    return { sent: sentRequests, received: receivedRequests };
   }
 }
+
 ```

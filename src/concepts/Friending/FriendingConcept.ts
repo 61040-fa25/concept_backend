@@ -175,16 +175,30 @@ export default class FriendingConcept {
   }
 
   /**
-   * Query: _getFriendRequests
-   * Returns a list of pending friend requests where the given user is either sender or receiver.
+   * Query: _getSentFriendRequests
+   * Returns an array of pending friend requests sent by the given user.
+   * @requires user to exist (implicitly, as it's an ID)
+   * @effects returns an array of FriendRequestDoc objects where the user is the sender
    */
-  async _getFriendRequests(
+  async _getSentFriendRequests(
     { user }: { user: User },
-  ): Promise<{ sent: FriendRequestDoc[]; received: FriendRequestDoc[] }> {
+  ): Promise<FriendRequestDoc[]> {
     const sentRequests = await this.friendRequests.find({ sender: user })
       .toArray();
+    return sentRequests;
+  }
+
+  /**
+   * Query: _getReceivedFriendRequests
+   * Returns an array of pending friend requests received by the given user.
+   * @requires user to exist (implicitly, as it's an ID)
+   * @effects returns an array of FriendRequestDoc objects where the user is the receiver
+   */
+  async _getReceivedFriendRequests(
+    { user }: { user: User },
+  ): Promise<FriendRequestDoc[]> {
     const receivedRequests = await this.friendRequests.find({ receiver: user })
       .toArray();
-    return { sent: sentRequests, received: receivedRequests };
+    return receivedRequests;
   }
 }
