@@ -1,3 +1,12 @@
+---
+timestamp: 'Tue Oct 14 2025 00:52:12 GMT-0400 (Eastern Daylight Time)'
+parent: '[[../20251014_005212.82f7de4a.md]]'
+content_id: 6d8ed18c5172abe7810fe14c055635b3567193f530a044987ca7354dfd91ef87
+---
+
+# file: src/concepts/Posting/PostingConcept.test.ts
+
+```typescript
 import { assertEquals } from "jsr:@std/assert";
 import { freshID, testDb } from "@utils/database.ts"; // Assuming @utils/database.ts provides testDb and freshID
 import { ID } from "@utils/types.ts"; // Assuming @utils/types.ts provides ID
@@ -52,25 +61,20 @@ Deno.test("Posting Concept Tests", async (t) => {
       assertEquals(
         getPostResult1.error,
         undefined,
-        "Query should not return an error for an existing post",
+        "Query should not return an error",
       );
       assertEquals(
-        getPostResult1.postDetails?.length,
-        1,
-        "Should return exactly one post",
-      );
-      assertEquals(
-        getPostResult1.postDetails?.[0]?.author, // Accessing the first element of the array
+        getPostResult1.postDetails?.author,
         userAlice,
         "Post author should be Alice",
       );
       assertEquals(
-        getPostResult1.postDetails?.[0]?.caption, // Accessing the first element of the array
+        getPostResult1.postDetails?.caption,
         "My first post about nature!",
         "Post caption mismatch",
       );
       assertEquals(
-        getPostResult1.postDetails?.[0]?.images.length, // Accessing the first element of the array
+        getPostResult1.postDetails?.images.length,
         2,
         "Post should have 2 images",
       );
@@ -103,12 +107,7 @@ Deno.test("Posting Concept Tests", async (t) => {
         "Query after edit should not return an error",
       );
       assertEquals(
-        getPostResult2.postDetails?.length,
-        1,
-        "Should return exactly one post after edit",
-      );
-      assertEquals(
-        getPostResult2.postDetails?.[0]?.caption, // Accessing the first element of the array
+        getPostResult2.postDetails?.caption,
         newCaption,
         "Post caption was not updated",
       );
@@ -128,20 +127,15 @@ Deno.test("Posting Concept Tests", async (t) => {
         "Delete should not return an error",
       );
 
-      // Verify post no longer exists using _getPostById, which should return an empty array
+      // Verify post no longer exists
       const getPostResult3 = await postingConcept._getPostById({
         post: postId,
       });
       console.log(`Query post by ID ${postId} after delete: `, getPostResult3);
       assertEquals(
         getPostResult3.error,
-        undefined, // _getPostById returns empty array for not found, not an error
-        "Query for non-existent post should not return an error",
-      );
-      assertEquals(
-        getPostResult3.postDetails?.length,
-        0, // Expecting an empty array for postDetails
-        "Post should no longer exist (query should return empty array)",
+        `Post with ID '${postId}' not found.`,
+        "Post should no longer exist",
       );
     },
   );
@@ -401,3 +395,5 @@ Deno.test("Posting Concept Tests", async (t) => {
 
   await client.close();
 });
+
+```

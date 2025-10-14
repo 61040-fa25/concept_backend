@@ -1,14 +1,9 @@
-[@concept-design-overview](../../background/concept-design-overview.md)
+---
+timestamp: 'Tue Oct 14 2025 00:51:22 GMT-0400 (Eastern Daylight Time)'
+parent: '[[../20251014_005122.f9965fb5.md]]'
+content_id: 183098a3b80a21bd2ee7d8b4a4a536ec8115cca70c3fb75832274e64b93ee07f
+---
 
-[@concept-specifications](../../background/concept-specifications.md)
-
-[@implementing-concepts](../../background/implementing-concepts.md)
-
-[@concept-spec](Posting.md)
-
-[@posting-implementation](../../../src/concepts/Posting/PostingConcept.ts)
-
-# prompt: Please modify getPostbyId to return PostDocument[] instead of PostDocument.
 # response:
 
 ```typescript

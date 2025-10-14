@@ -1,15 +1,10 @@
-[@concept-design-overview](../../background/concept-design-overview.md)
+---
+timestamp: 'Tue Oct 14 2025 00:52:12 GMT-0400 (Eastern Daylight Time)'
+parent: '[[../20251014_005212.82f7de4a.md]]'
+content_id: 578d58a51e33996d6a3929f16355541f519ed17dc805f8f54b8b528cbfdecae6
+---
 
-[@concept-specifications](../../background/concept-specifications.md)
-
-[@implementing-concepts](../../background/implementing-concepts.md)
-
-[@concept-spec](Posting.md)
-
-[@posting-implementation](../../../src/concepts/Posting/PostingConcept.ts)
-
-# prompt: Please modify getPostbyId to return PostDocument[] instead of PostDocument.
-# response:
+# file: src/concepts/Posting/PostingConcept.ts
 
 ```typescript
 import { Collection, Db } from "npm:mongodb";
@@ -234,4 +229,5 @@ export default class PostingConcept {
     }
   }
 }
+
 ```

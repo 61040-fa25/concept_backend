@@ -172,23 +172,26 @@ export default class PostingConcept {
   }
 
   /**
-   * query: _getPostById (post: Post): (postDetails: PostDocument)
+   * query: _getPostById (post: Post): (postDetails: PostDocument[])
    *
-   * effects: Returns the details of a specific post.
+   * effects: Returns the details of a specific post as an array.
    * This is a simple query to retrieve post details, often used for testing or by other concepts via syncs.
+   * As per concept design guidelines, queries return an array, even for single-item lookups.
    */
   async _getPostById(
     { post }: { post: Post },
-  ): Promise<{ postDetails?: PostDocument; error?: string }> {
+  ): Promise<{ postDetails?: PostDocument[]; error?: string }> {
     if (!post) {
       return { error: "Post ID must be provided." };
     }
     try {
       const postDetails = await this.posts.findOne({ _id: post });
       if (!postDetails) {
-        return { error: `Post with ID '${post}' not found.` };
+        // As queries should return arrays, return an empty array if not found
+        return { postDetails: [] };
       }
-      return { postDetails };
+      // Wrap the single found document in an array
+      return { postDetails: [postDetails] };
     } catch (e) {
       console.error("Failed to retrieve post:", e);
       return { error: "Failed to retrieve post due to a database error." };

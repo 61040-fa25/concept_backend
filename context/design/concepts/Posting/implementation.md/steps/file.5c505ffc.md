@@ -1,15 +1,10 @@
-[@concept-design-overview](../../background/concept-design-overview.md)
+---
+timestamp: 'Tue Oct 14 2025 00:51:09 GMT-0400 (Eastern Daylight Time)'
+parent: '[[../20251014_005109.816a0074.md]]'
+content_id: 5c505ffc9f7809d6d66a298eec7de29fd45ad2648072fd492b339450a88cbb5b
+---
 
-[@concept-specifications](../../background/concept-specifications.md)
-
-[@implementing-concepts](../../background/implementing-concepts.md)
-
-[@concept-spec](Posting.md)
-
-[@posting-implementation](../../../src/concepts/Posting/PostingConcept.ts)
-
-# prompt: Please modify getPostbyId to return PostDocument[] instead of PostDocument.
-# response:
+# file: src/concepts/Posting/PostingConcept.ts
 
 ```typescript
 import { Collection, Db } from "npm:mongodb";
@@ -186,26 +181,23 @@ export default class PostingConcept {
   }
 
   /**
-   * query: _getPostById (post: Post): (postDetails: PostDocument[])
+   * query: _getPostById (post: Post): (postDetails: PostDocument)
    *
-   * effects: Returns the details of a specific post as an array.
+   * effects: Returns the details of a specific post.
    * This is a simple query to retrieve post details, often used for testing or by other concepts via syncs.
-   * As per concept design guidelines, queries return an array, even for single-item lookups.
    */
   async _getPostById(
     { post }: { post: Post },
-  ): Promise<{ postDetails?: PostDocument[]; error?: string }> {
+  ): Promise<{ postDetails?: PostDocument; error?: string }> {
     if (!post) {
       return { error: "Post ID must be provided." };
     }
     try {
       const postDetails = await this.posts.findOne({ _id: post });
       if (!postDetails) {
-        // As queries should return arrays, return an empty array if not found
-        return { postDetails: [] };
+        return { error: `Post with ID '${post}' not found.` };
       }
-      // Wrap the single found document in an array
-      return { postDetails: [postDetails] };
+      return { postDetails };
     } catch (e) {
       console.error("Failed to retrieve post:", e);
       return { error: "Failed to retrieve post due to a database error." };
@@ -234,4 +226,5 @@ export default class PostingConcept {
     }
   }
 }
+
 ```

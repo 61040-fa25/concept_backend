@@ -1,9 +1,17 @@
-import { assertEquals } from "jsr:@std/assert";
+---
+timestamp: 'Tue Oct 14 2025 00:52:36 GMT-0400 (Eastern Daylight Time)'
+parent: '[[../20251014_005236.d6c98444.md]]'
+content_id: 33fea8ac90bad38516bc0e7de45bdc23325627e5511d1c48d779472beaae6604
+---
+
+# response:
+
+```typescript
+import { assertEquals, AssertionError } from "jsr:@std/assert";
 import { freshID, testDb } from "@utils/database.ts"; // Assuming @utils/database.ts provides testDb and freshID
 import { ID } from "@utils/types.ts"; // Assuming @utils/types.ts provides ID
 
 import PostingConcept from "./PostingConcept.ts";
-import { AssertionError } from "node:assert";
 
 Deno.test("Posting Concept Tests", async (t) => {
   const [db, client] = await testDb();
@@ -33,7 +41,7 @@ Deno.test("Posting Concept Tests", async (t) => {
 
       if ("error" in createResult) {
         throw new AssertionError({
-          message: "Create should not return an error",
+          message: `Create should not return an error: ${createResult.error}`,
         });
       }
 
@@ -401,3 +409,4 @@ Deno.test("Posting Concept Tests", async (t) => {
 
   await client.close();
 });
+```
