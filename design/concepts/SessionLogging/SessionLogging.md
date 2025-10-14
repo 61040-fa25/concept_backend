@@ -5,7 +5,7 @@
     * a set of Sessions with
         * an owner User
         * a set of Images
-        * an active Flag
+        * an active flag Boolean
 * **actions** 
     * startSession (user: User): (session: Session) 
         * *requires* user to exist

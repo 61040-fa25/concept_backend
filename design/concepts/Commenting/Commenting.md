@@ -6,6 +6,7 @@
         * an author User
         * a content String
         * an associated Post
+        * a creation date Time
 * **actions** 
     * addComment (author: User, content: String, post: Post): (comment: Comment) 
         * *requires* author and post must exist, author must have visibility of the post, content cannot be empty
