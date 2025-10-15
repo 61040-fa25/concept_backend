@@ -1,44 +1,16 @@
-[@concept-design-overview](../../background/concept-design-overview.md)
+---
+timestamp: 'Wed Oct 15 2025 01:49:12 GMT-0400 (Eastern Daylight Time)'
+parent: '[[../20251015_014912.b1fef627.md]]'
+content_id: dd4c6603a0a55623f435aece593a840dff5f4ee03348a15cf76508af880fb4b7
+---
 
-[@concept-specifications](../../background/concept-specifications.md)
-
-[@implementing-concepts](../../background/implementing-concepts.md)
-
-[@concept-spec](PasswordAuthentication.md)
-
-[@PasswordAuthenticationConcept.ts](../../../src/concepts/PasswordAuthentication/PasswordAuthenticationConcept.ts)
-
-# prompt: Add a query (or queries?) to check if a user exists. Use Promise<boolean[]> for the return type.
 # response:
 
-Here's the updated concept specification and implementation with the requested queries to check if a user exists, returning `Promise<boolean[]>`.
+To add a query (or queries) to check if a user exists, we can leverage the existing `_getUserByUsername` and `_getUserById` queries, which already return an empty array if the user doesn't exist. However, to make the intention more explicit and potentially more efficient (by only querying for the `_id` field), we can add dedicated queries that return a boolean existence indicator.
 
-```concept
-Concept: PasswordAuthentication (User)
+Following the established pattern for queries, they should return an array of dictionaries. For an existence check, if the user exists, we can return an array containing a single dictionary like `[{ exists: true }]`. If the user does not exist, an empty array `[]` should be returned.
 
-* **purpose** limit access to known users
-* **principle** after a user registers with a username and a password, they can authenticate with that same username and password and be treated each time as the same user
-* **state**
-  * a set of Users with
-    * a username String
-    * a password String
-* **actions**
-  * register (username: String, password: String): (user: User)
-    * *requires* username to not already exist in the set of Users
-    * *effects* creates a new user of that username and password, adds that user to the set of users, and returns the new user
-  * authenticate (username: String, password: String): (user: User)
-    * *requires* user of the argument username and password to exist in the set of Users
-    * *effects* returns the corresponding User
-* **queries**
-  * _userExistsById (user: User) : (exists: boolean)
-    * *requires* true
-    * *effects* returns `[true]` if a user with the given ID exists, otherwise `[]`
-  * _userExistsByUsername (username: String) : (exists: boolean)
-    * *requires* true
-    * *effects* returns `[true]` if a user with the given username exists, otherwise `[]`
-```
-
-# file: src/concepts/PasswordAuthentication/PasswordAuthenticationConcept.ts
+Here are the added queries for the `PasswordAuthenticationConcept`:
 
 ```typescript
 import { Collection, Db } from "npm:mongodb";
@@ -128,6 +100,32 @@ export default class PasswordAuthenticationConcept {
   }
 
   /**
+   * Query: _userExistsByUsername
+   * Checks if a user with the given username exists.
+   *
+   * @effects returns [{ exists: true }] if a user with the given username exists, otherwise an empty array.
+   */
+  async _userExistsByUsername(
+    { username }: { username: string },
+  ): Promise<Array<{ exists: boolean }>> {
+    const user = await this.users.findOne({ username: username }, { projection: { _id: 1 } });
+    return user ? [{ exists: true }] : [];
+  }
+
+  /**
+   * Query: _userExistsById
+   * Checks if a user with the given ID exists.
+   *
+   * @effects returns [{ exists: true }] if a user with the given ID exists, otherwise an empty array.
+   */
+  async _userExistsById(
+    { id }: { id: User },
+  ): Promise<Array<{ exists: boolean }>> {
+    const user = await this.users.findOne({ _id: id }, { projection: { _id: 1 } });
+    return user ? [{ exists: true }] : [];
+  }
+
+  /**
    * Query: _getUserByUsername
    * Internal query to retrieve a user document by username.
    *
@@ -159,30 +157,6 @@ export default class PasswordAuthenticationConcept {
    */
   async _getAllUsers(): Promise<UserDocument[]> {
     return await this.users.find({}).toArray();
-  }
-
-  /**
-   * Query: _userExistsById
-   *
-   * @requires true
-   * @effects returns `[true]` if a user with the given ID exists, otherwise `[]`
-   */
-  async _userExistsById({ user }: { user: User }): Promise<boolean[]> {
-    const foundUser = await this.users.findOne({ _id: user });
-    return foundUser ? [true] : [];
-  }
-
-  /**
-   * Query: _userExistsByUsername
-   *
-   * @requires true
-   * @effects returns `[true]` if a user with the given username exists, otherwise `[]`
-   */
-  async _userExistsByUsername({ username }: {
-    username: string;
-  }): Promise<boolean[]> {
-    const foundUser = await this.users.findOne({ username: username });
-    return foundUser ? [true] : [];
   }
 }
 ```

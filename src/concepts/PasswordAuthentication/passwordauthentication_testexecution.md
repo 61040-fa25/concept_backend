@@ -1,5 +1,5 @@
 
---- Running operational principle: register a user, then authenticate. ---
+--- RUNNING OPERATIONAL PRINCIPLE: register a user, then authenticate. ---
 
 --- Action: register ---
 {
@@ -9,8 +9,28 @@
 
 --- Result: register ---
 {
-  "user": "0199e10d-21f0-75bd-942a-040f5a8123da"
+  "user": "0199e672-c203-7eb2-9505-b4484bdd4fae"
 }
+
+--- Query: _userExistsById ---
+{
+  "user": "0199e672-c203-7eb2-9505-b4484bdd4fae"
+}
+
+--- Result: _userExistsById ---
+[
+  true
+]
+
+--- Query: _userExistsByUsername ---
+{
+  "username": "alice"
+}
+
+--- Result: _userExistsByUsername ---
+[
+  true
+]
 
 --- Action: authenticate ---
 {
@@ -20,7 +40,7 @@
 
 --- Result: authenticate ---
 {
-  "user": "0199e10d-21f0-75bd-942a-040f5a8123da"
+  "user": "0199e672-c203-7eb2-9505-b4484bdd4fae"
 }
 
 --- Query: _getUserByUsername ---
@@ -30,24 +50,24 @@
 
 --- Result: _getUserByUsername ---
 {
-  "_id": "0199e10d-21f0-75bd-942a-040f5a8123da",
+  "_id": "0199e672-c203-7eb2-9505-b4484bdd4fae",
   "username": "alice",
   "password": "password123"
 }
 
 --- Query: _getUserById ---
 {
-  "id": "0199e10d-21f0-75bd-942a-040f5a8123da"
+  "id": "0199e672-c203-7eb2-9505-b4484bdd4fae"
 }
 
 --- Result: _getUserById ---
 {
-  "_id": "0199e10d-21f0-75bd-942a-040f5a8123da",
+  "_id": "0199e672-c203-7eb2-9505-b4484bdd4fae",
   "username": "alice",
   "password": "password123"
 }
 
---- Running scenario 1: attempt to register with an already existing username. ---
+--- RUNNING SCENARIO 1: attempt to register with an already existing username. ---
 
 --- Action: register (first time) ---
 {
@@ -57,17 +77,37 @@
 
 --- Result: first register ---
 {
-  "user": "0199e10d-2267-75df-97b5-209bd1db5168"
+  "user": "0199e672-c2a6-77e7-abbc-5f1c55d9fd16"
 }
+
+--- Query: _userExistsById ---
+{
+  "user": "0199e672-c2a6-77e7-abbc-5f1c55d9fd16"
+}
+
+--- Result: _userExistsById (Bob) ---
+[
+  true
+]
+
+--- Query: _userExistsByUsername ---
+{
+  "username": "bob"
+}
+
+--- Result: _userExistsByUsername (Bob) ---
+[
+  true
+]
 
 --- Query: _getUserById ---
 {
-  "id": "0199e10d-2267-75df-97b5-209bd1db5168"
+  "id": "0199e672-c2a6-77e7-abbc-5f1c55d9fd16"
 }
 
 --- Result: _getUserById (Bob) ---
 {
-  "_id": "0199e10d-2267-75df-97b5-209bd1db5168",
+  "_id": "0199e672-c2a6-77e7-abbc-5f1c55d9fd16",
   "username": "bob",
   "password": "bobpassword"
 }
@@ -83,7 +123,19 @@
   "error": "Username already taken."
 }
 
---- Running scenario 2: authenticate with incorrect password. ---
+--- Verify that Bob still exists after failed registration ---
+
+--- Query: _userExistsByUsername (after failed register) ---
+{
+  "username": "bob"
+}
+
+--- Result: _userExistsByUsername (after failed register) ---
+[
+  true
+]
+
+--- RUNNING SCENARIO 2: authenticate with incorrect password. ---
 
 --- Action: register ---
 {
@@ -93,17 +145,37 @@
 
 --- Result: register ---
 {
-  "user": "0199e10d-22aa-79aa-92de-436fe9f0f5a5"
+  "user": "0199e672-c37e-70ba-b035-5b00b4666053"
 }
+
+--- Query: _userExistsById ---
+{
+  "user": "0199e672-c37e-70ba-b035-5b00b4666053"
+}
+
+--- Result: _userExistsById (Charlie) ---
+[
+  true
+]
+
+--- Query: _userExistsByUsername ---
+{
+  "username": "charlie"
+}
+
+--- Result: _userExistsByUsername (Charlie) ---
+[
+  true
+]
 
 --- Query: _getUserById ---
 {
-  "id": "0199e10d-22aa-79aa-92de-436fe9f0f5a5"
+  "id": "0199e672-c37e-70ba-b035-5b00b4666053"
 }
 
 --- Result: _getUserById (Charlie) ---
 {
-  "_id": "0199e10d-22aa-79aa-92de-436fe9f0f5a5",
+  "_id": "0199e672-c37e-70ba-b035-5b00b4666053",
   "username": "charlie",
   "password": "charliepassword"
 }
@@ -119,6 +191,18 @@
   "error": "Invalid username or password."
 }
 
+--- Verify that Charlie still exists after failed authentication ---
+
+--- Query: _userExistsByUsername (after failed auth) ---
+{
+  "username": "charlie"
+}
+
+--- Result: _userExistsByUsername (after failed auth) ---
+[
+  true
+]
+
 --- Action: authenticate with correct password ---
 {
   "username": "charlie",
@@ -127,10 +211,18 @@
 
 --- Result: authenticate (correct password) ---
 {
-  "user": "0199e10d-22aa-79aa-92de-436fe9f0f5a5"
+  "user": "0199e672-c37e-70ba-b035-5b00b4666053"
 }
 
---- Running scenario 3: authenticate with non-existent username. ---
+--- RUNNING SCENARIO 3: authenticate with non-existent username. ---
+
+--- Query: _userExistsByUsername (before auth) ---
+{
+  "username": "nonexistent"
+}
+
+--- Result: _userExistsByUsername (before auth) ---
+[]
 
 --- Action: authenticate ---
 {
@@ -143,7 +235,17 @@
   "error": "Invalid username or password."
 }
 
---- Running scenario 4: register and authenticate multiple users. ---
+--- Verify that user still does not exist after failed authentication ---
+
+--- Query: _userExistsByUsername (after auth) ---
+{
+  "username": "nonexistent"
+}
+
+--- Result: _userExistsByUsername (after auth) ---
+[]
+
+--- RUNNING SCENARIO 4: register and authenticate multiple users. ---
 
 --- Action: register user1 ---
 {
@@ -153,8 +255,28 @@
 
 --- Result: register user1 ---
 {
-  "user": "0199e10d-230a-7361-bb8c-e3ef99088584"
+  "user": "0199e672-c459-714b-9ff0-bac5dbcdd08f"
 }
+
+--- Query: _userExistsById (Diana) ---
+{
+  "user": "0199e672-c459-714b-9ff0-bac5dbcdd08f"
+}
+
+--- Result: _userExistsById (Diana) ---
+[
+  true
+]
+
+--- Query: _userExistsByUsername (Diana) ---
+{
+  "username": "diana"
+}
+
+--- Result: _userExistsByUsername (Diana) ---
+[
+  true
+]
 
 --- Action: register user2 ---
 {
@@ -164,8 +286,28 @@
 
 --- Result: register user2 ---
 {
-  "user": "0199e10d-232c-72d7-8d79-12d733c8b9c9"
+  "user": "0199e672-c4aa-72f8-853c-d4f24c2cbed9"
 }
+
+--- Query: _userExistsById (Eve) ---
+{
+  "user": "0199e672-c4aa-72f8-853c-d4f24c2cbed9"
+}
+
+--- Result: _userExistsById (Eve) ---
+[
+  true
+]
+
+--- Query: _userExistsByUsername (Eve) ---
+{
+  "username": "eve"
+}
+
+--- Result: _userExistsByUsername (Eve) ---
+[
+  true
+]
 
 --- Action: authenticate user1 ---
 {
@@ -175,7 +317,7 @@
 
 --- Result: authenticate user1 ---
 {
-  "user": "0199e10d-230a-7361-bb8c-e3ef99088584"
+  "user": "0199e672-c459-714b-9ff0-bac5dbcdd08f"
 }
 
 --- Action: authenticate user2 ---
@@ -186,7 +328,7 @@
 
 --- Result: authenticate user2 ---
 {
-  "user": "0199e10d-232c-72d7-8d79-12d733c8b9c9"
+  "user": "0199e672-c4aa-72f8-853c-d4f24c2cbed9"
 }
 
 --- Query: _getAllUsers ---
@@ -194,27 +336,27 @@
 --- Result: _getAllUsers ---
 [
   {
-    "_id": "0199e10d-21f0-75bd-942a-040f5a8123da",
+    "_id": "0199e672-c203-7eb2-9505-b4484bdd4fae",
     "username": "alice",
     "password": "password123"
   },
   {
-    "_id": "0199e10d-2267-75df-97b5-209bd1db5168",
+    "_id": "0199e672-c2a6-77e7-abbc-5f1c55d9fd16",
     "username": "bob",
     "password": "bobpassword"
   },
   {
-    "_id": "0199e10d-22aa-79aa-92de-436fe9f0f5a5",
+    "_id": "0199e672-c37e-70ba-b035-5b00b4666053",
     "username": "charlie",
     "password": "charliepassword"
   },
   {
-    "_id": "0199e10d-230a-7361-bb8c-e3ef99088584",
+    "_id": "0199e672-c459-714b-9ff0-bac5dbcdd08f",
     "username": "diana",
     "password": "diana_password"
   },
   {
-    "_id": "0199e10d-232c-72d7-8d79-12d733c8b9c9",
+    "_id": "0199e672-c4aa-72f8-853c-d4f24c2cbed9",
     "username": "eve",
     "password": "eve_password"
   }

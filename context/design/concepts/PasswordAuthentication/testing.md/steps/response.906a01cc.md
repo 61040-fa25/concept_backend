@@ -1,10 +1,9 @@
-[@implementation](../../../src/concepts/PasswordAuthentication/PasswordAuthenticationConcept.ts)
+---
+timestamp: 'Wed Oct 15 2025 01:51:54 GMT-0400 (Eastern Daylight Time)'
+parent: '[[../20251015_015154.03722b43.md]]'
+content_id: 906a01cc945dd17509d3e4ea0709fc142cafd0ffa2329b5edea5f63a68a1bf0f
+---
 
-[@testing-concepts](../../background/testing-concepts.md)
-
-[@concept-testcases](../../../src/concepts/PasswordAuthentication/PasswordAuthenticationConcept.test.ts)
-
-# prompt: Edit the tests to utilize the new queries (as appropriate): userExistsById, userExistsByUsername
 # response:
 
 ```typescript

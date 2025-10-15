@@ -117,4 +117,28 @@ export default class PasswordAuthenticationConcept {
   async _getAllUsers(): Promise<UserDocument[]> {
     return await this.users.find({}).toArray();
   }
+
+  /**
+   * Query: _userExistsById
+   *
+   * @requires true
+   * @effects returns `[true]` if a user with the given ID exists, otherwise `[]`
+   */
+  async _userExistsById({ user }: { user: User }): Promise<boolean[]> {
+    const foundUser = await this.users.findOne({ _id: user });
+    return foundUser ? [true] : [];
+  }
+
+  /**
+   * Query: _userExistsByUsername
+   *
+   * @requires true
+   * @effects returns `[true]` if a user with the given username exists, otherwise `[]`
+   */
+  async _userExistsByUsername({ username }: {
+    username: string;
+  }): Promise<boolean[]> {
+    const foundUser = await this.users.findOne({ username: username });
+    return foundUser ? [true] : [];
+  }
 }
