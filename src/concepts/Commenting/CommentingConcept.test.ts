@@ -195,12 +195,30 @@ Deno.test("Commenting Concept Tests", async (test) => {
 
     // Add a comment first for subsequent tests
     const commentToAdd = "A valid comment.";
+    console.log(
+      `Action: addComment(${mockUserA}, "${commentToAdd}", ${mockPostX})`,
+    );
     const addResult = await commentingConcept.addComment({
       author: mockUserA,
       content: commentToAdd,
       post: mockPostX,
     });
     const userACommentId = (addResult as { comment: ID }).comment;
+
+    // Verify the comment was added
+    const getCommentResult1 = await commentingConcept._getComment({
+      comment: userACommentId,
+    });
+    console.log(
+      "Query: _getComment(" + userACommentId + ") Result:",
+      getCommentResult1,
+    );
+    if ("error" in getCommentResult1) {
+      throw new AssertionError({
+        message:
+          `Comment ${userACommentId} should be found, but an error was returned: ${getCommentResult1.error}`,
+      });
+    }
 
     // 2. UserB tries to delete UserA's comment
     console.log(
@@ -248,12 +266,30 @@ Deno.test("Commenting Concept Tests", async (test) => {
 
     // Add a comment first for subsequent tests
     const commentToAdd = "Initial content.";
+    console.log(
+      `Action: addComment(${mockUserA}, "${commentToAdd}", ${mockPostX})`,
+    );
     const addResult = await commentingConcept.addComment({
       author: mockUserA,
       content: commentToAdd,
       post: mockPostX,
     });
     const userACommentId = (addResult as { comment: ID }).comment;
+
+    // Verify the comment was added
+    const getCommentResult1 = await commentingConcept._getComment({
+      comment: userACommentId,
+    });
+    console.log(
+      "Query: _getComment(" + userACommentId + ") Result:",
+      getCommentResult1,
+    );
+    if ("error" in getCommentResult1) {
+      throw new AssertionError({
+        message:
+          `Comment ${userACommentId} should be found, but an error was returned: ${getCommentResult1.error}`,
+      });
+    }
 
     // 2. UserB tries to edit UserA's comment
     console.log(

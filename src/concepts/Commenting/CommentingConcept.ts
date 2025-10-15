@@ -142,7 +142,7 @@ export default class CommentingConcept {
     // effects: edits the comment content to be that of new_content
     const result = await this.comments.updateOne(
       { _id: comment },
-      { $set: { content: new_content, updatedAt: new Date() } },
+      { $set: { content: new_content } },
     );
 
     if (result.acknowledged && result.modifiedCount === 1) {
