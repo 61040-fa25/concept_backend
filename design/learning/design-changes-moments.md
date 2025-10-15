@@ -16,9 +16,13 @@ I chose not to include the AI augmentation that I worked on for Assignment 3. (R
 
 [Context's first implementation of the Friending concept](../../context/design/concepts/Friending/implementation.md/steps/response.0495f9cd.md)
 
+-----
+
 2. After making an edit to the Friending specification with an initialization action (in accordance with (1)), I asked Context to re-implement the concept. Interestingly, I found that it went a bit overboard with the set of sentRequests and receivedRequests fields that I included in the state. For the acceptRequest action, Context added a lot of unnecessary checks that sendRequest would check and cover already.
 
 [Context's second implementation of the Friending concept](../../context/design/concepts/Friending/implementation.md/steps/response.ec9d0693.md)
+
+-----
 
 3. When designing a complex scenario, Context itself got very mixed up. For instance, it would assert that a friend request existed between two users, believing that a previous test case created the request, when in reality no such thing ever happened.
 
@@ -26,9 +30,13 @@ For instance, it created Carol in lines 114-116 but then proceeded to not do any
 
 [Context's first implementation of the tests cases for the Friending concept](../../context/design/concepts/Friending/testing.md/steps/response.cb6851da.md)
 
+-----
+
 4. For the SessionLogging concept, Context came up with more error-checking scenarios than me. [Link to generated test cases](../../context/design/concepts/SessionLogging/testing.md/steps/response.c1e78707.md)
 
 In particular, in the "Scenario: Multiple Users, Isolation, and Cross-User Interaction" test case, Context had both Alice and Bob have sessions and experimented around with the addEntry action, making sure that the sessions included the images that they did. However, Context also checked that the sessions did not include the images that they shouldn't have. In the test case, Alice's session had images 1 and 2 while Bob's session had images 3 and 5. Explicit checks that Alice's session did not include images 3 and 5 (and similarly images 1 and 2 for Bob's session) were included; I wouldn't have thought to check that, so Context did well here. (See lines 214-233 specifially for this.)
+
+-----
 
 5. While re-reading my concepts' implementations and test cases one by one, I noticed that the tests generated for PasswordAuthentication were a bit different than what was generated for the other concepts. Rather than writing "await t.step" for each test, they used "Deno.test." In particular, while the tests could be run and would pass successfully, no console output would be logged in spite of the many console.log statements. I ended up asking Context to rewrite the tests for PasswordAuthentication so that console output would successfully print.
 

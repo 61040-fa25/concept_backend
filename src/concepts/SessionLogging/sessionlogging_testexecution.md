@@ -1,5 +1,6 @@
 
 --- EXECUTING Principle Trace ---
+
 Scenario: Alice starts a new session.
 
 --- Action: startSession ---
@@ -23,10 +24,13 @@ Scenario: Alice ends the session.
   Result: {}
 
 Scenario: Verify recorded entries persist after the session ends.
+
 Images from Alice's session:  [ "image:photo1.jpg", "image:photo2.png", "image:photo3.jpeg" ]
 
 --- EXECUTING addEntry Precondition Violation Tests ---
+
 Setup: Started session 0199e699-fc77-7d2d-a67a-d54eaf16a748 for Alice.
+
 Scenario: Adding entry to a non-existent session.
 
 --- Action: addEntry (non-existent session) ---
@@ -38,7 +42,9 @@ Scenario: Adding entry to a non-existent session.
   Result: {
   error: "SessionLogging: Session with ID session:nonExistent not found."
 }
+
 Scenario: Alice tries to add entry to Bob's session.
+
 Setup: Started session 0199e699-fc9b-7bde-89a0-630b45db3f5c for Bob.
 
 --- Action: addEntry (wrong owner) ---
@@ -50,6 +56,7 @@ Setup: Started session 0199e699-fc9b-7bde-89a0-630b45db3f5c for Bob.
   Result: {
   error: "SessionLogging: User user:Alice is not the owner of session 0199e699-fc9b-7bde-89a0-630b45db3f5c."
 }
+
 Scenario: Alice adds the same image twice to her session.
 
 --- Action: addEntry (first time image4) ---
@@ -87,11 +94,13 @@ Scenario: Attempt to add an entry to an already ended session (expected to fail)
   Result: {
   error: "SessionLogging: Session with ID 0199e699-fc77-7d2d-a67a-d54eaf16a748 is not active. Cannot add entries."
 }
+
 Scenario: Verify recorded entries persist after the session ends.
 Images from Alice's session:  [ "image:photo4.jpg" ]
 
 --- EXECUTING endSession Precondition Violation & Idempotency Tests ---
 Setup: Started session 0199e699-fe29-7d15-9952-7db922a17ff5 for Alice.
+
 Scenario: Ending a non-existent session.
 
 --- Action: endSession (non-existent session) ---
@@ -100,6 +109,7 @@ Scenario: Ending a non-existent session.
   error: "SessionLogging: Session with ID session:anotherNonExistent not found."
 }
 Scenario: Alice tries to end Bob's session.
+
 Setup: Started session 0199e699-fe51-70c6-84f0-eeb925707d5c for Bob.
 
 --- Action: endSession (wrong owner) ---
@@ -107,6 +117,7 @@ Setup: Started session 0199e699-fe51-70c6-84f0-eeb925707d5c for Bob.
   Result: {
   error: "SessionLogging: User user:Alice is not the owner of session 0199e699-fe51-70c6-84f0-eeb925707d5c."
 }
+
 Scenario: Ending an already inactive session.
 
 --- Action: endSession (first time) ---
@@ -120,6 +131,7 @@ Scenario: Ending an already inactive session.
 }
 
 --- EXECUTING Multi-User Isolation Tests ---
+
 Scenario: Alice starts her session and adds images.
 
 --- Action: Alice's actions ---
@@ -128,6 +140,7 @@ Scenario: Alice starts her session and adds images.
   images: [ "image:photo1.jpg", "image:photo2.png" ]
 }
   Result: {}
+
 Scenario: Bob starts his session and adds images.
 
 --- Action: Bob's actions ---
@@ -145,6 +158,7 @@ Bob's session includes image1? --> false. Expected: False
 Bob's session includes image2? --> false. Expected: False
 Bob's session includes image3? --> true. Expected: True
 Bob's session includes image5? --> true. Expected: True
+
 Scenario: Alice attempts unauthorized actions on Bob's session.
 
 --- Action: Alice add entry to Bob's session ---
