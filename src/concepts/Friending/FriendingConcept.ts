@@ -1,42 +1,47 @@
 import { Collection, Db } from "npm:mongodb";
-import { Empty, ID } from "../../utils/types.ts"; // Assuming utils are in parent directory
-import { freshID } from "../../utils/database.ts"; // Assuming utils are in parent directory
-
-/**
- * Concept: Friending (User)
- *
- * @purpose allow users to add each other as friends to share information with
- * @principle If user A sends a friend request to user B, and user B accepts the request, then A and B become friends. After becoming friends, either party has the option to remove the other as a friend. Alternatively, user B also has the option to deny the request from user A should they wish to.
- */
+import { Empty, ID } from "@utils/types.ts";
+import { freshID } from "@utils/database.ts";
 
 // Declare collection prefix, use concept name
 const PREFIX = "Friending" + ".";
 
-// Generic type of this concept
+// Generic types of this concept
 type User = ID;
+type FriendRequest = ID;
+type Friendship = ID;
 
 /**
- * State: a set of Friendships
- * @state a set of Friendships with a set of Users (length 2)
+ * a set of Friendships with
+ *   a friend 1 User
+ *   a friend 2 User
  */
-interface FriendshipDoc {
-  _id: ID; // Unique ID for the friendship
-  users: [User, User]; // Store users in a sorted array to ensure uniqueness regardless of order
+interface Friendships {
+  _id: Friendship;
+  friend1: User; // To ensure canonical storage and retrieval, store friends in lexicographical order.
+  friend2: User;
 }
 
 /**
- * State: a set of FriendRequests
- * @state a set of FriendRequests with a sender User and a receiver User
+ * a set of FriendRequests with
+ *   a sender User
+ *   a receiver User
  */
-interface FriendRequestDoc {
-  _id: ID; // Unique ID for the request
+interface FriendRequests {
+  _id: FriendRequest;
   sender: User;
   receiver: User;
 }
 
+/**
+ * FriendingConcept
+ *
+ * @concept Friending [User]
+ * @purpose allow users to add each other as friends to share information with
+ * @principle Users can send friend requests to other users. Users who have received friend requests have the option to accept or deny the request. If a friend request (say between User A and User B) is accepted, then User A and User B become friends.
+ */
 export default class FriendingConcept {
-  private friendships: Collection<FriendshipDoc>;
-  private friendRequests: Collection<FriendRequestDoc>;
+  friendships: Collection<Friendships>;
+  friendRequests: Collection<FriendRequests>;
 
   constructor(private readonly db: Db) {
     this.friendships = this.db.collection(PREFIX + "friendships");
@@ -44,18 +49,33 @@ export default class FriendingConcept {
   }
 
   /**
-   * Action: sendRequest
-   * @requires sender is not the receiver, friend request from sender to receiver or vice versa does not already exist, friendship does not already exist
-   * @effects creates a new friend request from sender to receiver
+   * Helper to find a friendship between two users, regardless of order.
+   * Stores friends in lexicographical order (friend1 < friend2) for canonical representation.
+   */
+  private getCanonicalFriendPair(user1: User, user2: User): {
+    friend1: User;
+    friend2: User;
+  } {
+    return user1 < user2
+      ? { friend1: user1, friend2: user2 }
+      : { friend1: user2, friend2: user1 };
+  }
+
+  /**
+   * sendRequest (sender: User, receiver: User): (request: FriendRequest)
+   *
+   * @requires sender is not the receiver, friend request from sender to receiver or vice versa does not already exist, friendship between sender and receiver does not already exist
+   * @effects creates a new friend request from sender to receiver; returns the new request's ID
    */
   async sendRequest(
     { sender, receiver }: { sender: User; receiver: User },
-  ): Promise<Empty | { error: string }> {
+  ): Promise<{ request: FriendRequest } | { error: string }> {
+    // Requires: sender is not the receiver
     if (sender === receiver) {
-      return { error: "Cannot send friend request to self." };
+      return { error: "Sender cannot send a friend request to themselves." };
     }
 
-    // Check for existing pending request (sender -> receiver or receiver -> sender)
+    // Requires: friend request from sender to receiver or vice versa does not already exist
     const existingRequest = await this.friendRequests.findOne({
       $or: [
         { sender: sender, receiver: receiver },
@@ -63,142 +83,189 @@ export default class FriendingConcept {
       ],
     });
     if (existingRequest) {
-      return { error: "Friend request already exists or is pending." };
+      return {
+        error: "A friend request between these users already exists.",
+      };
     }
 
-    // Check for existing friendship
-    const sortedUsers: [User, User] = [sender, receiver].sort() as [User, User];
+    // Requires: friendship between sender and receiver does not already exist
+    const { friend1, friend2 } = this.getCanonicalFriendPair(sender, receiver);
     const existingFriendship = await this.friendships.findOne({
-      users: sortedUsers,
+      friend1: friend1,
+      friend2: friend2,
     });
     if (existingFriendship) {
       return { error: "Users are already friends." };
     }
 
-    // Create new friend request
-    const newRequest: FriendRequestDoc = {
-      _id: freshID(),
-      sender,
-      receiver,
-    };
-    await this.friendRequests.insertOne(newRequest);
-    return {};
+    // Effects: creates a new friend request from sender to receiver
+    const newRequestID = freshID();
+    await this.friendRequests.insertOne({
+      _id: newRequestID,
+      sender: sender,
+      receiver: receiver,
+    });
+
+    // Effects: returns the new request's ID
+    return { request: newRequestID };
   }
 
   /**
-   * Action: acceptRequest
+   * acceptRequest (sender: User, receiver: User): Empty
+   *
    * @requires request from sender to receiver to exist
    * @effects removes friend request, records friendship between sender and user
    */
   async acceptRequest(
     { sender, receiver }: { sender: User; receiver: User },
   ): Promise<Empty | { error: string }> {
-    // Find and remove the friend request
-    const deleteResult = await this.friendRequests.deleteOne({
+    // Requires: request from sender to receiver to exist
+    const request = await this.friendRequests.findOne({
       sender: sender,
       receiver: receiver,
     });
-
-    if (deleteResult.deletedCount === 0) {
-      return { error: "Friend request not found." };
+    if (!request) {
+      return { error: "Friend request does not exist." };
     }
 
-    // Record the friendship
-    const sortedUsers: [User, User] = [sender, receiver].sort() as [User, User];
-    const newFriendship: FriendshipDoc = {
+    // Effects: removes friend request
+    await this.friendRequests.deleteOne({ _id: request._id });
+
+    // Effects: records friendship between sender and user
+    const { friend1, friend2 } = this.getCanonicalFriendPair(sender, receiver);
+    await this.friendships.insertOne({
       _id: freshID(),
-      users: sortedUsers,
-    };
-    await this.friendships.insertOne(newFriendship);
+      friend1: friend1,
+      friend2: friend2,
+    });
+
     return {};
   }
 
   /**
-   * Action: denyRequest
+   * denyRequest (sender: User, receiver: User): Empty
+   *
    * @requires request from sender to receiver to exist
    * @effects removes friend request
    */
   async denyRequest(
     { sender, receiver }: { sender: User; receiver: User },
   ): Promise<Empty | { error: string }> {
-    const deleteResult = await this.friendRequests.deleteOne({
+    // Requires: request from sender to receiver to exist
+    const request = await this.friendRequests.findOne({
       sender: sender,
       receiver: receiver,
     });
-
-    if (deleteResult.deletedCount === 0) {
-      return { error: "Friend request not found." };
+    if (!request) {
+      return { error: "Friend request does not exist." };
     }
+
+    // Effects: removes friend request
+    await this.friendRequests.deleteOne({ _id: request._id });
 
     return {};
   }
 
   /**
-   * Action: removeFriend
+   * removeFriend (user: User, to_be_removed_friend: User): Empty
+   *
    * @requires friendship between user and to_be_removed_friend must exist
    * @effects removes friendship between user and to_be_removed_friend
    */
   async removeFriend(
     { user, to_be_removed_friend }: { user: User; to_be_removed_friend: User },
   ): Promise<Empty | { error: string }> {
-    const sortedUsers: [User, User] = [user, to_be_removed_friend].sort() as [
-      User,
-      User,
-    ];
-
-    const deleteResult = await this.friendships.deleteOne({
-      users: sortedUsers,
+    // Requires: friendship between user and to_be_removed_friend must exist
+    const { friend1, friend2 } = this.getCanonicalFriendPair(
+      user,
+      to_be_removed_friend,
+    );
+    const friendship = await this.friendships.findOne({
+      friend1: friend1,
+      friend2: friend2,
     });
-
-    if (deleteResult.deletedCount === 0) {
-      return { error: "Friendship not found." };
+    if (!friendship) {
+      return { error: "Friendship does not exist." };
     }
+
+    // Effects: removes friendship between user and to_be_removed_friend
+    await this.friendships.deleteOne({ _id: friendship._id });
 
     return {};
   }
 
   /**
-   * Query: _getFriends
-   * Returns a list of users who are friends with the given user.
+   * _isFriends (user1: User, user2: User): Promise<{ areFriends: boolean[] }>
+   *
+   * @requires user1 and user2 are valid User IDs (implicit, as concept doesn't manage User existence)
+   * @effects returns an object with an 'areFriends' field containing an array with a single boolean indicating if users are friends
+   */
+  async _isFriends(
+    { user1, user2 }: { user1: User; user2: User },
+  ): Promise<{ areFriends: boolean[] }> {
+    if (user1 === user2) {
+      return { areFriends: [false] }; // Cannot be friends with self in this context
+    }
+    const { friend1, friend2 } = this.getCanonicalFriendPair(user1, user2);
+    const friendship = await this.friendships.findOne({
+      friend1: friend1,
+      friend2: friend2,
+    });
+    return { areFriends: [!!friendship] };
+  }
+
+  /**
+   * _getFriends (user: User): Promise<{ friends: User[] }>
+   *
+   * @requires user is a valid User ID (implicit)
+   * @effects returns an object with a 'friends' field containing an array of User IDs that are friends with the specified user
    */
   async _getFriends(
     { user }: { user: User },
   ): Promise<{ friends: User[] }> {
-    const friendships = await this.friendships.find({
-      users: user,
+    const friendDocuments = await this.friendships.find({
+      $or: [
+        { friend1: user },
+        { friend2: user },
+      ],
     }).toArray();
 
-    const friends = friendships.flatMap((f) =>
-      f.users.filter((u) => u !== user)
+    const friends = friendDocuments.map((doc) =>
+      doc.friend1 === user ? doc.friend2 : doc.friend1
     );
-    return { friends };
+
+    return { friends: friends };
   }
 
   /**
-   * Query: _getSentFriendRequests
-   * Returns an array of pending friend requests sent by the given user.
-   * @requires user to exist (implicitly, as it's an ID)
-   * @effects returns an array of FriendRequestDoc objects where the user is the sender
+   * _getSentFriendRequests (sender: User): Promise<{ sentRequests: User[] }>
+   *
+   * @requires sender is a valid User ID (implicit)
+   * @effects returns an object with a 'sentRequests' field containing an array of User IDs to whom the sender has sent requests
    */
   async _getSentFriendRequests(
-    { user }: { user: User },
-  ): Promise<FriendRequestDoc[]> {
-    const sentRequests = await this.friendRequests.find({ sender: user })
+    { sender }: { sender: User },
+  ): Promise<{ sentRequests: User[] }> {
+    const requestDocuments = await this.friendRequests.find({ sender: sender })
       .toArray();
-    return sentRequests;
+    const receivers = requestDocuments.map((doc) => doc.receiver);
+    return { sentRequests: receivers };
   }
 
   /**
-   * Query: _getReceivedFriendRequests
-   * Returns an array of pending friend requests received by the given user.
-   * @requires user to exist (implicitly, as it's an ID)
-   * @effects returns an array of FriendRequestDoc objects where the user is the receiver
+   * _getReceivedFriendRequests (receiver: User): Promise<{ receivedRequests: User[] }>
+   *
+   * @requires receiver is a valid User ID (implicit)
+   * @effects returns an object with a 'receivedRequests' field containing an array of User IDs who have sent requests to the receiver
    */
   async _getReceivedFriendRequests(
-    { user }: { user: User },
-  ): Promise<FriendRequestDoc[]> {
-    const receivedRequests = await this.friendRequests.find({ receiver: user })
+    { receiver }: { receiver: User },
+  ): Promise<{ receivedRequests: User[] }> {
+    const requestDocuments = await this.friendRequests.find({
+      receiver: receiver,
+    })
       .toArray();
-    return receivedRequests;
+    const senders = requestDocuments.map((doc) => doc.sender);
+    return { receivedRequests: senders };
   }
 }

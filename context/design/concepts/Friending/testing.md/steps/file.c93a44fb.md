@@ -1,21 +1,10 @@
-[@concept-design-overview](../../background/concept-design-overview.md)
+---
+timestamp: 'Wed Oct 15 2025 01:17:48 GMT-0400 (Eastern Daylight Time)'
+parent: '[[../20251015_011748.b0870dda.md]]'
+content_id: c93a44fba0ad447969e6fd636f77be7c695ef536f142a4c3406ce18f170153fe
+---
 
-[@concept-specifications](../../background/concept-specifications.md)
-
-[@implementing-concepts](../../background/implementing-concepts.md)
-
-[@concept-spec](Friending.md)
-
-[@concept-implementation](../../../src/concepts/Friending/FriendingConcept.ts)
-
-# prompt: Edit the queries such that their return types are as such:
-- _areFriends returns Promise<{ areFriends : boolean[] }
-- _getFriends returns Promise<{ friends: User[] }
-- _getSentFriendRequests returns Promise<{ sentRequests: User[] }
-- _getReceivedFriendRequests returns Promise<{ receivedRequests: User[] }
-
-The Promises do not need to account for errors.
-# response:
+# file: src/concepts/FriendingConcept.ts
 
 ```typescript
 import { Collection, Db } from "npm:mongodb";
@@ -31,20 +20,17 @@ type FriendRequest = ID;
 type Friendship = ID;
 
 /**
- * a set of Friendships with
- *   a friend 1 User
- *   a friend 2 User
+ * Represents a friendship relationship between two users.
+ * To ensure canonical storage and retrieval, friend IDs are stored in lexicographical order.
  */
 interface Friendships {
   _id: Friendship;
-  friend1: User; // To ensure canonical storage and retrieval, store friends in lexicographical order.
-  friend2: User;
+  friend1: User; // The user ID that comes first lexicographically
+  friend2: User; // The user ID that comes second lexicographically
 }
 
 /**
- * a set of FriendRequests with
- *   a sender User
- *   a receiver User
+ * Represents a pending friend request from a sender to a receiver.
  */
 interface FriendRequests {
   _id: FriendRequest;
@@ -69,8 +55,9 @@ export default class FriendingConcept {
   }
 
   /**
-   * Helper to find a friendship between two users, regardless of order.
-   * Stores friends in lexicographical order (friend1 < friend2) for canonical representation.
+   * Helper to get the canonical representation of a pair of users for a friendship.
+   * Ensures that friend1 < friend2 lexicographically. This helps in consistently
+   * storing and querying friendships, avoiding duplicates like (A,B) and (B,A).
    */
   private getCanonicalFriendPair(user1: User, user2: User): {
     friend1: User;
@@ -103,9 +90,13 @@ export default class FriendingConcept {
       ],
     });
     if (existingRequest) {
-      return {
-        error: "A friend request between these users already exists.",
-      };
+      // If a request exists, check if it's pending (sender->receiver) or needs acceptance (receiver->sender)
+      if (existingRequest.sender === sender &&
+        existingRequest.receiver === receiver) {
+        return { error: "A friend request from you to this user is already pending." };
+      } else {
+        return { error: "This user has already sent you a friend request." };
+      }
     }
 
     // Requires: friendship between sender and receiver does not already exist
@@ -119,7 +110,7 @@ export default class FriendingConcept {
     }
 
     // Effects: creates a new friend request from sender to receiver
-    const newRequestID = freshID();
+    const newRequestID = freshID() as FriendRequest;
     await this.friendRequests.insertOne({
       _id: newRequestID,
       sender: sender,
@@ -139,22 +130,34 @@ export default class FriendingConcept {
   async acceptRequest(
     { sender, receiver }: { sender: User; receiver: User },
   ): Promise<Empty | { error: string }> {
-    // Requires: request from sender to receiver to exist
+    // Requires: request from sender to receiver to exist (meaning receiver is accepting what sender sent)
     const request = await this.friendRequests.findOne({
       sender: sender,
       receiver: receiver,
     });
     if (!request) {
-      return { error: "Friend request does not exist." };
+      return { error: "Friend request from sender to receiver does not exist." };
+    }
+
+    // Check if friendship already exists before creating. This acts as a safeguard
+    // though ideally prevented by sendRequest's pre-conditions.
+    const { friend1, friend2 } = this.getCanonicalFriendPair(sender, receiver);
+    const existingFriendship = await this.friendships.findOne({
+      friend1: friend1,
+      friend2: friend2,
+    });
+    if (existingFriendship) {
+      // If already friends, just remove the request and indicate no new friendship was formed.
+      await this.friendRequests.deleteOne({ _id: request._id });
+      return { error: "Users are already friends, request removed." };
     }
 
     // Effects: removes friend request
     await this.friendRequests.deleteOne({ _id: request._id });
 
     // Effects: records friendship between sender and user
-    const { friend1, friend2 } = this.getCanonicalFriendPair(sender, receiver);
     await this.friendships.insertOne({
-      _id: freshID(),
+      _id: freshID() as Friendship,
       friend1: friend1,
       friend2: friend2,
     });
@@ -177,7 +180,7 @@ export default class FriendingConcept {
       receiver: receiver,
     });
     if (!request) {
-      return { error: "Friend request does not exist." };
+      return { error: "Friend request from sender to receiver does not exist." };
     }
 
     // Effects: removes friend request
@@ -215,34 +218,34 @@ export default class FriendingConcept {
   }
 
   /**
-   * _isFriends (user1: User, user2: User): Promise<{ areFriends: boolean[] }>
+   * _isFriends (user1: User, user2: User): { isFriend: boolean }[]
    *
-   * @requires user1 and user2 are valid User IDs (implicit, as concept doesn't manage User existence)
-   * @effects returns an object with an 'areFriends' field containing an array with a single boolean indicating if users are friends
+   * @requires (implicit) user1 and user2 are valid User IDs in the system (managed by another concept)
+   * @effects returns an array with a single object { isFriend: true } if friends, else { isFriend: false }
    */
   async _isFriends(
     { user1, user2 }: { user1: User; user2: User },
-  ): Promise<{ areFriends: boolean[] }> {
+  ): Promise<{ isFriend: boolean }[] | { error: string }> {
     if (user1 === user2) {
-      return { areFriends: [false] }; // Cannot be friends with self in this context
+      return [{ isFriend: false }]; // Users cannot be friends with themselves in this concept's definition
     }
     const { friend1, friend2 } = this.getCanonicalFriendPair(user1, user2);
     const friendship = await this.friendships.findOne({
       friend1: friend1,
       friend2: friend2,
     });
-    return { areFriends: [!!friendship] };
+    return [{ isFriend: !!friendship }];
   }
 
   /**
-   * _getFriends (user: User): Promise<{ friends: User[] }>
+   * _getFriends (user: User): { friend: User }[]
    *
-   * @requires user is a valid User ID (implicit)
-   * @effects returns an object with a 'friends' field containing an array of User IDs that are friends with the specified user
+   * @requires (implicit) user is a valid User ID in the system (managed by another concept)
+   * @effects returns an array of objects, each with a 'friend' field containing a User ID that is friends with the input user
    */
   async _getFriends(
     { user }: { user: User },
-  ): Promise<{ friends: User[] }> {
+  ): Promise<{ friend: User }[] | { error: string }> {
     const friendDocuments = await this.friendships.find({
       $or: [
         { friend1: user },
@@ -250,43 +253,47 @@ export default class FriendingConcept {
       ],
     }).toArray();
 
-    const friends = friendDocuments.map((doc) =>
-      doc.friend1 === user ? doc.friend2 : doc.friend1
-    );
+    const friends = friendDocuments.map((doc) => ({
+      friend: doc.friend1 === user ? doc.friend2 : doc.friend1,
+    }));
 
-    return { friends: friends };
+    return friends;
   }
 
   /**
-   * _getSentFriendRequests (sender: User): Promise<{ sentRequests: User[] }>
+   * _getSentFriendRequests (sender: User): { receiver: User }[]
    *
-   * @requires sender is a valid User ID (implicit)
-   * @effects returns an object with a 'sentRequests' field containing an array of User IDs to whom the sender has sent requests
+   * @requires (implicit) sender is a valid User ID in the system (managed by another concept)
+   * @effects returns an array of objects, each with a 'receiver' field containing a User ID for a pending request sent by the sender
    */
   async _getSentFriendRequests(
     { sender }: { sender: User },
-  ): Promise<{ sentRequests: User[] }> {
+  ): Promise<{ receiver: User }[] | { error: string }> {
     const requestDocuments = await this.friendRequests.find({ sender: sender })
       .toArray();
-    const receivers = requestDocuments.map((doc) => doc.receiver);
-    return { sentRequests: receivers };
+    const receivers = requestDocuments.map((doc) => ({
+      receiver: doc.receiver,
+    }));
+    return receivers;
   }
 
   /**
-   * _getReceivedFriendRequests (receiver: User): Promise<{ receivedRequests: User[] }>
+   * _getReceivedFriendRequests (receiver: User): { sender: User }[]
    *
-   * @requires receiver is a valid User ID (implicit)
-   * @effects returns an object with a 'receivedRequests' field containing an array of User IDs who have sent requests to the receiver
+   * @requires (implicit) receiver is a valid User ID in the system (managed by another concept)
+   * @effects returns an array of objects, each with a 'sender' field containing a User ID for a pending request received by the receiver
    */
   async _getReceivedFriendRequests(
     { receiver }: { receiver: User },
-  ): Promise<{ receivedRequests: User[] }> {
+  ): Promise<{ sender: User }[] | { error: string }> {
     const requestDocuments = await this.friendRequests.find({
       receiver: receiver,
     })
       .toArray();
-    const senders = requestDocuments.map((doc) => doc.sender);
-    return { receivedRequests: senders };
+    const senders = requestDocuments.map((doc) => ({ sender: doc.sender }));
+    return senders;
   }
 }
 ```
+
+Next, the test file for the `Friending` concept:

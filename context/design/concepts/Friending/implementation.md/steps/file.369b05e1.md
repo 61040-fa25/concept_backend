@@ -1,21 +1,10 @@
-[@concept-design-overview](../../background/concept-design-overview.md)
+---
+timestamp: 'Wed Oct 15 2025 01:11:36 GMT-0400 (Eastern Daylight Time)'
+parent: '[[../20251015_011136.be14885f.md]]'
+content_id: 369b05e156192e87a1dd3f5e174bfccacd2350afc056fe55f14bfb0848411ada
+---
 
-[@concept-specifications](../../background/concept-specifications.md)
-
-[@implementing-concepts](../../background/implementing-concepts.md)
-
-[@concept-spec](Friending.md)
-
-[@concept-implementation](../../../src/concepts/Friending/FriendingConcept.ts)
-
-# prompt: Edit the queries such that their return types are as such:
-- _areFriends returns Promise<{ areFriends : boolean[] }
-- _getFriends returns Promise<{ friends: User[] }
-- _getSentFriendRequests returns Promise<{ sentRequests: User[] }
-- _getReceivedFriendRequests returns Promise<{ receivedRequests: User[] }
-
-The Promises do not need to account for errors.
-# response:
+# file: src/concepts/FriendingConcept.ts
 
 ```typescript
 import { Collection, Db } from "npm:mongodb";
@@ -153,6 +142,16 @@ export default class FriendingConcept {
 
     // Effects: records friendship between sender and user
     const { friend1, friend2 } = this.getCanonicalFriendPair(sender, receiver);
+    const existingFriendship = await this.friendships.findOne({
+      friend1: friend1,
+      friend2: friend2,
+    });
+    if (existingFriendship) {
+      // This should ideally not happen if sendRequest's requires were fully met,
+      // but it's a good safeguard.
+      return { error: "Users are already friends." };
+    }
+
     await this.friendships.insertOne({
       _id: freshID(),
       friend1: friend1,
@@ -215,34 +214,34 @@ export default class FriendingConcept {
   }
 
   /**
-   * _isFriends (user1: User, user2: User): Promise<{ areFriends: boolean[] }>
+   * _isFriends (user1: User, user2: User): { isFriend: boolean }[]
    *
    * @requires user1 and user2 are valid User IDs (implicit, as concept doesn't manage User existence)
-   * @effects returns an object with an 'areFriends' field containing an array with a single boolean indicating if users are friends
+   * @effects returns an array with a single object { isFriend: true } if friends, else { isFriend: false }
    */
   async _isFriends(
     { user1, user2 }: { user1: User; user2: User },
-  ): Promise<{ areFriends: boolean[] }> {
+  ): Promise<{ isFriend: boolean }[] | { error: string }> {
     if (user1 === user2) {
-      return { areFriends: [false] }; // Cannot be friends with self in this context
+      return [{ isFriend: false }]; // Cannot be friends with self in this context
     }
     const { friend1, friend2 } = this.getCanonicalFriendPair(user1, user2);
     const friendship = await this.friendships.findOne({
       friend1: friend1,
       friend2: friend2,
     });
-    return { areFriends: [!!friendship] };
+    return [{ isFriend: !!friendship }];
   }
 
   /**
-   * _getFriends (user: User): Promise<{ friends: User[] }>
+   * _getFriends (user: User): { friend: User }[]
    *
    * @requires user is a valid User ID (implicit)
-   * @effects returns an object with a 'friends' field containing an array of User IDs that are friends with the specified user
+   * @effects returns an array of objects, each with a 'friend' field containing a User ID
    */
   async _getFriends(
     { user }: { user: User },
-  ): Promise<{ friends: User[] }> {
+  ): Promise<{ friend: User }[] | { error: string }> {
     const friendDocuments = await this.friendships.find({
       $or: [
         { friend1: user },
@@ -250,43 +249,45 @@ export default class FriendingConcept {
       ],
     }).toArray();
 
-    const friends = friendDocuments.map((doc) =>
-      doc.friend1 === user ? doc.friend2 : doc.friend1
-    );
+    const friends = friendDocuments.map((doc) => ({
+      friend: doc.friend1 === user ? doc.friend2 : doc.friend1,
+    }));
 
-    return { friends: friends };
+    return friends;
   }
 
   /**
-   * _getSentFriendRequests (sender: User): Promise<{ sentRequests: User[] }>
+   * _getSentFriendRequests (sender: User): { receiver: User }[]
    *
    * @requires sender is a valid User ID (implicit)
-   * @effects returns an object with a 'sentRequests' field containing an array of User IDs to whom the sender has sent requests
+   * @effects returns an array of objects, each with a 'receiver' field containing a User ID
    */
   async _getSentFriendRequests(
     { sender }: { sender: User },
-  ): Promise<{ sentRequests: User[] }> {
+  ): Promise<{ receiver: User }[] | { error: string }> {
     const requestDocuments = await this.friendRequests.find({ sender: sender })
       .toArray();
-    const receivers = requestDocuments.map((doc) => doc.receiver);
-    return { sentRequests: receivers };
+    const receivers = requestDocuments.map((doc) => ({
+      receiver: doc.receiver,
+    }));
+    return receivers;
   }
 
   /**
-   * _getReceivedFriendRequests (receiver: User): Promise<{ receivedRequests: User[] }>
+   * _getReceivedFriendRequests (receiver: User): { sender: User }[]
    *
    * @requires receiver is a valid User ID (implicit)
-   * @effects returns an object with a 'receivedRequests' field containing an array of User IDs who have sent requests to the receiver
+   * @effects returns an array of objects, each with a 'sender' field containing a User ID
    */
   async _getReceivedFriendRequests(
     { receiver }: { receiver: User },
-  ): Promise<{ receivedRequests: User[] }> {
+  ): Promise<{ sender: User }[] | { error: string }> {
     const requestDocuments = await this.friendRequests.find({
       receiver: receiver,
     })
       .toArray();
-    const senders = requestDocuments.map((doc) => doc.sender);
-    return { receivedRequests: senders };
+    const senders = requestDocuments.map((doc) => ({ sender: doc.sender }));
+    return senders;
   }
 }
 ```

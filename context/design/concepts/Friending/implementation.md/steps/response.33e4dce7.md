@@ -1,20 +1,9 @@
-[@concept-design-overview](../../background/concept-design-overview.md)
+---
+timestamp: 'Wed Oct 15 2025 01:21:39 GMT-0400 (Eastern Daylight Time)'
+parent: '[[../20251015_012139.ef1afd72.md]]'
+content_id: 33e4dce791dd8f86728c1e9a2660f9b24d26be41c497780a1d06ce79708e458c
+---
 
-[@concept-specifications](../../background/concept-specifications.md)
-
-[@implementing-concepts](../../background/implementing-concepts.md)
-
-[@concept-spec](Friending.md)
-
-[@concept-implementation](../../../src/concepts/Friending/FriendingConcept.ts)
-
-# prompt: Edit the queries such that their return types are as such:
-- _areFriends returns Promise<{ areFriends : boolean[] }
-- _getFriends returns Promise<{ friends: User[] }
-- _getSentFriendRequests returns Promise<{ sentRequests: User[] }
-- _getReceivedFriendRequests returns Promise<{ receivedRequests: User[] }
-
-The Promises do not need to account for errors.
 # response:
 
 ```typescript
@@ -215,14 +204,14 @@ export default class FriendingConcept {
   }
 
   /**
-   * _isFriends (user1: User, user2: User): Promise<{ areFriends: boolean[] }>
+   * _isFriends (user1: User, user2: User): { areFriends: boolean[] }
    *
    * @requires user1 and user2 are valid User IDs (implicit, as concept doesn't manage User existence)
-   * @effects returns an object with an 'areFriends' field containing an array with a single boolean indicating if users are friends
+   * @effects returns an object with an 'areFriends' field containing a single boolean: true if friends, else false
    */
   async _isFriends(
     { user1, user2 }: { user1: User; user2: User },
-  ): Promise<{ areFriends: boolean[] }> {
+  ): Promise<{ areFriends: boolean[] } | { error: string }> {
     if (user1 === user2) {
       return { areFriends: [false] }; // Cannot be friends with self in this context
     }
@@ -235,14 +224,14 @@ export default class FriendingConcept {
   }
 
   /**
-   * _getFriends (user: User): Promise<{ friends: User[] }>
+   * _getFriends (user: User): { friends: User[] }
    *
    * @requires user is a valid User ID (implicit)
-   * @effects returns an object with a 'friends' field containing an array of User IDs that are friends with the specified user
+   * @effects returns an object with a 'friends' field containing an array of User IDs
    */
   async _getFriends(
     { user }: { user: User },
-  ): Promise<{ friends: User[] }> {
+  ): Promise<{ friends: User[] } | { error: string }> {
     const friendDocuments = await this.friendships.find({
       $or: [
         { friend1: user },
@@ -258,14 +247,14 @@ export default class FriendingConcept {
   }
 
   /**
-   * _getSentFriendRequests (sender: User): Promise<{ sentRequests: User[] }>
+   * _getSentFriendRequests (sender: User): { sentRequests: User[] }
    *
    * @requires sender is a valid User ID (implicit)
-   * @effects returns an object with a 'sentRequests' field containing an array of User IDs to whom the sender has sent requests
+   * @effects returns an object with a 'sentRequests' field containing an array of User IDs (receivers)
    */
   async _getSentFriendRequests(
     { sender }: { sender: User },
-  ): Promise<{ sentRequests: User[] }> {
+  ): Promise<{ sentRequests: User[] } | { error: string }> {
     const requestDocuments = await this.friendRequests.find({ sender: sender })
       .toArray();
     const receivers = requestDocuments.map((doc) => doc.receiver);
@@ -273,14 +262,14 @@ export default class FriendingConcept {
   }
 
   /**
-   * _getReceivedFriendRequests (receiver: User): Promise<{ receivedRequests: User[] }>
+   * _getReceivedFriendRequests (receiver: User): { receivedRequests: User[] }
    *
    * @requires receiver is a valid User ID (implicit)
-   * @effects returns an object with a 'receivedRequests' field containing an array of User IDs who have sent requests to the receiver
+   * @effects returns an object with a 'receivedRequests' field containing an array of User IDs (senders)
    */
   async _getReceivedFriendRequests(
     { receiver }: { receiver: User },
-  ): Promise<{ receivedRequests: User[] }> {
+  ): Promise<{ receivedRequests: User[] } | { error: string }> {
     const requestDocuments = await this.friendRequests.find({
       receiver: receiver,
     })

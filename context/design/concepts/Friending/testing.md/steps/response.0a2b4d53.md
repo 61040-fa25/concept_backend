@@ -1,20 +1,9 @@
-[@concept-design-overview](../../background/concept-design-overview.md)
+---
+timestamp: 'Wed Oct 15 2025 01:25:58 GMT-0400 (Eastern Daylight Time)'
+parent: '[[../20251015_012558.7987f024.md]]'
+content_id: 0a2b4d532b92bbb7390b8d0c752a054e2bf0cd2093ff639560d67a83b76007ed
+---
 
-[@concept-specifications](../../background/concept-specifications.md)
-
-[@implementing-concepts](../../background/implementing-concepts.md)
-
-[@concept-spec](Friending.md)
-
-[@concept-implementation](../../../src/concepts/Friending/FriendingConcept.ts)
-
-# prompt: Edit the queries such that their return types are as such:
-- _areFriends returns Promise<{ areFriends : boolean[] }
-- _getFriends returns Promise<{ friends: User[] }
-- _getSentFriendRequests returns Promise<{ sentRequests: User[] }
-- _getReceivedFriendRequests returns Promise<{ receivedRequests: User[] }
-
-The Promises do not need to account for errors.
 # response:
 
 ```typescript
