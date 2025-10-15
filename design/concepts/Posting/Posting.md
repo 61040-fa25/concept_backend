@@ -1,4 +1,4 @@
-**Concept: Posting (User, Image)**
+**Concept: Posting (User, Image, Date)**
 * **purpose** allow users to publish and share content for others to see
 * **principle** users can create/publish posts that consist of a caption and at least one image. These posts can be edited and deleted by their owners.
 * **state**

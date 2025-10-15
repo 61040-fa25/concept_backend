@@ -347,12 +347,12 @@ Deno.test("Posting Concept Tests", async (t) => {
       assertEquals(
         alicePostsResult.posts?.[0]._id,
         postA2Id,
-        "First post should be Alice's second post (most recent)",
+        "First post given in query should be Alice's second post (most recent)",
       );
       assertEquals(
         alicePostsResult.posts?.[1]._id,
         postA1Id,
-        "Second post should be Alice's first post (oldest)",
+        "Second post given in query should be Alice's first post (oldest)",
       );
 
       // Query for Bob's posts
