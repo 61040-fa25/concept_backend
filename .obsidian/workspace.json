@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "README.md",
+                "file": "design/concepts/Notification/implementation.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "README"
+              "title": "implementation"
             }
           }
         ]
@@ -169,8 +169,22 @@
       "bases:Create new base": false
     }
   },
-  "active": "60ccb8b74e272dda",
+  "active": "9b42b4503c7d88ad",
   "lastOpenFiles": [
-    "README.md"
+    "ctx.exe",
+    "ctx.exe.tmp-c031b08aa3e77ef9",
+    "design/background/concept-specifications.md",
+    "design/background/concept-design-overview.md",
+    "design/background/implementing-concepts.md",
+    "design/background/testing-concepts.md",
+    "design/background/concept-design-brief.md",
+    "design/concepts/Notification/implementation.md",
+    "design/concepts/Notification/NotificationSpec.md",
+    "design/concepts/TripCostEstimation/TripCostEstimationSpec.md",
+    "design/concepts/ProgressTracking/ProgressTrackingSpec.md",
+    "design/concepts/PasswordAuthentication/testing.md",
+    "design/concepts/PasswordAuthentication/PasswordAuthenticationSpec.md",
+    "README.md",
+    "ctx.exe.tmp-0a88e6652f0344fe"
   ]
 }
