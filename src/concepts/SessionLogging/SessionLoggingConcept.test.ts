@@ -32,7 +32,7 @@ Deno.test("SessionLogging Concept Tests", async (t) => {
   await t.step(
     "Principle Trace: Fulfilling the concept's main purpose",
     async () => {
-      console.log("\n--- Executing Principle Trace ---");
+      console.log("\n--- EXECUTING Principle Trace ---");
 
       // 1. User Alice starts a session
       console.log("Scenario: Alice starts a new session.");
@@ -89,7 +89,7 @@ Deno.test("SessionLogging Concept Tests", async (t) => {
 
       // 2. Alice adds multiple image entries to the session
       console.log(
-        "Scenario: Alice adds multiple image entries to the active session.",
+        "\nScenario: Alice adds multiple image entries to the active session.",
       );
       await concept.addEntry({
         user: userAlice,
@@ -138,7 +138,7 @@ Deno.test("SessionLogging Concept Tests", async (t) => {
       );
 
       // 3. Alice ends the session
-      console.log("Scenario: Alice ends the session.");
+      console.log("\nScenario: Alice ends the session.");
       const endSessionResult = await concept.endSession({
         user: userAlice,
         session: sessionAlice1,
@@ -184,46 +184,8 @@ Deno.test("SessionLogging Concept Tests", async (t) => {
         "Query for active status should confirm inactive.",
       );
 
-      // 4. Attempt to add an entry to the ended session (should fail)
       console.log(
-        "Scenario: Attempt to add an entry to an already ended session (expected to fail).",
-      );
-      const addEntryFailedResult = await concept.addEntry({
-        user: userAlice,
-        session: sessionAlice1,
-        image: image4,
-      });
-      logAction("addEntry (to ended session)", {
-        user: userAlice,
-        session: sessionAlice1,
-        image: image4,
-      }, addEntryFailedResult);
-      assertEquals(
-        isError(addEntryFailedResult),
-        true,
-        "Adding entry to inactive session should fail.",
-      );
-      assertEquals(
-        (addEntryFailedResult as { error: string }).error,
-        `SessionLogging: Session with ID ${sessionAlice1} is not active. Cannot add entries.`,
-      );
-      sessionImages = await concept._getEntriesInSession({
-        session: sessionAlice1,
-      });
-      assertEquals(
-        sessionImages.includes(image4),
-        false,
-        "Image4 should not be added to inactive session.",
-      );
-      assertEquals(
-        sessionImages.length,
-        3,
-        "Image count should remain 3 after failed attempt.",
-      );
-
-      // 5. Verify previously recorded entries are still associated (persistence as per principle)
-      console.log(
-        "Scenario: Verify recorded entries persist after the session ends.",
+        "\nScenario: Verify recorded entries persist after the session ends.",
       );
       sessionImages = await concept._getEntriesInSession({
         session: sessionAlice1,
@@ -236,11 +198,16 @@ Deno.test("SessionLogging Concept Tests", async (t) => {
       assertEquals(sessionImages.includes(image1), true);
       assertEquals(sessionImages.includes(image2), true);
       assertEquals(sessionImages.includes(image3), true);
+
+      console.log(
+        `Images from Alice's session: `,
+        sessionImages,
+      );
     },
   );
 
   await t.step("Scenario: `addEntry` Precondition Violations", async () => {
-    console.log("\n--- Executing addEntry Precondition Violation Tests ---");
+    console.log("\n--- EXECUTING addEntry Precondition Violation Tests ---");
 
     // Setup an active session for Alice for valid base cases
     const startSessionResult = await concept.startSession({ user: userAlice });
@@ -351,13 +318,82 @@ Deno.test("SessionLogging Concept Tests", async (t) => {
       1,
       "Image count should still be 1 after duplicate attempt.",
     );
+
+    // Alice ends session
+    console.log("\nScenario: Alice ends the session.");
+    const endSessionResult = await concept.endSession({
+      user: userAlice,
+      session: sessionAlice2,
+    });
+    logAction(
+      "endSession",
+      { user: userAlice, session: sessionAlice2 },
+      endSessionResult,
+    );
+    assertEquals(
+      isError(endSessionResult),
+      false,
+      `Expected no error, got: ${
+        isError(endSessionResult) ? endSessionResult.error : "Unknown error"
+      }`,
+    );
+
+    // 4. Attempt to add an entry to the ended session (should fail)
+    console.log(
+      "\nScenario: Attempt to add an entry to an already ended session (expected to fail).",
+    );
+    const addEntryFailedResult = await concept.addEntry({
+      user: userAlice,
+      session: sessionAlice2,
+      image: image5,
+    });
+    logAction("addEntry (to ended session)", {
+      user: userAlice,
+      session: sessionAlice2,
+      image: image5,
+    }, addEntryFailedResult);
+    assertEquals(
+      isError(addEntryFailedResult),
+      true,
+      "Adding entry to inactive session should fail.",
+    );
+    assertEquals(
+      (addEntryFailedResult as { error: string }).error,
+      `SessionLogging: Session with ID ${sessionAlice2} is not active. Cannot add entries.`,
+    );
+    sessionImages = await concept._getEntriesInSession({
+      session: sessionAlice2,
+    });
+    assertEquals(
+      sessionImages.includes(image5),
+      false,
+      "image5 should not be added to inactive session.",
+    );
+
+    // 5. Verify previously recorded entries are still associated (persistence as per principle)
+    console.log(
+      "Scenario: Verify recorded entries persist after the session ends.",
+    );
+    sessionImages = await concept._getEntriesInSession({
+      session: sessionAlice2,
+    });
+    assertEquals(
+      sessionImages.length,
+      1,
+      "Entries should persist after session ends.",
+    );
+    assertEquals(sessionImages.includes(image4), true);
+    console.log(
+      `Images from Alice's session: `,
+      sessionImages,
+    );
   });
 
   await t.step(
     "Scenario: `endSession` Precondition Violations and Idempotency",
     async () => {
       console.log(
-        "\n--- Executing endSession Precondition Violation & Idempotency Tests ---",
+        "\n--- EXECUTING endSession Precondition Violation & Idempotency Tests ---",
       );
 
       // Setup an active session for Alice
@@ -473,7 +509,7 @@ Deno.test("SessionLogging Concept Tests", async (t) => {
   await t.step(
     "Scenario: Multiple Users, Isolation, and Cross-User Interaction",
     async () => {
-      console.log("\n--- Executing Multi-User Isolation Tests ---");
+      console.log("\n--- EXECUTING Multi-User Isolation Tests ---");
 
       // Alice starts a session and adds entries
       console.log("Scenario: Alice starts her session and adds images.");
@@ -554,6 +590,26 @@ Deno.test("SessionLogging Concept Tests", async (t) => {
         false,
         "Alice's session should not contain Bob's image5.",
       );
+      console.log(
+        `Alice's session includes image1? --> ${
+          aliceImages.includes(image1)
+        }. Expected: True`,
+      );
+      console.log(
+        `Alice's session includes image2? --> ${
+          aliceImages.includes(image2)
+        }. Expected: True`,
+      );
+      console.log(
+        `Alice's session includes image3? --> ${
+          aliceImages.includes(image3)
+        }. Expected: False`,
+      );
+      console.log(
+        `Alice's session includes image5? --> ${
+          aliceImages.includes(image5)
+        }. Expected: False`,
+      );
 
       const bobSessions = await concept._getSessionsByUser({ user: userBob });
       assertEquals(
@@ -585,6 +641,26 @@ Deno.test("SessionLogging Concept Tests", async (t) => {
         bobImages.includes(image2),
         false,
         "Bob's session should not contain Alice's image2.",
+      );
+      console.log(
+        `Bob's session includes image1? --> ${
+          bobImages.includes(image1)
+        }. Expected: False`,
+      );
+      console.log(
+        `Bob's session includes image2? --> ${
+          bobImages.includes(image2)
+        }. Expected: False`,
+      );
+      console.log(
+        `Bob's session includes image3? --> ${
+          bobImages.includes(image3)
+        }. Expected: True`,
+      );
+      console.log(
+        `Bob's session includes image5? --> ${
+          bobImages.includes(image5)
+        }. Expected: True`,
       );
 
       // User Alice tries to mess with User Bob's session (should fail)
