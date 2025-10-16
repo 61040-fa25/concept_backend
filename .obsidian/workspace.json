@@ -4,16 +4,16 @@
     "type": "split",
     "children": [
       {
-        "id": "0191866cebf1b7c3",
+        "id": "eebcbeea5a2db0cb",
         "type": "tabs",
         "children": [
           {
-            "id": "60ccb8b74e272dda",
+            "id": "72b263cfa3df1cde",
             "type": "leaf",
             "state": {
               "type": "markdown",
               "state": {
-                "file": "design/concepts/Notification/implementation.md",
+                "file": "design/concepts/TripCostEstimation/implementation.md",
                 "mode": "source",
                 "source": false
               },
@@ -78,7 +78,7 @@
       }
     ],
     "direction": "horizontal",
-    "width": 300
+    "width": 298.5
   },
   "right": {
     "id": "ffc60e9763cc384c",
@@ -169,22 +169,43 @@
       "bases:Create new base": false
     }
   },
-  "active": "9b42b4503c7d88ad",
+  "active": "72b263cfa3df1cde",
   "lastOpenFiles": [
-    "ctx.exe",
-    "ctx.exe.tmp-c031b08aa3e77ef9",
-    "design/background/concept-specifications.md",
-    "design/background/concept-design-overview.md",
-    "design/background/implementing-concepts.md",
-    "design/background/testing-concepts.md",
-    "design/background/concept-design-brief.md",
-    "design/concepts/Notification/implementation.md",
-    "design/concepts/Notification/NotificationSpec.md",
-    "design/concepts/TripCostEstimation/TripCostEstimationSpec.md",
-    "design/concepts/ProgressTracking/ProgressTrackingSpec.md",
-    "design/concepts/PasswordAuthentication/testing.md",
-    "design/concepts/PasswordAuthentication/PasswordAuthenticationSpec.md",
-    "README.md",
-    "ctx.exe.tmp-0a88e6652f0344fe"
+    "context/src/concepts/TripCostEstimation/TripCostEstimationConcept.ts/20251016_133814.0a36833c.md",
+    "context/src/concepts/TripCostEstimation/TripCostEstimationConcept.ts",
+    "context/src/concepts/TripCostEstimation/TripCostEstimationConcept.test.ts/20251016_133808.782a69f1.md",
+    "context/src/concepts/TripCostEstimation/TripCostEstimationConcept.test.ts",
+    "context/src/concepts/TripCostEstimation",
+    "design/concepts/TripCostEstimation/comparison-two-implementations.md",
+    "context/design/concepts/TripCostEstimation/comparison-two-implementations.md/20251016_133650.417c74c9.md",
+    "design/overallDesign-Interesting-Moments.md",
+    "context/design/concepts/TripCostEstimation/comparison-two-implementations.md/steps/current TripCostEstimation implementation.1cd74556.md",
+    "context/design/concepts/TripCostEstimation/comparison-two-implementations.md/steps/another concept implementation.2840b9d3.md",
+    "context/design/concepts/TripCostEstimation/comparison-two-implementations.md/steps",
+    "context/design/concepts/TripCostEstimation/comparison-two-implementations.md",
+    "context/design/overallDesign-Interesting-Moments.md/20251016_133213.34cb0da4.md",
+    "context/design/overallDesign-Interesting-Moments.md/steps/response.fcae376c.md",
+    "context/design/overallDesign-Interesting-Moments.md/20251016_133149.d1790cf5.md",
+    "context/design/overallDesign-Interesting-Moments.md/steps/_.88e44dda.md",
+    "context/design/overallDesign-Interesting-Moments.md/steps/current TripCostEstimation implementation.1cd74556.md",
+    "context/design/overallDesign-Interesting-Moments.md/steps/another concept implementation.2840b9d3.md",
+    "context/design/overallDesign-Interesting-Moments.md/steps/_.6e9ae459.md",
+    "context/design/overallDesign-Interesting-Moments.md/steps/_.eea7fc51.md",
+    "design/concepts/TripCostEstimation/testing.md",
+    "context/design/concepts/TripCostEstimation/testing.md/20251016_132304.4be41456.md",
+    "context/design/concepts/TripCostEstimation/testing.md/steps/file.f06bf500.md",
+    "context/design/concepts/TripCostEstimation/testing.md/steps/response.fe45a6f8.md",
+    "context/design/concepts/TripCostEstimation/testing.md/20251016_132200.667d136f.md",
+    "context/design/concepts/TripCostEstimation/testing.md/steps/prompt.c3327ee8.md",
+    "context/design/concepts/TripCostEstimation/testing.md/steps/response.5ffa2ea3.md",
+    "context/design/concepts/TripCostEstimation/testing.md/steps/_.94f1212b.md",
+    "context/design/concepts/TripCostEstimation/testing.md/steps/response.7f089df7.md",
+    "context/design/concepts/TripCostEstimation/testing.md/steps/prompt.6f037cd5.md",
+    "context/design/concepts/TripCostEstimation/testing.md/steps",
+    "src/utils/gemini-llm.ts",
+    "context/design/concepts/TripCostEstimation/implementation.md/steps",
+    "context/design/concepts/TripCostEstimation/TripCostEstimationSpec.md/steps",
+    "context/design/concepts/TripCostEstimation",
+    "context/design/concepts/ProgressTracking/testing-output.md/steps"
   ]
 }

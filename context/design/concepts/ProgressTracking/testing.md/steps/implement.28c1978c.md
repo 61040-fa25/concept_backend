@@ -1,0 +1,45 @@
+---
+timestamp: 'Thu Oct 16 2025 10:44:05 GMT-0400 (Eastern Daylight Time)'
+parent: '[[..\20251016_104405.63076ad7.md]]'
+content_id: 28c1978cf9eb4128f18b679fa9b9ddb9148a5d49290fa8ce6e54d7079eef90f1
+---
+
+# implement: the following concept
+
+ProgressTracking \[TripCostEstimation, User]
+
+* **purpose** create and track savings plans for discretionary vacation goals
+* **principle** a plan breaks a trip’s cost into manageable contributions, the user sets a payment period and the amount to be paid every period. The user can also change those details for some trip.
+* **state**
+  * a set of **Users** with
+    * a set of **Plans**
+  * a set of **Plans** with
+    * a `trip` **TripCostEstimation**
+    * a `paymentPeriod` **Number**
+    * a `amountPerPeriod` **Number**
+    * a `goalAmount` **Number**
+    * a `currentAmount` **Number**
+    * a `goalReachedFlag` **Boolean**
+* **actions**
+  * `createPlan (user: User, trip: TripCostEstimation, paymentPeriod: Number, amountPerPeriod: Number, goalAmount: Number): (plan: Plan, paymentPeriod: Number, amountPerPeriod: Number)`
+    * **requires** amountPerPeriod is a >= 0 amount that the user selects to pay every paymentPeriod month, and goalAmount is >= 0
+    * **effect** makes a new plan linked to `trip` and `user`. Sets `currentAmount` to `0`. Sets `goalReachedFlag` to `false`
+  * `addAmount (user: User, plan: Plan, amount: Number): currentAmount: Number`
+    * **requires** plan exists and belongs to user
+    * **effect** increases `currentAmount` of plan by `amount` and then calls `updateGoalStatus(user, plan)`.
+  * `removeAmount (user: User, plan: Plan, amount: Number): currentAmount: number`
+    * **requires** plan exists and belongs to user and amount less than or equal to currentAmount associated with plan
+    * **effect** decreases `currentAmount` by `amount` and then calls `updateGoalStatus(user, plan)`.
+  * `deletePlan (user: User, plan: Plan)`
+    * **requires** `plan` exists and belongs to user
+    * **effect** removes plan
+  * `modifyPlan (user: User, plan: Plan, newPaymentPeriod: Number, newAmountPerPeriod: Number)`
+    * **requires** plan exists and belongs to user
+    * **effect** updates savings schedule associated with plan by changing the `paymentPeriod` to `newPaymentPeriod` and `amountPerPeriod` to `newAmountPerPeriod`.
+  * `updateGoalStatus (user: User, plan: Plan): goalReachedFlag: boolean`
+    * **requires** `plan` exists and belongs to `user`.
+    * **effect**
+      * If `plan.currentAmount >= plan.goalAmount`, sets `plan.goalReachedFlag` to `true`.
+      * Otherwise (`plan.currentAmount < plan.goalAmount`), sets `plan.goalReachedFlag` to `false`.
+  * `_getPlans(user: User): plans: Plan[]`
+    * **effect** returns an array of all existing Plans belonging to user
