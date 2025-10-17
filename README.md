@@ -9,15 +9,15 @@ Still here? Thanks for not getting bored :-D. Below is the table of contents for
 
 1. [Main repo that is outside of this repo!](https://github.com/notyahir/61040-portfolio)
 
-2. [Code Implementation, src](resurfacer_4a/src/concepts)
+2. [Code Implementation, src](src/concepts)
 
-3. [Context Concept Files](resurfacer_4a/context/design/concepts)
+3. [Context Concept Files](context/design/concepts)
 
-4. [Design Files](resurfacer_4a/design/concepts)
+4. [Design Files](design/concepts)
 
-5. [Design Takeaways File](resurfacer_4a/design/takeaways.md)
+5. [Design Takeaways File](design/takeaways.md)
 
-6. [Test Output]()
+6. [Test Output](design/test_output.md)
 
 
 
