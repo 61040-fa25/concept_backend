@@ -8,20 +8,63 @@
         "type": "tabs",
         "children": [
           {
-            "id": "60ccb8b74e272dda",
+            "id": "95dd8fdccd43f72c",
             "type": "leaf",
             "state": {
               "type": "markdown",
               "state": {
-                "file": "README.md",
+                "file": "context/design/brainstorming/questioning.md/steps/response.3155580a.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "README"
+              "title": "response.3155580a"
+            }
+          },
+          {
+            "id": "fbef871521cf58c2",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "design/brainstorming/questioning.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "questioning"
+            }
+          },
+          {
+            "id": "eedceba02a0346d2",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "design/learning/exercise-0.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "exercise-0"
+            }
+          },
+          {
+            "id": "a28cccc2fea04a2f",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "context/design/brainstorming/questioning.md/steps/response.3155580a.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "response.3155580a"
             }
           }
-        ]
+        ],
+        "currentTab": 2
       }
     ],
     "direction": "vertical"
@@ -169,8 +212,43 @@
       "bases:Create new base": false
     }
   },
-  "active": "60ccb8b74e272dda",
+  "active": "eedceba02a0346d2",
   "lastOpenFiles": [
-    "README.md"
+    "dir_tree_to_text.py",
+    "src/concepts/TrackScoring",
+    "src/concepts/SwipeSessions",
+    "src/concepts/Swipe Sessions",
+    "src/concepts/PlaylistHealth",
+    "src/concepts/PlatformLink",
+    "src/concepts/LibraryCache",
+    "design/concepts/SwipeSessions",
+    "design/concepts/LibraryCache",
+    "design/concepts/PlaylistHealth",
+    "design/concepts/PlatformLink",
+    "context/design/learning/exercise-0.md/steps/_.5701c6a2.md",
+    "context/design/learning/exercise-0.md/20251016_132837.616e42d9.md",
+    "context/design/learning/exercise-0.md",
+    "design/brainstorming/questioning.md",
+    "design/learning/exercise-0.md",
+    "context/design/brainstorming/questioning.md/steps/response.69dea29b.md",
+    "context/design/brainstorming/questioning.md/steps/response.3155580a.md",
+    "context/design/brainstorming/questioning.md/20251016_132701.aaa78454.md",
+    "context/design/brainstorming/questioning.md/steps/response.9f9f2b2f.md",
+    "design/learning/understanding-concepts.md",
+    "context/design/learning/understanding-concepts.md/20251016_130315.ae28d34c.md",
+    "context/design/learning/understanding-concepts.md/steps/response.8e379376.md",
+    "context/design/brainstorming/questioning.md/20251016_124902.40fb8281.md",
+    "context/design/brainstorming/questioning.md/20251016_124842.59c9a53b.md",
+    "context/design/brainstorming/questioning.md/steps/prompt.f7f0dfe5.md",
+    "context/design/brainstorming/questioning.md/steps/prompt.55b66e4a.md",
+    "context/design/brainstorming/questioning.md/20251007_210354.dbfa3313.md",
+    "context/design/brainstorming/questioning.md/20251007_210412.34d993fb.md",
+    "node_modules/mongodb/README.md",
+    "node_modules/mongodb/LICENSE.md",
+    "node_modules/bson/README.md",
+    "node_modules/bson/LICENSE.md",
+    "node_modules/@mongodb-js/saslprep/readme.md",
+    "node_modules/whatwg-url/README.md",
+    "node_modules/bson/vendor/text-encoding/README.md"
   ]
 }
