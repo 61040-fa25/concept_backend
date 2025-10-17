@@ -1,14 +1,12 @@
 import { Collection, Db } from "npm:mongodb";
 import { ID, Empty } from "@utils/types.ts";
 import { freshID } from "@utils/database.ts";
-// Import the GeminiLLM. The Config interface is no longer needed here.
 import { GeminiLLM } from "@utils/gemini-llm.ts";
 
 // Declare collection prefix, use concept name
 const PREFIX = "TripCostEstimation" + ".";
 
 // Generic types of this concept (all are IDs when referenced as foreign keys)
-// These types are now defined at the module level.
 type User = ID;
 type Location = ID;
 type TravelPlan = ID;
@@ -23,8 +21,6 @@ interface CostEstimateResponse {
   flight?: number;
   roomsPerNight?: number;
   foodDaily?: number;
-  // The `error` field is not part of the *successful* LLM response structure itself,
-  // but rather part of the action's return type when an error occurs during API call or parsing.
 }
 
 // --- State Interfaces ---
@@ -35,8 +31,6 @@ interface CostEstimateResponse {
  */
 interface UsersDoc {
   _id: User;
-  // No other properties explicitly defined by the state for a User itself,
-  // as TravelPlans are linked to Users.
 }
 
 /**
@@ -56,6 +50,7 @@ interface LocationsDoc {
  *   a `fromDate` Date
  *   a `toDate` Date
  *   a `necessityID` Necessity (ID)
+ *   a `latestCostEstimateID` CostEstimate (ID) - NEW: Reference to the most recent estimate
  */
 interface TravelPlansDoc {
   _id: TravelPlan;
@@ -65,6 +60,7 @@ interface TravelPlansDoc {
   fromDate: Date;
   toDate: Date;
   necessityID: Necessity; // Link to NecessitiesDoc
+  latestCostEstimateID?: CostEstimate; // NEW: Optional link to the latest cost estimate
 }
 
 /**
@@ -88,7 +84,7 @@ interface NecessitiesDoc {
  */
 interface CostEstimatesDoc {
   _id: CostEstimate;
-  travelPlanID: TravelPlan; // Link to TravelPlansDoc
+  travelPlanID: TravelPlan; // Link to TravelPlansDoc (many-to-one)
   flight: number; // estimated total round-trip flight cost in USD
   roomsPerNight: number; // estimated cost per night in USD
   foodDaily: number; // estimated cost per day in USD
@@ -122,7 +118,7 @@ export default class TripCostEstimationConcept {
   /**
    * Parses the LLM's raw string response into a structured CostEstimateResponse object.
    * Assumes the LLM response is a JSON string, potentially wrapped in markdown.
-   * This method is now private to the concept, enforcing separation of concerns
+   * This method is private to the concept, enforcing separation of concerns
    * between LLM interaction and domain-specific parsing.
    * @param rawResponse The raw string output received from the LLM.
    * @returns CostEstimateResponse if parsing is successful, or an object with an `error` string.
@@ -218,7 +214,7 @@ export default class TripCostEstimationConcept {
       fromDate: Date;
       toDate: Date;
     },
-  ): Promise<{ travelPlan: ID } | { error: string }> {
+  ): Promise<{ travelPlan: TravelPlan } | { error: string }> {
     // Requires: fromCity and toCity exist
     const origin = await this.locations.findOne({ _id: fromCity });
     const destination = await this.locations.findOne({ _id: toCity });
@@ -268,22 +264,23 @@ export default class TripCostEstimationConcept {
       fromDate: fromDate,
       toDate: toDate,
       necessityID: newNecessityID,
+      // NEW: No latestCostEstimateID initially
     };
     await this.travelPlans.insertOne(newTravelPlan);
 
-    return { travelPlan: newTravelPlanID };
+    return { travelPlan: newTravelPlanID as TravelPlan };
   }
 
   /**
-   * deleteTravelPlan (user: User, travelPlan: TravelPlan): Empty
+   * deleteTravelPlan (user: User, travelPlan: TravelPlan): (travelPlan: TravelPlan)
    *
    * **requires** `travelPlan` exists and belongs to user
    *
-   * **effects** Delete the `travelPlan` and any associated `CostEstimates` and `Necessities`
+   * **effects** Delete the `travelPlan` and any associated `CostEstimates`
    */
   async deleteTravelPlan(
     { user, travelPlan }: { user: ID; travelPlan: ID },
-  ): Promise<Empty | { error: string }> {
+  ): Promise<{ travelPlan: TravelPlan } | { error: string }> {
     const existingTravelPlan = await this.travelPlans.findOne({
       _id: travelPlan,
       userID: user,
@@ -295,7 +292,7 @@ export default class TripCostEstimationConcept {
       };
     }
 
-    // Delete associated CostEstimates
+    // Delete all associated CostEstimates (many-to-one relationship)
     await this.costEstimates.deleteMany({ travelPlanID: travelPlan });
 
     // Delete associated Necessity
@@ -304,7 +301,7 @@ export default class TripCostEstimationConcept {
     // Delete the TravelPlan itself
     await this.travelPlans.deleteOne({ _id: travelPlan });
 
-    return {};
+    return { travelPlan: travelPlan as TravelPlan };
   }
 
   /**
@@ -312,7 +309,7 @@ export default class TripCostEstimationConcept {
    *
    * **requires** `travelPlan` exists and belongs to user
    *
-   * **effects** Create and add the `necessity` with `accommodation` and `diningFlag` to `travelPlan` (updates existing necessity)
+   * **effects** Update the `necessity` linked to `travelPlan` with new `accommodation` and `diningFlag` values.
    */
   async updateNecessity(
     {
@@ -326,7 +323,7 @@ export default class TripCostEstimationConcept {
       accommodation: boolean;
       diningFlag: boolean;
     },
-  ): Promise<{ travelPlan: ID; necessity: ID } | { error: string }> {
+  ): Promise<{ travelPlan: TravelPlan; necessity: Necessity } | { error: string }> {
     const existingTravelPlan = await this.travelPlans.findOne({
       _id: travelPlan,
       userID: user,
@@ -349,13 +346,13 @@ export default class TripCostEstimationConcept {
     }
 
     return {
-      travelPlan: travelPlan,
-      necessity: existingTravelPlan.necessityID,
+      travelPlan: travelPlan as TravelPlan,
+      necessity: existingTravelPlan.necessityID as Necessity,
     };
   }
 
   /**
-   * resetNecessity (user: User, travelPlan: TravelPlan): Empty
+   * resetNecessity (user: User, travelPlan: TravelPlan): (necessity: Necessity)
    *
    * **requires** `travelPlan` exists and belongs to user
    *
@@ -363,7 +360,7 @@ export default class TripCostEstimationConcept {
    */
   async resetNecessity(
     { user, travelPlan }: { user: ID; travelPlan: ID },
-  ): Promise<Empty | { error: string }> {
+  ): Promise<{ necessity: Necessity } | { error: string }> {
     const existingTravelPlan = await this.travelPlans.findOne({
       _id: travelPlan,
       userID: user,
@@ -384,7 +381,7 @@ export default class TripCostEstimationConcept {
       return { error: "Associated necessity not found." };
     }
 
-    return {};
+    return { necessity: existingTravelPlan.necessityID as Necessity };
   }
 
   /**
@@ -392,12 +389,12 @@ export default class TripCostEstimationConcept {
    *
    * **requires** `travelPlan` exists and belongs to user
    *
-   * **effects** Retrieves trip details (dates, locations) and necessity preference (accommodation, dining) and uses the llm's specialized tool (e.g., Google Search/Flights/Hotels) to calculate and return the median cost estimates for flight, `rooms_per_night`, and `food_daily`; the resulting data is stored as a new `CostEstimate` associated with the `travelPlanID`.
+   * **effects** Retrieves trip details (dates, locations) and necessity preference (accommodation, dining) and uses the llm's specialized tool (e.g., Google Search/Flights/Hotels) to calculate and return the median cost estimates for flight, `rooms_per_night`, and `food_daily`; the resulting data is stored as a new `CostEstimate` associated with the `travelPlanID`. The `TravelPlan`'s `latestCostEstimateID` is updated to this new estimate.
    * **Note:** The LLM prompt will be specifically tailored to search for accommodation prices matching the `accommodation` Boolean (e.g., true for hotel/motel costs) and food costs based on the `diningFlag` (true for "restaurant costs," false for "no food costs"). If the LLM fails to provide an estimate for any reason or the costs are widely inaccurate (less than 50, more than 100000 for example) then the user can manually enter the total cost of the trip that they plan to save for.
    */
   async generateAICostEstimate(
-    { user, travelPlan, llm }: { user: ID; travelPlan: ID; llm: GeminiLLM }, // `llm` type is now `GeminiLLM`
-  ): Promise<{ costEstimate: ID } | { error: string }> {
+    { user, travelPlan, llm }: { user: ID; travelPlan: ID; llm: GeminiLLM },
+  ): Promise<{ costEstimate: CostEstimate } | { error: string }> {
     const existingTravelPlan = await this.travelPlans.findOne({
       _id: travelPlan,
       userID: user,
@@ -436,7 +433,6 @@ export default class TripCostEstimationConcept {
       ? "daily restaurant food costs"
       : "no food costs (e.g., cooking own meals)";
 
-    // Prompt explicitly asks for JSON, as the LLM utility is configured for it.
     const prompt =
       `Please provide a cost estimate in JSON format for a trip. ` +
       `Estimate median round-trip flight, ${
@@ -453,11 +449,9 @@ export default class TripCostEstimationConcept {
     try {
       llmRawResult = await llm.executeLLM(prompt);
     } catch (llmError) {
-      // Catch errors thrown by GeminiLLM.executeLLM
       return { error: `LLM API call failed: ${(llmError as Error).message}` };
     }
 
-    // Parse the raw LLM response using the private method in the concept.
     const parsedCostEstimate = this._parseLLMCostEstimate(llmRawResult);
 
     if ("error" in parsedCostEstimate) {
@@ -468,7 +462,6 @@ export default class TripCostEstimationConcept {
     const roomsPerNightCost = parsedCostEstimate.roomsPerNight ?? 0;
     const foodDailyCost = parsedCostEstimate.foodDaily ?? 0;
 
-    // Basic validation for wide inaccuracies
     if (
       flightCost < 50 || flightCost > 100000 ||
       roomsPerNightCost < 0 || roomsPerNightCost > 5000 ||
@@ -490,14 +483,16 @@ export default class TripCostEstimationConcept {
       lastUpdated: new Date(),
     };
 
-    // Replace any existing estimate for this travel plan
-    await this.costEstimates.replaceOne(
-      { travelPlanID: travelPlan },
-      newCostEstimate,
-      { upsert: true },
+    // NEW: Always insert a new cost estimate (many-to-one)
+    await this.costEstimates.insertOne(newCostEstimate);
+
+    // NEW: Update the travel plan to reference this new cost estimate as the latest
+    await this.travelPlans.updateOne(
+        { _id: travelPlan },
+        { $set: { latestCostEstimateID: newCostEstimateID } }
     );
 
-    return { costEstimate: newCostEstimateID };
+    return { costEstimate: newCostEstimateID as CostEstimate };
   }
 
   /**
@@ -521,12 +516,19 @@ export default class TripCostEstimationConcept {
       };
     }
 
+    // NEW: Retrieve the LATEST cost estimate via the travel plan's reference
+    if (!existingTravelPlan.latestCostEstimateID) {
+      return { error: "No latest cost estimate found for this travel plan." };
+    }
+
     const costEstimate = await this.costEstimates.findOne({
-      travelPlanID: travelPlan,
+      _id: existingTravelPlan.latestCostEstimateID,
+      travelPlanID: travelPlan, // Optional: for extra validation that the estimate belongs to this plan
     });
 
     if (!costEstimate) {
-      return { error: "No cost estimate found for this travel plan." };
+      // This could happen if latestCostEstimateID points to a deleted or non-existent estimate
+      return { error: "Referenced cost estimate not found." };
     }
 
     // Calculate number of days (inclusive of arrival day if departing on same day as arrival, min 1 day)
@@ -539,12 +541,6 @@ export default class TripCostEstimationConcept {
       ),
     );
 
-    // Assuming numDays also represents nights for roomsPerNight for simplification
-    // For more accuracy, one might adjust `numNights` for accommodation calculations:
-    // `numNights = Math.max(0, Math.floor((toDate.getTime() - fromDate.getTime()) / (1000 * 60 * 60 * 24)))`
-    // However, the problem statement uses 'numNights' as the duration for the prompt,
-    // and 'roomsPerNight' is often calculated based on full nights stay.
-    // Sticking to `numDays` for both for consistency with earlier `numNights` calculation in `generateAICostEstimate`.
     const totalCost = costEstimate.flight +
       (costEstimate.roomsPerNight * numDays) +
       (costEstimate.foodDaily * numDays);
@@ -563,20 +559,16 @@ export default class TripCostEstimationConcept {
    */
   async _getAllTravelPlans(
     { user }: { user: ID },
-  ): Promise<TravelPlan[] | { error: string }[]> { // Changed return type to TravelPlan[]
-    // Check if user exists (as per "requires" clause).
-    // If user doesn't exist, return an error as specified for typical error handling.
+  ): Promise<TravelPlan[] | { error: string }[]> {
     const userExists = await this.users.findOne({ _id: user });
     if (!userExists) {
       return [{ error: `User with ID ${user} does not exist.` }];
     }
 
-    // Project only the _id field
     const plans = await this.travelPlans.find({ userID: user }, {
       projection: { _id: 1 },
     }).toArray();
 
-    // Map to an array of TravelPlan IDs (which are of type ID)
-    return plans.map((plan: TravelPlansDoc) => plan._id as TravelPlan); // Explicitly cast to TravelPlan for type safety
+    return plans.map((plan) => plan._id as TravelPlan);
   }
 }

@@ -21,6 +21,7 @@ Based on a user's choice of initial departure city and arrival city, and the use
     *   A `fromDate` Date
     *   A `toDate` Date
     *   A `necessity` Necessity
+    *  A LatestUpdatedCostEstimate CostEstimate
 *   A set of `Necessities` with
     *   An `accommodation` Boolean // true for saving for rooms, false for not
     *   A `diningFlag` Boolean // true for saving for eating out, false for not
@@ -37,7 +38,7 @@ Based on a user's choice of initial departure city and arrival city, and the use
     *   **Requires:** `fromCity` and `toCity` exists and `toDate` >= `fromDate` and both are greater than the current date
     *   **Effect:** Create and return a `travelPlan` with a `fromCity`, `toCity`, and from and to dates, and a default necessity (`accommodation` = true, `diningFlag` = true)
 
-*   `deleteTravelPlan(user: User, travelPlan: TravelPlan)`
+*   `deleteTravelPlan(user: User, travelPlan: TravelPlan):  (travelPlan: TravelPlan)`
     *   **Requires:** `travelPlan` exists and belongs to user
     *   **Effect:** Delete the `travelPlan` and any associated `CostEstimates`
 
@@ -45,13 +46,13 @@ Based on a user's choice of initial departure city and arrival city, and the use
     *   **Requires:** `travelPlan` exists and belongs to user, `accommodation` exists as one of the livingSpaces and `diningFlag` indicates whether the user plans to save for eating out (true) or not (false)
     *   **Effect:** Create and add the `necessity` with `accommodation` and `diningFlag` to `travelPlan`
 
-*   `resetNecessity(user: User, travelPlan: TravelPlan)`
+*   `resetNecessity(user: User, travelPlan: TravelPlan): (necessity: Necessity)`
     *   **Requires:** `travelPlan` exists and belongs to user
     *   **Effect:** Reset the `necessity` belonging to `travelPlan` to the default as described in the action `createTravelPlan`
 
 *   **async** `generateAICostEstimate(user: User, travelPlan: TravelPlan, llm: GeminiLLM): (costEstimate: CostEstimate)`
     *   **Requires:** `travelPlan` exists and belongs to user
-    *   **Effect:** Retrieves trip details (dates, locations) and necessity preference (accommodation, dining) and uses the llm's specialized tool (e.g., Google Search/Flights/Hotels) to calculate and return the median cost estimates for flight, `rooms_per_night`, and `food_daily`; the resulting data is stored as a new `CostEstimate` associated with the `travelPlanID`.
+    *   **Effect:** Retrieves trip details (dates, locations) and necessity preference (accommodation, dining) and uses the llm's specialized tool (e.g., Google Search/Flights/Hotels) to calculate and return the median cost estimates for flight, `rooms_per_night`, and `food_daily`; the resulting data is stored as a new `CostEstimate` associated with the `travelPlanID. Also, add the most recent CostEstimate to travelPlan` 
     *   **Note:** The LLM prompt will be specifically tailored to search for accommodation prices matching the `accommodation` Boolean (e.g., true for hotel/motel costs) and food costs based on the `diningFlag` (true for "restaurant costs," false for "no food costs"). If the LLM fails to provide an estimate for any reason or the costs are widely inaccurate (less than 50, more than 100000 for example) then the user can manually enter the total cost of the trip that they plan to save for.
 
 *   `estimateCost (user: User, travelPlan: TravelPlan): (totalCost: Number)`

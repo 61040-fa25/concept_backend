@@ -1,4 +1,3 @@
-
 import { GoogleGenerativeAI } from 'npm:@google/generative-ai'; // Use qualified import for Deno
 import "jsr:@std/dotenv/load"; // Import dotenv to load environment variables
 
@@ -30,10 +29,8 @@ export interface CostEstimateResponse {
  * It does NOT perform any parsing of the LLM's output.
  */
 export class GeminiLLM {
-    // Removed private apiKey: string; as it's now fetched from environment
     private retryConfig: RetryConfig;
 
-    // Constructor no longer takes config, as API key is from environment
     constructor() {
         this.retryConfig = {
             maxRetries: 3,
@@ -83,17 +80,33 @@ export class GeminiLLM {
     }
 
     /**
-     * Execute LLM request with timeout.
+     * Execute LLM request with timeout, ensuring the timeout timer is always cleared.
      */
     private async executeWithTimeout(prompt: string): Promise<string> {
-        const timeoutPromise = new Promise<never>((_, reject) => {
-            setTimeout(() => {
-                reject(new Error(`LLM request timed out after ${this.retryConfig.timeoutMs}ms`));
-            }, this.retryConfig.timeoutMs);
-        });
+        let timeoutId: number | undefined; // To store the setTimeout ID
 
         const llmPromise = this.callGeminiAPI(prompt);
-        return Promise.race([llmPromise, timeoutPromise]);
+
+        const racePromise = new Promise<string>((resolve, reject) => {
+            // Start the timeout timer
+            timeoutId = setTimeout(() => {
+                reject(new Error(`LLM request timed out after ${this.retryConfig.timeoutMs}ms`));
+            }, this.retryConfig.timeoutMs);
+
+            // Race the LLM promise against the timeout
+            llmPromise.then(
+                (value) => {
+                    clearTimeout(timeoutId); // Clear timeout if LLM call succeeds
+                    resolve(value);
+                },
+                (reason) => {
+                    clearTimeout(timeoutId); // Clear timeout if LLM call fails
+                    reject(reason);
+                }
+            );
+        });
+
+        return racePromise;
     }
 
     /**
@@ -118,7 +131,7 @@ export class GeminiLLM {
                 model: GEMINI_MODEL,
                 generationConfig: {
                     maxOutputTokens: 1000,
-                    temperature: 0.1, // Lower temperature for more consistent responses
+                    temperature: 0, // Lower temperature for more consistent responses
                     responseMimeType: "application/json", // Explicitly request JSON output
                 }
             });
@@ -161,6 +174,7 @@ export class GeminiLLM {
 
     /**
      * Sleep utility for delays.
+     * This `setTimeout` will naturally complete as it's awaited.
      */
     private sleep(ms: number): Promise<void> {
         return new Promise(resolve => setTimeout(resolve, ms));

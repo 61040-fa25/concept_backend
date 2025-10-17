@@ -1,7 +1,8 @@
-import { assertEquals, assertObjectMatch, assertInstanceOf } from "jsr:@std/assert";
+import { assertEquals, assertObjectMatch, assertNotEquals } from "jsr:@std/assert"; // Added assertNotEquals
 import { testDb } from "@utils/database.ts";
 import { ID } from "@utils/types.ts";
 import { freshID } from "@utils/database.ts";
+import "jsr:@std/dotenv/load"; // Ensure environment variables are loaded for GeminiLLM
 
 // Import the concept class and its dependencies
 import TripCostEstimationConcept from "./TripCostEstimationConcept.ts";
@@ -11,36 +12,9 @@ import { GeminiLLM } from "@utils/gemini-llm.ts";
 type User = ID;
 type Location = ID;
 type TravelPlan = ID;
-type Necessity = ID; // Although Necessity is internal ID, it's good to keep its type alias.
-type CostEstimate = ID;
+// Note: Necessity and CostEstimate are internal IDs; their full document structure cannot be queried directly from tests.
 
-// Mock GeminiLLM for testing purposes
-// It now directly implements the `executeLLM` method.
-class MockGeminiLLM implements GeminiLLM {
-    private mockResponse: string | Error;
-    private shouldThrow: boolean = false;
-
-    constructor(response: string | Error) {
-        this.mockResponse = response;
-        if (response instanceof Error) {
-            this.shouldThrow = true;
-        }
-    }
-
-    /**
-     * Mock implementation of the GeminiLLM's executeLLM method.
-     * It returns a predefined response or throws an error.
-     */
-    async executeLLM(prompt: string): Promise<string> {
-        // console.log(`[MockGeminiLLM] Received prompt (first 100 chars): ${prompt.substring(0, 100)}...`);
-        if (this.shouldThrow) {
-            throw this.mockResponse;
-        }
-        return Promise.resolve(this.mockResponse as string);
-    }
-}
-
-// Common setup for most tests: initializes DB, concept, and basic data
+// Helper function to setup the test environment (DB, concept, base data)
 async function setupTestEnvironment() {
     const [db, client] = await testDb();
     const concept = new TripCostEstimationConcept(db);
@@ -48,16 +22,13 @@ async function setupTestEnvironment() {
     const userAlice = "user:Alice" as User;
     const locationNYC = freshID() as Location;
     const locationLA = freshID() as Location;
-    const locationCHI = freshID() as Location;
+    const locationCHI = freshID() as Location; // Additional location for variety
 
-    // Pre-populate locations for tests using concept's internal collections
-    // This is allowed in setup as it directly manipulates the initial state for the concept to function.
-    await concept["locations"].insertOne({ _id: locationNYC, city: "New York City" });
-    await concept["locations"].insertOne({ _id: locationLA, city: "Los Angeles" });
-    await concept["locations"].insertOne({ _id: locationCHI, city: "Chicago" });
-
-    // Explicitly add user Alice (concept's createTravelPlan upserts, but explicit setup is good)
-    await concept["users"].updateOne(
+    // Pre-populate locations and user Alice. This is for initial setup, not direct test verification.
+    await (concept as any)["locations"].insertOne({ _id: locationNYC, city: "New York City" });
+    await (concept as any)["locations"].insertOne({ _id: locationLA, city: "Los Angeles" });
+    await (concept as any)["locations"].insertOne({ _id: locationCHI, city: "Chicago" });
+    await (concept as any)["users"].updateOne(
         { _id: userAlice },
         { $setOnInsert: { _id: userAlice } },
         { upsert: true },
@@ -66,578 +37,230 @@ async function setupTestEnvironment() {
     return { client, concept, userAlice, locationNYC, locationLA, locationCHI };
 }
 
-Deno.test("TripCostEstimationConcept: createTravelPlan - Successful creation", async () => {
-    console.log("--- Test: createTravelPlan - Successful creation ---");
+// --- Test 1: Operational Principle Trace ---
+// This test follows the core flow described in the concept's principle.
+Deno.test("TripCostEstimationConcept: Operational Principle Trace", async () => {
+    console.log("\n--- Test: Operational Principle Trace ---");
     const { client, concept, userAlice, locationNYC, locationLA } = await setupTestEnvironment();
 
-    const fromDate = new Date();
-    fromDate.setDate(fromDate.getDate() + 10);
-    const toDate = new Date();
-    toDate.setDate(toDate.getDate() + 15);
+    try {
+        const fromDateP = new Date();
+        fromDateP.setDate(fromDateP.getDate() + 60); // 2 months from now
+        const toDateP = new Date();
+        toDateP.setDate(toDateP.getDate() + 67); // 7 nights later, making it an 8-day trip (7 nights)
 
-    const result = await concept.createTravelPlan({
-        user: userAlice,
-        fromCity: locationNYC,
-        toCity: locationLA,
-        fromDate: fromDate,
-        toDate: toDate,
-    });
+        console.log("1. Action: createTravelPlan (London to Paris)");
+        const createPlanResult = await concept.createTravelPlan({
+            user: userAlice,
+            fromCity: locationNYC, // Using NYC as proxy for London from setup
+            toCity: locationLA,    // Using LA as proxy for Paris from setup
+            fromDate: fromDateP,
+            toDate: toDateP,
+        });
+        if ("error" in createPlanResult) throw new Error(`Principle Trace failed to create travel plan: ${createPlanResult.error}`);
+        const principleTravelPlanId = createPlanResult.travelPlan;
+        console.log(`   -> Created travel plan ID: ${principleTravelPlanId}.`);
+        let allPlans = await concept._getAllTravelPlans({ user: userAlice });
+        if (Array.isArray(allPlans) && allPlans.length > 0 && typeof allPlans[0] === 'object' && allPlans[0] !== null && 'error' in allPlans[0]) { throw new Error(`Query failed: ${(allPlans[0] as {error: string}).error}`); }
+        assertEquals((allPlans as ID[]).includes(principleTravelPlanId), true, "Verification: Travel plan ID is listed after creation.");
 
-    if ("error" in result) {
-        throw new Error(`Test failed: ${result.error}`);
+        console.log("2. Action: updateNecessity (Accommodation to false, Dining to true)");
+        const updateNecessityResult = await concept.updateNecessity({
+            user: userAlice,
+            travelPlan: principleTravelPlanId,
+            accommodation: false, // User prefers to stay with friends/family
+            diningFlag: true,     // But still wants to eat out
+        });
+        if ("error" in updateNecessityResult) throw new Error(`Principle Trace failed to update necessity: ${updateNecessityResult.error}`);
+        console.log(`   -> Updated necessity for plan ${principleTravelPlanId}.`);
+
+        console.log("3. Action: generateAICostEstimate (Live LLM Call)");
+        const llm = new GeminiLLM();
+        const generateEstimateResult = await concept.generateAICostEstimate({
+            user: userAlice,
+            travelPlan: principleTravelPlanId,
+            llm: llm,
+        });
+        if ("error" in generateEstimateResult) throw new Error(`Principle Trace failed to generate estimate: ${generateEstimateResult.error}`);
+        console.log(`   -> Generated AI cost estimate for plan ${principleTravelPlanId}.`);
+        // NOTE: Exact cost values are non-deterministic with live LLM, so only successful generation is asserted.
+
+        console.log("4. Action: estimateCost");
+        const estimateCostResult = await concept.estimateCost({ user: userAlice, travelPlan: principleTravelPlanId });
+        if ("error" in estimateCostResult) throw new Error(`Principle Trace failed to get total cost: ${estimateCostResult.error}`);
+        assertEquals(typeof estimateCostResult.totalCost, 'number', "Verification: Total estimated cost should be a number.");
+        assertEquals(estimateCostResult.totalCost > 0, true, "Verification: Total estimated cost should be greater than 0.");
+        console.log(`   -> Calculated total cost: ${estimateCostResult.totalCost}.`);
+
+        console.log("5. Action: deleteTravelPlan");
+        const deleteResult = await concept.deleteTravelPlan({
+            user: userAlice,
+            travelPlan: principleTravelPlanId,
+        });
+        if ("error" in deleteResult) throw new Error(`Principle Trace failed to delete travel plan: ${deleteResult.error}`);
+        console.log(`   -> Deleted travel plan ${principleTravelPlanId}.`);
+        allPlans = await concept._getAllTravelPlans({ user: userAlice });
+        if (Array.isArray(allPlans) && allPlans.some(p => 'error' in p)) { throw new Error(`Query failed: ${(allPlans[0] as {error: string}).error}`); }
+        assertEquals((allPlans as ID[]).includes(principleTravelPlanId), false, "Verification: Deleted travel plan ID is no longer listed.");
+
+        console.log("Principle Trace completed successfully.");
+    } finally {
+        await client.close();
     }
-    const travelPlanId = result.travelPlan;
-    console.log(`Action: Created travel plan with ID: ${travelPlanId}`);
-
-    // Verify effects via the concept's public API
-    const allPlans = await concept._getAllTravelPlans({ user: userAlice });
-    if (Array.isArray(allPlans) && allPlans.some(p => 'error' in p)) {
-        throw new Error(`Query failed: ${(allPlans[0] as {error: string}).error}`);
-    }
-    assertEquals((allPlans as ID[]).includes(travelPlanId), true, "Effect: New travel plan ID should be listed for the user.");
-    // NOTE: Cannot verify detailed fields (fromCity, toDate, default necessity) due to API constraints.
-
-    await client.close();
 });
 
-// Deno.test("TripCostEstimationConcept: createTravelPlan - Requirement: fromCity does not exist", async () => {
-//     console.log("--- Test: createTravelPlan - Requirement: fromCity does not exist ---");
-//     const { client, concept, userAlice, locationLA } = await setupTestEnvironment();
+// --- Test 2: Interesting Case - Multiple Travel Plans and Query Verification ---
+Deno.test("TripCostEstimationConcept: Interesting Case - Multiple Travel Plans and Query Verification", async () => {
+    console.log("\n--- Test: Multiple Travel Plans and Query Verification ---");
+    const { client, concept, userAlice, locationNYC, locationLA, locationCHI } = await setupTestEnvironment();
 
-//     const fromDate = new Date(); fromDate.setDate(fromDate.getDate() + 10);
-//     const toDate = new Date(); toDate.setDate(toDate.getDate() + 15);
-//     const nonExistentLocation = freshID() as Location;
+    try {
+        const fromDate1 = new Date(); fromDate1.setDate(fromDate1.getDate() + 10);
+        const toDate1 = new Date(); toDate1.setDate(toDate1.getDate() + 15);
+        const createResult1 = await concept.createTravelPlan({ user: userAlice, fromCity: locationNYC, toCity: locationLA, fromDate: fromDate1, toDate: toDate1 });
+        if ("error" in createResult1) throw new Error(`Test failed: ${createResult1.error}`);
+        const travelPlanId1 = createResult1.travelPlan;
+        console.log(`1. Action: Created first travel plan ID: ${travelPlanId1}.`);
 
-//     const result = await concept.createTravelPlan({
-//         user: userAlice,
-//         fromCity: nonExistentLocation,
-//         toCity: locationLA,
-//         fromDate: fromDate,
-//         toDate: toDate,
-//     });
-//     assertObjectMatch(result, { error: `Origin city with ID ${nonExistentLocation} not found.` }, "Requirement: Should return error for non-existent origin city.");
-//     console.log(`Requirement Confirmed: ${result.error}`);
+        const fromDate2 = new Date(); fromDate2.setDate(fromDate2.getDate() + 20);
+        const toDate2 = new Date(); toDate2.setDate(toDate2.getDate() + 25);
+        const createResult2 = await concept.createTravelPlan({ user: userAlice, fromCity: locationLA, toCity: locationCHI, fromDate: fromDate2, toDate: toDate2 });
+        if ("error" in createResult2) throw new Error(`Test failed: ${createResult2.error}`);
+        const travelPlanId2 = createResult2.travelPlan;
+        console.log(`2. Action: Created second travel plan ID: ${travelPlanId2}.`);
 
-//     await client.close();
-// });
+        console.log(`3. Query: _getAllTravelPlans for user ${userAlice}.`);
+        let allPlansResult = await concept._getAllTravelPlans({ user: userAlice });
+        if (Array.isArray(allPlansResult) && allPlansResult.length > 0 && typeof allPlansResult[0] === 'object' && allPlansResult[0] !== null && 'error' in allPlansResult[0]) { 
+            throw new Error(`Query failed: ${(allPlansResult[0] as {error: string}).error}`); 
+        }
+        const allPlans = allPlansResult as ID[];
 
-// Deno.test("TripCostEstimationConcept: createTravelPlan - Requirement: toDate < fromDate", async () => {
-//     console.log("--- Test: createTravelPlan - Requirement: toDate < fromDate ---");
+        assertEquals(allPlans.length, 2, "Verification: Should return 2 travel plan IDs.");
+        assertEquals(allPlans.includes(travelPlanId1), true, `Verification: Should include first plan ID ${travelPlanId1}.`);
+        assertEquals(allPlans.includes(travelPlanId2), true, `Verification: Should include second plan ID ${travelPlanId2}.`);
+        console.log(`   -> Retrieved plans: ${JSON.stringify(allPlans)}`);
+
+    } finally {
+        await client.close();
+    }
+});
+
+// --- Test 3: Interesting Case - Zero-day Trip / Same fromDate and toDate Calculation ---
+// WILL FIX THIS BY ADDING ASSERTING ESTIMATE FUNC RETURNS ERROR
+// Deno.test("TripCostEstimationConcept: Interesting Case - Zero-day Trip Calculation", async () => {
+//     console.log("\n--- Test: Zero-day Trip Calculation ---");
 //     const { client, concept, userAlice, locationNYC, locationLA } = await setupTestEnvironment();
 
-//     const fromDate = new Date(); fromDate.setDate(fromDate.getDate() + 15);
-//     const toDate = new Date(); toDate.setDate(toDate.getDate() + 10);
+//     try {
+//         const tripDate = new Date();
+//         tripDate.setDate(tripDate.getDate() + 10); // A future date for a single-day trip
 
-//     const result = await concept.createTravelPlan({
-//         user: userAlice,
-//         fromCity: locationNYC,
-//         toCity: locationLA,
-//         fromDate: fromDate,
-//         toDate: toDate,
-//     });
-//     assertObjectMatch(result, { error: "Arrival date must be on or after departure date." }, "Requirement: Should return error for invalid date range.");
-//     console.log(`Requirement Confirmed: ${result.error}`);
+//         console.log(`1. Action: createTravelPlan for a zero-night/one-day trip (${tripDate.toISOString()} to ${tripDate.toISOString()}).`);
+//         const createResult = await concept.createTravelPlan({ user: userAlice, fromCity: locationNYC, toCity: locationLA, fromDate: tripDate, toDate: tripDate });
+//         if ("error" in createResult) throw new Error(`Setup failed: ${createResult.error}`);
+//         const travelPlanId = createResult.travelPlan;
 
-//     await client.close();
-// });
+//         console.log("2. Action: generateAICostEstimate (Live LLM Call) for the zero-day trip.");
+//         const llm = new GeminiLLM();
+//         const generateEstimateResult = await concept.generateAICostEstimate({ user: userAlice, travelPlan: travelPlanId, llm: llm });
+//         if ("error" in generateEstimateResult) throw new Error(`Test failed: ${generateEstimateResult.error}`);
 
-// Deno.test("TripCostEstimationConcept: createTravelPlan - Requirement: fromDate is in the past", async () => {
-//     console.log("--- Test: createTravelPlan - Requirement: fromDate is in the past ---");
-//     const { client, concept, userAlice, locationNYC, locationLA } = await setupTestEnvironment();
+//         console.log("3. Action: estimateCost for the zero-day trip.");
+//         const estimateCostResult = await concept.estimateCost({ user: userAlice, travelPlan: travelPlanId });
+//         if ("error" in estimateCostResult) throw new Error(`Test failed: ${estimateCostResult.error}`);
 
-//     const fromDate = new Date(); fromDate.setDate(fromDate.getDate() - 5);
-//     const toDate = new Date(); toDate.setDate(toDate.getDate() + 10);
+//         assertEquals(typeof estimateCostResult.totalCost, 'number', "Verification: Total cost should be a number.");
+//         assertEquals(estimateCostResult.totalCost > 0, true, "Verification: Total cost should be greater than 0 (includes flight + at least one day of food/rooms if applicable).");
+//         console.log(`   -> Calculated total cost for zero-day trip: ${estimateCostResult.totalCost}.`);
 
-//     const result = await concept.createTravelPlan({
-//         user: userAlice,
-//         fromCity: locationNYC,
-//         toCity: locationLA,
-//         fromDate: fromDate,
-//         toDate: toDate,
-//     });
-//     assertObjectMatch(result, { error: "Departure and arrival dates must be in the future." }, "Requirement: Should return error for past dates.");
-//     console.log(`Requirement Confirmed: ${result.error}`);
-
-//     await client.close();
-// });
-
-// Deno.test("TripCostEstimationConcept: updateNecessity - Successful update", async () => {
-//     console.log("--- Test: updateNecessity - Successful update ---");
-//     const { client, concept, userAlice, locationNYC, locationLA } = await setupTestEnvironment();
-
-//     // Setup: Create a travel plan first
-//     const fromDate = new Date(); fromDate.setDate(fromDate.getDate() + 10);
-//     const toDate = new Date(); toDate.setDate(toDate.getDate() + 15);
-//     const createResult = await concept.createTravelPlan({ user: userAlice, fromCity: locationNYC, toCity: locationLA, fromDate, toDate });
-//     if ("error" in createResult) throw new Error(`Setup failed: ${createResult.error}`);
-//     const travelPlanId = createResult.travelPlan;
-
-//     const updateResult = await concept.updateNecessity({
-//         user: userAlice,
-//         travelPlan: travelPlanId,
-//         accommodation: false,
-//         diningFlag: true,
-//     });
-
-//     if ("error" in updateResult) {
-//         throw new Error(`Test failed: ${updateResult.error}`);
+//     } finally {
+//         await client.close();
 //     }
-//     console.log(`Action: Updated necessity for travel plan ${travelPlanId}`);
-//     assertEquals(updateResult.travelPlan, travelPlanId, "Effect: Returned travelPlan ID matches.");
-//     // NOTE: Cannot verify detailed necessity flags (accommodation, diningFlag) due to API constraints.
-
-//     await client.close();
 // });
 
-// Deno.test("TripCostEstimationConcept: updateNecessity - Requirement: travelPlan does not belong to user", async () => {
-//     console.log("--- Test: updateNecessity - Requirement: travelPlan does not belong to user ---");
-//     const { client, concept, userAlice, locationNYC, locationLA } = await setupTestEnvironment();
-
-//     // Setup: Create a travel plan for Alice
-//     const fromDate = new Date(); fromDate.setDate(fromDate.getDate() + 10);
-//     const toDate = new Date(); toDate.setDate(toDate.getDate() + 15);
-//     const createResult = await concept.createTravelPlan({ user: userAlice, fromCity: locationNYC, toCity: locationLA, fromDate, toDate });
-//     if ("error" in createResult) throw new Error(`Setup failed: ${createResult.error}`);
-//     const travelPlanId = createResult.travelPlan;
-
-//     const userBob = "user:Bob" as User;
-//     await concept["users"].updateOne({ _id: userBob }, { $setOnInsert: { _id: userBob } }, { upsert: true });
-
-//     const result = await concept.updateNecessity({
-//         user: userBob,
-//         travelPlan: travelPlanId,
-//         accommodation: true,
-//         diningFlag: false,
-//     });
-//     assertObjectMatch(result, { error: "Travel plan not found or does not belong to the user." }, "Requirement: Should return error as plan doesn't belong to Bob.");
-//     console.log(`Requirement Confirmed: ${result.error}`);
-
-//     await client.close();
-// });
-
-// Deno.test("TripCostEstimationConcept: resetNecessity - Successful reset", async () => {
-//     console.log("--- Test: resetNecessity - Successful reset ---");
-//     const { client, concept, userAlice, locationNYC, locationLA } = await setupTestEnvironment();
-
-//     // Setup: Create a travel plan and modify its necessity
-//     const fromDate = new Date(); fromDate.setDate(fromDate.getDate() + 10);
-//     const toDate = new Date(); toDate.setDate(toDate.getDate() + 15);
-//     const createResult = await concept.createTravelPlan({ user: userAlice, fromCity: locationNYC, toCity: locationLA, fromDate, toDate });
-//     if ("error" in createResult) throw new Error(`Setup failed: ${createResult.error}`);
-//     const travelPlanId = createResult.travelPlan;
-//     await concept.updateNecessity({ user: userAlice, travelPlan: travelPlanId, accommodation: false, diningFlag: false });
-
-//     const resetResult = await concept.resetNecessity({
-//         user: userAlice,
-//         travelPlan: travelPlanId,
-//     });
-
-//     if ("error" in resetResult) {
-//         throw new Error(`Test failed: ${resetResult.error}`);
-//     }
-//     console.log(`Action: Reset necessity for travel plan ${travelPlanId}.`);
-//     // NOTE: Cannot verify detailed necessity flags (accommodation, diningFlag) due to API constraints.
-
-//     await client.close();
-// });
-
-// Deno.test("TripCostEstimationConcept: resetNecessity - Requirement: travelPlan does not exist", async () => {
-//     console.log("--- Test: resetNecessity - Requirement: travelPlan does not exist ---");
-//     const { client, concept, userAlice } = await setupTestEnvironment();
-
-//     const nonExistentTravelPlan = freshID() as TravelPlan;
-//     const result = await concept.resetNecessity({
-//         user: userAlice,
-//         travelPlan: nonExistentTravelPlan,
-//     });
-//     assertObjectMatch(result, { error: "Travel plan not found or does not belong to the user." }, "Requirement: Should return error for non-existent travel plan.");
-//     console.log(`Requirement Confirmed: ${result.error}`);
-
-//     await client.close();
-// });
-
-// Deno.test("TripCostEstimationConcept: generateAICostEstimate - Successful generation", async () => {
-//     console.log("--- Test: generateAICostEstimate - Successful generation ---");
-//     const { client, concept, userAlice, locationNYC, locationLA } = await setupTestEnvironment();
-
-//     // Setup: Create a travel plan
-//     const fromDate = new Date(); fromDate.setDate(fromDate.getDate() + 10);
-//     const toDate = new Date(); toDate.setDate(toDate.getDate() + 15);
-//     const createResult = await concept.createTravelPlan({ user: userAlice, fromCity: locationNYC, toCity: locationLA, fromDate, toDate });
-//     if ("error" in createResult) throw new Error(`Setup failed: ${createResult.error}`);
-//     const travelPlanId = createResult.travelPlan;
-
-//     const mockLlmResponse = JSON.stringify({ flight: 500, roomsPerNight: 150, foodDaily: 75 });
-//     const mockLLM = new MockGeminiLLM(mockLlmResponse);
-
-//     const result = await concept.generateAICostEstimate({
-//         user: userAlice,
-//         travelPlan: travelPlanId,
-//         llm: mockLLM,
-//     });
-
-//     if ("error" in result) {
-//         throw new Error(`Test failed: ${result.error}`);
-//     }
-//     const costEstimateId = result.costEstimate;
-//     console.log(`Action: Generated cost estimate with ID: ${costEstimateId}.`);
-//     // NOTE: Cannot verify detailed cost estimate fields (flight, roomsPerNight, foodDaily) due to API constraints.
-
-//     await client.close();
-// });
-
-// Deno.test("TripCostEstimationConcept: generateAICostEstimate - Interesting Case: LLM returns invalid JSON", async () => {
-//     console.log("--- Test: generateAICostEstimate - Interesting Case: LLM returns invalid JSON ---");
-//     const { client, concept, userAlice, locationNYC, locationLA } = await setupTestEnvironment();
-
-//     const fromDate = new Date(); fromDate.setDate(fromDate.getDate() + 10);
-//     const toDate = new Date(); toDate.setDate(toDate.getDate() + 15);
-//     const createResult = await concept.createTravelPlan({ user: userAlice, fromCity: locationNYC, toCity: locationLA, fromDate, toDate });
-//     if ("error" in createResult) throw new Error(`Setup failed: ${createResult.error}`);
-//     const travelPlanId = createResult.travelPlan;
-
-//     const mockLLM = new MockGeminiLLM("this is not json");
-//     const result = await concept.generateAICostEstimate({
-//         user: userAlice,
-//         travelPlan: travelPlanId,
-//         llm: mockLLM,
-//     });
-
-//     assertObjectMatch(result, { error: (val) => val.includes("Failed to parse LLM response") }, "Expected error for invalid JSON format.");
-//     console.log(`Requirement Confirmed: ${result.error}`);
-
-//     await client.close();
-// });
-
-// Deno.test("TripCostEstimationConcept: generateAICostEstimate - Interesting Case: LLM returns incomplete JSON", async () => {
-//     console.log("--- Test: generateAICostEstimate - Interesting Case: LLM returns incomplete JSON ---");
-//     const { client, concept, userAlice, locationNYC, locationLA } = await setupTestEnvironment();
-
-//     const fromDate = new Date(); fromDate.setDate(fromDate.getDate() + 10);
-//     const toDate = new Date(); toDate.setDate(toDate.getDate() + 15);
-//     const createResult = await concept.createTravelPlan({ user: userAlice, fromCity: locationNYC, toCity: locationLA, fromDate, toDate });
-//     if ("error" in createResult) throw new Error(`Setup failed: ${createResult.error}`);
-//     const travelPlanId = createResult.travelPlan;
-
-//     const mockLLM = new MockGeminiLLM(JSON.stringify({ flight: 500 })); // Missing roomsPerNight and foodDaily
-//     const result = await concept.generateAICostEstimate({
-//         user: userAlice,
-//         travelPlan: travelPlanId,
-//         llm: mockLLM,
-//     });
-
-//     assertObjectMatch(result, { error: (val) => val.includes("LLM response could not be parsed into all required cost components") }, "Expected error for incomplete JSON.");
-//     console.log(`Requirement Confirmed: ${result.error}`);
-
-//     await client.close();
-// });
-
-// Deno.test("TripCostEstimationConcept: generateAICostEstimate - Interesting Case: LLM returns inaccurate values", async () => {
-//     console.log("--- Test: generateAICostEstimate - Interesting Case: LLM returns inaccurate values (too high/low) ---");
-//     const { client, concept, userAlice, locationNYC, locationLA } = await setupTestEnvironment();
-
-//     const fromDate = new Date(); fromDate.setDate(fromDate.getDate() + 10);
-//     const toDate = new Date(); toDate.setDate(toDate.getDate() + 15);
-//     const createResult = await concept.createTravelPlan({ user: userAlice, fromCity: locationNYC, toCity: locationLA, fromDate, toDate });
-//     if ("error" in createResult) throw new Error(`Setup failed: ${createResult.error}`);
-//     const travelPlanId = createResult.travelPlan;
-
-//     // Test case 1: Flight cost too high
-//     const mockLlmResponseTooHigh = JSON.stringify({ flight: 200000, roomsPerNight: 100, foodDaily: 50 });
-//     let mockLLM = new MockGeminiLLM(mockLlmResponseTooHigh);
-//     let result = await concept.generateAICostEstimate({ user: userAlice, travelPlan: travelPlanId, llm: mockLLM });
-//     assertObjectMatch(result, { error: (val) => val.includes("LLM provided cost estimates are widely inaccurate") }, "Expected error for too high flight cost.");
-//     console.log(`Requirement Confirmed (too high flight cost): ${result.error}`);
-
-//     // Test case 2: Flight cost too low
-//     const mockLlmResponseTooLow = JSON.stringify({ flight: 10, roomsPerNight: 100, foodDaily: 50 });
-//     mockLLM = new MockGeminiLLM(mockLlmResponseTooLow);
-//     result = await concept.generateAICostEstimate({ user: userAlice, travelPlan: travelPlanId, llm: mockLLM });
-//     assertObjectMatch(result, { error: (val) => val.includes("LLM provided cost estimates are widely inaccurate") }, "Expected error for too low flight cost.");
-//     console.log(`Requirement Confirmed (too low flight cost): ${result.error}`);
-
-//     await client.close();
-// });
-
-// Deno.test("TripCostEstimationConcept: generateAICostEstimate - Interesting Case: LLM API call fails", async () => {
-//     console.log("--- Test: generateAICostEstimate - Interesting Case: LLM API call fails ---");
-//     const { client, concept, userAlice, locationNYC, locationLA } = await setupTestEnvironment();
-
-//     const fromDate = new Date(); fromDate.setDate(fromDate.getDate() + 10);
-//     const toDate = new Date(); toDate.setDate(toDate.getDate() + 15);
-//     const createResult = await concept.createTravelPlan({ user: userAlice, fromCity: locationNYC, toCity: locationLA, fromDate, toDate });
-//     if ("error" in createResult) throw new Error(`Setup failed: ${createResult.error}`);
-//     const travelPlanId = createResult.travelPlan;
-
-//     const mockLLM = new MockGeminiLLM(new Error("Network error during LLM call"));
-//     const result = await concept.generateAICostEstimate({
-//         user: userAlice,
-//         travelPlan: travelPlanId,
-//         llm: mockLLM,
-//     });
-
-//     assertObjectMatch(result, { error: (val) => val.includes("LLM API call failed: Network error during LLM call") }, "Expected error for LLM API failure.");
-//     console.log(`Requirement Confirmed: ${result.error}`);
-
-//     await client.close();
-// });
-
-// Deno.test("TripCostEstimationConcept: estimateCost - Successful calculation", async () => {
-//     console.log("--- Test: estimateCost - Successful calculation ---");
-//     const { client, concept, userAlice, locationNYC, locationLA } = await setupTestEnvironment();
-
-//     // Setup: Create a travel plan and generate an estimate
-//     const fromDate = new Date(); fromDate.setDate(fromDate.getDate() + 10);
-//     const toDate = new Date(); toDate.setDate(toDate.getDate() + 15); // 5 nights / 6 days
-//     const createResult = await concept.createTravelPlan({ user: userAlice, fromCity: locationNYC, toCity: locationLA, fromDate, toDate });
-//     if ("error" in createResult) throw new Error(`Setup failed: ${createResult.error}`);
-//     const travelPlanId = createResult.travelPlan;
-
-//     const mockLlmResponse = JSON.stringify({ flight: 500, roomsPerNight: 150, foodDaily: 75 });
-//     const generateEstimateResult = await concept.generateAICostEstimate({ user: userAlice, travelPlan: travelPlanId, llm: new MockGeminiLLM(mockLlmResponse) });
-//     if ("error" in generateEstimateResult) throw new Error(`Setup failed: ${generateEstimateResult.error}`);
-//     const costEstimateId = generateEstimateResult.costEstimate;
-
-//     const numDays = Math.ceil((toDate.getTime() - fromDate.getTime()) / (1000 * 60 * 60 * 24));
-//     const expectedTotal = 500 + (150 * numDays) + (75 * numDays);
-
-//     const result = await concept.estimateCost({ user: userAlice, travelPlan: travelPlanId });
-
-//     if ("error" in result) {
-//         throw new Error(`Test failed: ${result.error}`);
-//     }
-//     assertEquals(result.totalCost, expectedTotal, "Effect: Total cost should be correctly calculated and returned.");
-//     console.log(`Action: Estimated total cost: ${result.totalCost}.`);
-
-//     await client.close();
-// });
-
-// Deno.test("TripCostEstimationConcept: estimateCost - Interesting Case: Requirement: no associated CostEstimate", async () => {
-//     console.log("--- Test: estimateCost - Interesting Case: Requirement: no associated CostEstimate ---");
-//     const { client, concept, userAlice, locationNYC, locationLA } = await setupTestEnvironment();
-
-//     // Setup: Create a new travel plan without generating an estimate
-//     const fromDate = new Date(); fromDate.setDate(fromDate.getDate() + 20);
-//     const toDate = new Date(); toDate.setDate(toDate.getDate() + 25);
-//     const createResult = await concept.createTravelPlan({ user: userAlice, fromCity: locationNYC, toCity: locationLA, fromDate, toDate });
-//     if ("error" in createResult) throw new Error("Setup failed: Failed to create new plan for test.");
-//     const newTravelPlanId = createResult.travelPlan;
-
-//     const result = await concept.estimateCost({ user: userAlice, travelPlan: newTravelPlanId });
-
-//     assertObjectMatch(result, { error: "No cost estimate found for this travel plan." }, "Requirement: Should return error if no cost estimate exists.");
-//     console.log(`Requirement Confirmed: ${result.error}`);
-
-//     await concept.deleteTravelPlan({ user: userAlice, travelPlan: newTravelPlanId }); // Clean up
-//     await client.close();
-// });
-
-// Deno.test("TripCostEstimationConcept: _getAllTravelPlans - Returns all plan IDs for user", async () => {
-//     console.log("--- Test: _getAllTravelPlans - Returns all plan IDs for user ---");
-//     const { client, concept, userAlice, locationNYC, locationLA, locationCHI } = await setupTestEnvironment();
-
-//     // Setup: Create multiple travel plans for Alice
-//     const fromDate1 = new Date(); fromDate1.setDate(fromDate1.getDate() + 10);
-//     const toDate1 = new Date(); toDate1.setDate(toDate1.getDate() + 15);
-//     const createResult1 = await concept.createTravelPlan({ user: userAlice, fromCity: locationNYC, toCity: locationLA, fromDate: fromDate1, toDate: toDate1 });
-//     if ("error" in createResult1) throw new Error(`Setup failed: ${createResult1.error}`);
-//     const travelPlanId1 = createResult1.travelPlan;
-
-//     const fromDate2 = new Date(); fromDate2.setDate(fromDate2.getDate() + 20);
-//     const toDate2 = new Date(); toDate2.setDate(toDate2.getDate() + 25);
-//     const createResult2 = await concept.createTravelPlan({ user: userAlice, fromCity: locationLA, toCity: locationCHI, fromDate: fromDate2, toDate: toDate2 });
-//     if ("error" in createResult2) throw new Error(`Setup failed: ${createResult2.error}`);
-//     const travelPlanId2 = createResult2.travelPlan;
-
-//     const allPlans = await concept._getAllTravelPlans({ user: userAlice });
-
-//     if (!Array.isArray(allPlans) || allPlans.some(p => typeof p !== 'string')) {
-//         throw new Error(`Test failed: _getAllTravelPlans returned an unexpected format: ${JSON.stringify(allPlans)}`);
-//     }
-//     assertEquals(allPlans.length, 2, "Effect: Should return 2 travel plan IDs.");
-//     assertEquals(allPlans.includes(travelPlanId1), true, `Effect: Should include plan ID ${travelPlanId1}.`);
-//     assertEquals(allPlans.includes(travelPlanId2), true, `Effect: Should include plan ID ${travelPlanId2}.`);
-//     console.log(`Action: Retrieved plans for ${userAlice}: ${JSON.stringify(allPlans)}`);
-
-//     await client.close();
-// });
-
-// Deno.test("TripCostEstimationConcept: _getAllTravelPlans - Returns empty array if user has no plans", async () => {
-//     console.log("--- Test: _getAllTravelPlans - Returns empty array if user has no plans ---");
-//     const { client, concept } = await setupTestEnvironment();
-
-//     const userNoPlans = "user:Charlie" as User;
-//     await concept["users"].updateOne(
-//       { _id: userNoPlans },
-//       { $setOnInsert: { _id: userNoPlans } },
-//       { upsert: true },
-//     );
-
-//     const allPlans = await concept._getAllTravelPlans({ user: userNoPlans });
-
-//     if (!Array.isArray(allPlans) || allPlans.some(p => typeof p !== 'string')) {
-//         throw new Error(`Test failed: _getAllTravelPlans returned an unexpected error: ${JSON.stringify(allPlans)}`);
-//     }
-//     assertEquals(allPlans.length, 0, "Effect: Should return an empty array for a user with no plans.");
-//     console.log(`Action: Retrieved plans for user ${userNoPlans}: ${JSON.stringify(allPlans)}`);
-
-//     await client.close();
-// });
-
-// Deno.test("TripCostEstimationConcept: _getAllTravelPlans - Requirement: user does not exist", async () => {
-//     console.log("--- Test: _getAllTravelPlans - Requirement: user does not exist ---");
-//     const { client, concept } = await setupTestEnvironment();
-
-//     const nonExistentUser = "user:NonExistent" as User;
-//     const result = await concept._getAllTravelPlans({ user: nonExistentUser });
-
-//     if (!Array.isArray(result) || result.length === 0 || !('error' in result[0])) {
-//          throw new Error(`Test failed: _getAllTravelPlans did not return expected error for non-existent user: ${JSON.stringify(result)}`);
-//     }
-//     assertObjectMatch(result[0], { error: `User with ID ${nonExistentUser} does not exist.` }, "Requirement: Should return error for non-existent user.");
-//     console.log(`Requirement Confirmed: ${result[0].error}`);
-
-//     await client.close();
-// });
-
-// Deno.test("TripCostEstimationConcept: deleteTravelPlan - Successful deletion of plan and associated data", async () => {
-//     console.log("--- Test: deleteTravelPlan - Successful deletion of plan and associated data ---");
-//     const { client, concept, userAlice, locationNYC, locationLA } = await setupTestEnvironment();
-
-//     // Setup: Create a travel plan, its necessity, and a cost estimate
-//     const fromDate = new Date(); fromDate.setDate(fromDate.getDate() + 10);
-//     const toDate = new Date(); toDate.setDate(toDate.getDate() + 15);
-//     const createResult = await concept.createTravelPlan({ user: userAlice, fromCity: locationNYC, toCity: locationLA, fromDate, toDate });
-//     if ("error" in createResult) throw new Error(`Setup failed: ${createResult.error}`);
-//     const travelPlanId = createResult.travelPlan;
-
-//     const mockLlmResponse = JSON.stringify({ flight: 500, roomsPerNight: 150, foodDaily: 75 });
-//     const generateResult = await concept.generateAICostEstimate({ user: userAlice, travelPlan: travelPlanId, llm: new MockGeminiLLM(mockLlmResponse) });
-//     if ("error" in generateResult) throw new Error(`Setup failed: ${generateResult.error}`);
-//     const costEstimateId = generateResult.costEstimate; // Cost estimate ID is returned
-
-//     console.log(`Action: Deleting travel plan with ID: ${travelPlanId}.`);
-//     const deleteResult = await concept.deleteTravelPlan({
-//         user: userAlice,
-//         travelPlan: travelPlanId,
-//     });
-
-//     if ("error" in deleteResult) {
-//         throw new Error(`Test failed: ${deleteResult.error}`);
-//     }
-//     console.log(`Effect: Travel plan ${travelPlanId} deleted successfully.`);
-
-//     // Verify effects via the concept's public API
-//     const allPlans = await concept._getAllTravelPlans({ user: userAlice });
-//     if (Array.isArray(allPlans) && allPlans.some(p => 'error' in p)) {
-//         throw new Error(`Query failed: ${(allPlans[0] as {error: string}).error}`);
-//     }
-//     assertEquals((allPlans as ID[]).includes(travelPlanId), false, "Effect: Deleted travel plan ID should not be listed for the user.");
-//     // NOTE: Cannot verify deletion of associated necessity and cost estimate documents directly due to API constraints.
-
-//     await client.close();
-// });
-
-// Deno.test("TripCostEstimationConcept: deleteTravelPlan - Requirement: travelPlan does not exist", async () => {
-//     console.log("--- Test: deleteTravelPlan - Requirement: travelPlan does not exist ---");
-//     const { client, concept, userAlice } = await setupTestEnvironment();
-
-//     const nonExistentTravelPlan = freshID() as TravelPlan;
-//     const result = await concept.deleteTravelPlan({
-//         user: userAlice,
-//         travelPlan: nonExistentTravelPlan,
-//     });
-//     assertObjectMatch(result, { error: "Travel plan not found or does not belong to the user." }, "Requirement: Should return error for non-existent travel plan.");
-//     console.log(`Requirement Confirmed: ${result.error}`);
-
-//     await client.close();
-// });
-
-// Deno.test("TripCostEstimationConcept: Principle Trace - Generate realistic cost estimates based on preferences", async () => {
-//     console.log("\n--- Principle Trace Test ---");
-//     const { client, concept } = await setupTestEnvironment();
-
-//     const principleUser = "user:PrincipleAlice" as User;
-//     const principleLocationHome = freshID() as Location;
-//     const principleLocationDest = freshID() as Location;
-
-//     // 1. Setup: Create user and locations
-//     await concept["locations"].insertOne({ _id: principleLocationHome, city: "London" });
-//     await concept["locations"].insertOne({ _id: principleLocationDest, city: "Paris" });
-//     await concept["users"].updateOne({ _id: principleUser }, { $setOnInsert: { _id: principleUser } }, { upsert: true });
-//     console.log("1. Setup: Created principle user and locations (London, Paris).");
-
-//     const fromDateP = new Date();
-//     fromDateP.setDate(fromDateP.getDate() + 60); // 2 months from now
-//     const toDateP = new Date();
-//     toDateP.setDate(toDateP.getDate() + 67); // 7 nights later, making it an 8-day trip (7 nights)
-
-//     // 2. Action: Create initial travel plan with default necessity
-//     const createPlanResult = await concept.createTravelPlan({
-//         user: principleUser,
-//         fromCity: principleLocationHome,
-//         toCity: principleLocationDest,
-//         fromDate: fromDateP,
-//         toDate: toDateP,
-//     });
-//     if ("error" in createPlanResult) throw new Error(`Principle Trace failed to create travel plan: ${createPlanResult.error}`);
-//     const principleTravelPlanId = createPlanResult.travelPlan;
-//     console.log(`2. Action: Created travel plan (${principleTravelPlanId}) for ${principleUser} from London to Paris, with default necessities.`);
-
-//     const allPlansAfterCreation = await concept._getAllTravelPlans({ user: principleUser });
-//     if (Array.isArray(allPlansAfterCreation) && allPlansAfterCreation.some(p => 'error' in p)) {
-//         throw new Error(`Query failed: ${(allPlansAfterCreation[0] as {error: string}).error}`);
-//     }
-//     assertEquals((allPlansAfterCreation as ID[]).includes(principleTravelPlanId), true, "Verification: Travel plan ID is listed after creation.");
-//     // NOTE: Cannot verify default necessity content (accommodation: true, dining: true) due to API constraints.
-
-//     // 3. Action: Update necessity based on user preferences
-//     const updateNecessityResult = await concept.updateNecessity({
-//         user: principleUser,
-//         travelPlan: principleTravelPlanId,
-//         accommodation: false, // User prefers to stay with friends/family
-//         diningFlag: true,     // But still wants to eat out
-//     });
-//     if ("error" in updateNecessityResult) throw new Error(`Principle Trace failed to update necessity: ${updateNecessityResult.error}`);
-//     console.log(`3. Action: Updated necessity for plan ${principleTravelPlanId}: accommodation false, dining true.`);
-//     // NOTE: Cannot verify updated necessity content directly due to API constraints.
-
-//     // 4. Action: Generate AI cost estimate using LLM with specialized tool
-//     const mockPrincipleLlmResponse = JSON.stringify({
-//         flight: 180,
-//         roomsPerNight: 0,   // Reflects 'accommodation: false'
-//         foodDaily: 60,      // Reflects 'diningFlag: true'
-//     });
-//     const mockLLM = new MockGeminiLLM(mockPrincipleLlmResponse);
-
-//     const generateEstimateResult = await concept.generateAICostEstimate({
-//         user: principleUser,
-//         travelPlan: principleTravelPlanId,
-//         llm: mockLLM,
-//     });
-//     if ("error" in generateEstimateResult) throw new Error(`Principle Trace failed to generate estimate: ${generateEstimateResult.error}`);
-//     const principleCostEstimateId = generateEstimateResult.costEstimate;
-//     console.log(`4. Action: Generated AI cost estimate (${principleCostEstimateId}) using LLM for plan ${principleTravelPlanId}.`);
-//     // NOTE: Cannot verify detailed cost estimate values (flight, roomsPerNight, foodDaily) directly due to API constraints.
-
-//     // 5. Action: Calculate total cost based on generated estimate
-//     const estimateCostResult = await concept.estimateCost({ user: principleUser, travelPlan: principleTravelPlanId });
-//     if ("error" in estimateCostResult) throw new Error(`Principle Trace failed to get total cost: ${estimateCostResult.error}`);
-
-//     const numDaysPrinciple = Math.ceil((toDateP.getTime() - fromDateP.getTime()) / (1000 * 60 * 60 * 24)); // 7 days (e.g., May 1st to May 8th is 7 nights, 8 days)
-//     const expectedTotalCost = 180 + (0 * numDaysPrinciple) + (60 * numDaysPrinciple); // 180 + (0 * 7) + (60 * 7) = 180 + 420 = 600
-//     assertEquals(estimateCostResult.totalCost, expectedTotalCost, "Verification: Total estimated cost should be correct based on updated preferences.");
-//     console.log(`5. Action: Calculated total cost: ${estimateCostResult.totalCost}. Expected: ${expectedTotalCost}.`);
-//     console.log("   Verification: Total cost aligns with flight, NO accommodation costs, and daily dining costs for the duration.");
-
-//     // 6. Query: Retrieve user's travel plans
-//     const allPrinciplePlans = await concept._getAllTravelPlans({ user: principleUser });
-//     if (Array.isArray(allPrinciplePlans) && allPrinciplePlans.some(p => 'error' in p)) {
-//         throw new Error(`Query failed: ${(allPrinciplePlans[0] as {error: string}).error}`);
-//     }
-//     assertEquals((allPrinciplePlans as ID[]).includes(principleTravelPlanId), true, "Verification: Principle travel plan should be listed for the user.");
-//     console.log("6. Query: User's travel plans retrieved, includes the principle plan.");
-
-//     console.log("Principle Trace completed successfully: An estimate was provided based on user's choices and LLM data.");
-//     await client.close();
-// });
+//--- Test 4: Interesting Case - Sequential Estimates for Same Plan (Many-to-One: Latest update) ---
+Deno.test("TripCostEstimationConcept: Interesting Case - Sequential Estimates for Same Plan", async () => {
+    console.log("\n--- Test: Sequential Estimates for Same Plan (Many-to-One: Latest Update) ---");
+    const { client, concept, userAlice, locationNYC, locationLA } = await setupTestEnvironment();
+
+    try {
+        const fromDate = new Date(); fromDate.setDate(fromDate.getDate() + 10);
+        const toDate = new Date(); toDate.setDate(toDate.getDate() + 15);
+        const createResult = await concept.createTravelPlan({ user: userAlice, fromCity: locationNYC, toCity: locationLA, fromDate, toDate });
+        if ("error" in createResult) throw new Error(`Setup failed: ${createResult.error}`);
+        const travelPlanId = createResult.travelPlan;
+        console.log(`1. Action: Created travel plan ID: ${travelPlanId}.`);
+
+        // Generate first estimate
+        console.log("2. Action: Generate first AI cost estimate (Live LLM Call).");
+        const llm = new GeminiLLM();
+        const generateEstimateResult1 = await concept.generateAICostEstimate({ user: userAlice, travelPlan: travelPlanId, llm: llm });
+        if ("error" in generateEstimateResult1) throw new Error(`Test failed: ${generateEstimateResult1.error}`);
+        const costEstimateId1 = generateEstimateResult1.costEstimate;
+        console.log(`   -> Generated first cost estimate ID: ${costEstimateId1}.`);
+
+        // Verify the travel plan now points to this estimate
+        let travelPlanDoc = await (concept as any)["travelPlans"].findOne({ _id: travelPlanId });
+        assertEquals(travelPlanDoc?.latestCostEstimateID, costEstimateId1, "Verification: Travel plan's latestCostEstimateID should be the first estimate.");
+        
+        // Generate a second estimate for the *same* travel plan
+        console.log("3. Action: Generate second AI cost estimate (Live LLM Call) for the same plan.");
+        const generateEstimateResult2 = await concept.generateAICostEstimate({ user: userAlice, travelPlan: travelPlanId, llm: llm });
+        if ("error" in generateEstimateResult2) throw new Error(`Test failed: ${generateEstimateResult2.error}`);
+        const costEstimateId2 = generateEstimateResult2.costEstimate;
+        console.log(`   -> Generated second cost estimate ID: ${costEstimateId2}.`);
+
+        // Verify that a new estimate ID was created and it's different from the first one
+        assertNotEquals(costEstimateId1, costEstimateId2, "Verification: A new cost estimate ID should be generated.");
+
+        // Verify the travel plan now points to the *second* estimate
+        travelPlanDoc = await (concept as any)["travelPlans"].findOne({ _id: travelPlanId });
+        assertEquals(travelPlanDoc?.latestCostEstimateID, costEstimateId2, "Verification: Travel plan's latestCostEstimateID should be the second (newest) estimate.");
+
+        // Verify that both old and new cost estimates still exist in the collection
+        // (many-to-one relationship, not replacing in the collection itself)
+        const totalEstimatesForPlan = await (concept as any)["costEstimates"].countDocuments({ travelPlanID: travelPlanId });
+        assertEquals(totalEstimatesForPlan, 2, "Verification: Two cost estimates should exist in the collection for this travel plan.");
+
+    } finally {
+        await client.close();
+    }
+});
+
+// --- Test 5: Interesting Case - `_getAllTravelPlans` Query Edge Cases ---
+Deno.test("TripCostEstimationConcept: Interesting Case - `_getAllTravelPlans` Query Edge Cases", async () => {
+    console.log("\n--- Test: `_getAllTravelPlans` Query Edge Cases ---");
+    const { client, concept } = await setupTestEnvironment(); // setupTestEnvironment pre-creates userAlice
+
+    try {
+        // Test 1: User with no plans
+        const userNoPlans = "user:Charlie" as User;
+        await (concept as any)["users"].updateOne(
+          { _id: userNoPlans },
+          { $setOnInsert: { _id: userNoPlans } },
+          { upsert: true },
+        );
+        console.log(`1. Action: Querying plans for user ${userNoPlans} (no plans).`);
+        let allPlansResult1 = await concept._getAllTravelPlans({ user: userNoPlans });
+        if (Array.isArray(allPlansResult1) && allPlansResult1.length > 0 && typeof allPlansResult1[0] === 'object' && allPlansResult1[0] !== null && 'error' in allPlansResult1[0]) { 
+            throw new Error(`Query failed: ${(allPlansResult1[0] as {error: string}).error}`); 
+        }
+        const allPlans1 = allPlansResult1 as ID[];
+        assertEquals(allPlans1.length, 0, "Effect: Should return an empty array for a user with no plans.");
+        console.log(`   -> Verification: Plans for ${userNoPlans}: ${JSON.stringify(allPlans1)}`);
+
+        // Test 2: Non-existent user
+        const nonExistentUser = "user:NonExistent" as User;
+        console.log(`2. Action: Querying plans for non-existent user ${nonExistentUser}.`);
+        const result = await concept._getAllTravelPlans({ user: nonExistentUser });
+        if (!Array.isArray(result) || result.length === 0 || !('error' in result[0])) {
+             throw new Error(`Test failed: _getAllTravelPlans did not return expected error for non-existent user: ${JSON.stringify(result)}`);
+        }
+        assertObjectMatch(result[0], { error: `User with ID ${nonExistentUser} does not exist.` }, "Requirement: Should return error for non-existent user.");
+        console.log(`   -> Requirement Confirmed: ${result[0].error}`);
+
+    } finally {
+        await client.close();
+    }
+});
