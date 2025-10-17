@@ -1,8 +1,8 @@
 {
-    "imports": {
-        "@concepts/": "./src/concepts/",
-        "@utils/": "./src/utils/"
-    ,
+  "imports": {
+    "@concepts/": "./src/concepts/",
+    "@utils/": "./src/utils/",
+    "mongo/test_deps": "https://deno.land/x/mongo@v0.32.0/test_deps.ts",
     "@std/assert": "https://deno.land/std@0.203.0/testing/asserts.ts"
-    }
+  }
 }
