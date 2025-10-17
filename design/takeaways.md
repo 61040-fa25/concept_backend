@@ -37,3 +37,6 @@ Nothing crazy here, I just thought it was super cool that I had accidentally for
 
 Reading through a lot of the context reasoning, it seemed to always have a step of refinement and adjusting which meant that the model was working through iterations of the tests it was building to make sure it worked. 
 
+7. Imports seemed to break sometimes
+
+Tool sometimes gave incorrect imports
