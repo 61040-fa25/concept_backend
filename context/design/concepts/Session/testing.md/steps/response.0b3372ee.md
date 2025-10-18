@@ -1,8 +1,8 @@
-[@implementation](implementation.md)
-
-[@testing-concepts](../../background/testing-concepts.md)
-
-# test: Session
+---
+timestamp: 'Sat Oct 18 2025 15:03:02 GMT-0400 (Eastern Daylight Time)'
+parent: '[[..\20251018_150302.5cfaae76.md]]'
+content_id: 0b3372ee0b993ac84528d3ba98b9c4813c7e1b83034b7b8d09dd883636942bad
+---
 
 # response:
 
@@ -488,6 +488,7 @@ Deno.test("Session Concept Tests", async (t) => {
   await client.close();
 });
 ```
+
 ```trace
 ### Principle Trace for Session Concept
 

@@ -1,509 +1,553 @@
 import { Collection, Db } from "npm:mongodb";
-import { Empty, ID } from "../../utils/types.ts"; // Adjust path as needed for actual project structure
-// freshID is not directly used for SessionDoc _id if _id is owner ID, but might be useful for sub-documents if they were separate collections.
-// For this concept, using owner ID as _id for the main session document.
+import { Empty, ID } from "@utils/types.ts";
+import { freshID } from "@utils/database.ts";
 
-/**
- * @concept Session [User, List, Task]
- * @purpose a focused session of completing all tasks on a list
- * @principle a user will "activate" a list to start a session and be given an ordered list (either default ordering or generated) of tasks on the list to complete
- */
 // Declare collection prefix, use concept name
 const PREFIX = "Session" + ".";
 
-// Generic types for the concept, representing external entities by their IDs.
+// Generic types of this concept
 type User = ID;
-type List = ID; // The external List ID
-type Task = ID; // The external Task ID
+type List = ID;
+type Task = ID;
+type Session = ID; // The ID for a Session instance
 
-// Enums for clarity and type safety
-enum OrderType {
-  Default = "Default",
-  Random = "Random",
-}
+/**
+ * Type for the status of a task within a session.
+ */
+type TaskStatus = "Incomplete" | "In Progress" | "Complete";
 
-enum FormatType {
-  List = "List", // As given in the example
-  Kanban = "Kanban", // Adding another format for realism
-}
+/**
+ * Type for the ordering preference of tasks in a session.
+ */
+type OrderType = "Default" | "Random";
 
-enum TaskStatus {
-  Incomplete = "Incomplete",
-  InProgress = "InProgress",
-  Complete = "Complete",
+/**
+ * Type for the display format of the session's list.
+ * (Only "List" is specified, but this allows for future expansion)
+ */
+type FormatType = "List";
+
+/**
+ * A set of Sessions with
+ *   an owner of type User
+ *   a SessionList with
+ *     a title of type String
+ *     an itemCount of type Number
+ *   an active of type Flag (boolean)
+ *   an ordering of type OrderType
+ *   a format of type FormatType
+ *
+ * Note: The 'SessionList' with 'ListItems' is interpreted as:
+ * - 'listId' references an external List ID (polymorphically).
+ * - 'title' is a session-specific title, possibly denormalized or a default.
+ * - 'ListItems' are managed in a separate collection, linked to this Session.
+ *
+ * Ambiguity Note: The original specification of `changeSession` (list: List, sessionOwner: User)
+ * does not provide a mechanism to initialize the `title` or the specific `ListItems` (tasks with
+ * default order) for the session from the `list` ID, while strictly adhering to concept independence.
+ * For this implementation, `title` will be initialized as an empty string and `itemCount` as 0.
+ * Populating `ListItems` must be done via other (unspecified in this concept) actions or via syncs
+ * from an external List concept that provides the initial items.
+ */
+interface SessionDoc {
+  _id: Session;
+  owner: User;
+  listId: List; // Reference to the external 'List' concept's ID
+  title: string; // Title for *this* session's list
+  itemCount: number; // Count of ListItems associated with this session
+  active: boolean;
+  ordering: OrderType;
+  format: FormatType;
 }
 
 /**
- * Represents an individual task item within a session's list.
- * @state
+ * A set of ListItems with
  *   a task of type Task
  *   a defaultOrder of type Number
- *   a randomOrder of type  Number
+ *   a randomOrder of type Number
  *   an itemStatus of type TaskStatus
+ *
+ * This represents individual tasks within a specific session,
+ * linked to a Session and an external Task ID.
  */
-interface SessionListItem {
-  task: Task;
+interface ListItemDoc {
+  _id: ID; // Unique ID for this specific ListItem instance
+  sessionId: Session; // Reference to the Session this item belongs to
+  taskId: Task; // Reference to the Task from external concept
   defaultOrder: number;
   randomOrder: number;
   itemStatus: TaskStatus;
 }
 
 /**
- * Represents the entire state of a user's session.
- * @state
- *   a Session with
- *     an owner of type User
- *     a List with
- *       a title of type String
- *       a set of ListItems with (defined by SessionListItem[])
- *       an itemCount of type Number
- *     an active of type Flag (boolean)
- *     an ordering of type OrderType
- *     a format of type FormatType
- *
- * Each document in the 'sessions' collection represents a session for a particular user.
- * The _id of the document is the User ID, ensuring a single session per user at a time.
+ * @concept Session
+ * @purpose a focused session of completing all tasks on a list
+ * @principle a user will "activate" a list to start a session and be given an ordered list
+ * (either default ordering or generated) of tasks on the list to complete
  */
-interface SessionDoc {
-  _id: User; // The owner's ID serves as the session ID, enforcing one session per user.
-  owner: User; // Redundant with _id, but explicitly stored for clarity and potential alternative querying.
-  active: boolean;
-  ordering: OrderType;
-  format: FormatType;
-  list: { // The list content managed by this session, allowing for independence.
-    id: List; // The ID of the external list this session is based on.
-    title: string; // Title of the external list.
-    items: SessionListItem[]; // The "set of ListItems" for this session.
-    itemCount: number; // The number of items in the list.
-  };
-}
-
 export default class SessionConcept {
   private sessions: Collection<SessionDoc>;
+  private listItems: Collection<ListItemDoc>;
 
   constructor(private readonly db: Db) {
     this.sessions = this.db.collection(PREFIX + "sessions");
+    this.listItems = this.db.collection(PREFIX + "listItems");
+  }
+
+  public async findListItem(sessionId: ID, taskId: ID) {
+    return await this.listItems.findOne({ sessionId, taskId });
   }
 
   /**
-   * changeSession (listId: List, listTitle: string, listItemsData: Array<{task: Task, defaultOrder: number}>, sessionOwner: User)
+   * @action changeSession
    * @requires : there is not an active session for sessionOwner
-   * @effects : makes list the Session's List with each randomOrder = defaultOrder, itemStatus = Incomplete, active = False, ordering = Default, and format = List
+   * @effects : creates new session with SessionList = list, randomOrder = defaultOrder,
+   *            itemStatus = Incomplete, active = False, ordering = Default, and format = List
    *
-   * This action initializes or reconfigures a session for a user with a specified list and its tasks.
-   * It takes the necessary list and task details as arguments to maintain concept independence.
+   * Note on ambiguity: As per concept independence, this action cannot directly query the `list` ID
+   * to get its title or contents (ListItems). The `title` is initialized empty, `itemCount` to 0.
+   * `ListItems` must be added separately, or via synchronization rules from another concept.
    */
-  async changeSession(input: {
-    listId: List;
-    listTitle: string;
-    listItemsData: Array<{ task: Task; defaultOrder: number }>;
-    sessionOwner: User;
-  }): Promise<Empty | { error: string }> {
-    const { listId, listTitle, listItemsData, sessionOwner } = input;
-
+  async changeSession(
+    { list, sessionOwner }: { list: List; sessionOwner: User },
+  ): Promise<Empty | { error: string }> {
+    // requires: there is not an active session for sessionOwner
     const existingSession = await this.sessions.findOne({
       owner: sessionOwner,
+      active: true,
     });
-
-    // Precondition: there is not an active session for sessionOwner
-    if (existingSession && existingSession.active) {
-      return {
-        error:
-          `User '${sessionOwner}' already has an active session. Please end it first.`,
-      };
+    if (existingSession) {
+      return { error: "An active session already exists for this owner." };
     }
 
-    const sessionListItems: SessionListItem[] = listItemsData.map((item) => ({
-      task: item.task,
-      defaultOrder: item.defaultOrder,
-      randomOrder: item.defaultOrder, // Initialize randomOrder to defaultOrder
-      itemStatus: TaskStatus.Incomplete, // Initialize status
-    }));
-
+    // effects: creates new session
+    const newSessionId = freshID();
     const newSession: SessionDoc = {
-      _id: sessionOwner, // Using owner ID as the unique key for the session.
+      _id: newSessionId,
       owner: sessionOwner,
-      active: false, // Session starts as inactive.
-      ordering: OrderType.Default, // Default ordering.
-      format: FormatType.List, // Default format.
-      list: {
-        id: listId,
-        title: listTitle,
-        items: sessionListItems,
-        itemCount: sessionListItems.length,
-      },
+      listId: list,
+      title: "", // Placeholder; should ideally be provided or set by a sync
+      itemCount: 0, // Initial count, items added separately
+      active: false,
+      ordering: "Default",
+      format: "List", // As specified
     };
 
-    if (existingSession) {
-      // If a session exists (even if inactive), replace it.
-      await this.sessions.replaceOne({ _id: sessionOwner }, newSession);
-    } else {
-      // Otherwise, insert a new session document.
-      await this.sessions.insertOne(newSession);
-    }
+    await this.sessions.insertOne(newSession);
+
+    // The principle mentions "given an ordered list of tasks". This implies `ListItems`
+    // are populated here. However, due to strict concept independence and the provided
+    // action signature, the `Session` concept itself cannot fetch these from `list`.
+    // This part of the principle would need to be fulfilled by a separate action (e.g.,
+    // `addListItemToSession`) or a synchronization rule that populates `listItems`
+    // for this new session based on the `list` ID.
 
     return {};
   }
 
   /**
-   * setOrdering (newType : OrderType, setter : User)
+   * @action setOrdering
    * @requires : session's active Flag is currently False and setter = owner
    * @effects : ordering is set to newType
-   *
-   * Allows the owner to change the ordering type (e.g., Default, Random) for their session,
-   * provided the session is not currently active.
    */
-  async setOrdering(input: {
-    newType: OrderType;
-    setter: User;
-  }): Promise<Empty | { error: string }> {
-    const { newType, setter } = input;
-
-    const session = await this.sessions.findOne({ owner: setter });
-
-    // Precondition: A session must exist for the setter.
-    if (!session) {
-      return { error: `No session found for user '${setter}'.` };
+  async setOrdering(
+    { session, newType, setter }: {
+      session: Session;
+      newType: OrderType;
+      setter: User;
+    },
+  ): Promise<Empty | { error: string }> {
+    const sessionDoc = await this.sessions.findOne({ _id: session });
+    if (!sessionDoc) {
+      return { error: `Session with ID ${session} not found.` };
     }
-    // Precondition: The session's active flag must be False.
-    if (session.active) {
-      return {
-        error:
-          `Cannot change ordering while session for '${setter}' is active.`,
-      };
-    }
-    // Precondition: setter must be the owner (handled by findOne({ owner: setter }) matching _id).
 
-    // Effect: The session's ordering is updated.
+    // requires: session's active Flag is currently False
+    if (sessionDoc.active) {
+      return { error: "Cannot change ordering while session is active." };
+    }
+    // requires: setter = owner
+    if (sessionDoc.owner !== setter) {
+      return { error: "Only the session owner can change ordering." };
+    }
+
+    // effects: ordering is set to newType
     await this.sessions.updateOne(
-      { _id: setter },
+      { _id: session },
       { $set: { ordering: newType } },
     );
-
     return {};
   }
 
   /**
-   * setFormat (newFormat : FormatType, setter : User)
+   * @action setFormat
    * @requires : session's active Flag is currently False and setter = owner
    * @effects : format is set to newFormat
-   *
-   * Allows the owner to change the format type (e.g., List, Kanban) for their session,
-   * provided the session is not currently active.
    */
-  async setFormat(input: {
-    newFormat: FormatType;
-    setter: User;
-  }): Promise<Empty | { error: string }> {
-    const { newFormat, setter } = input;
-
-    const session = await this.sessions.findOne({ owner: setter });
-
-    // Precondition: A session must exist for the setter.
-    if (!session) {
-      return { error: `No session found for user '${setter}'.` };
+  async setFormat(
+    { session, newFormat, setter }: {
+      session: Session;
+      newFormat: FormatType;
+      setter: User;
+    },
+  ): Promise<Empty | { error: string }> {
+    const sessionDoc = await this.sessions.findOne({ _id: session });
+    if (!sessionDoc) {
+      return { error: `Session with ID ${session} not found.` };
     }
-    // Precondition: The session's active flag must be False.
-    if (session.active) {
-      return {
-        error: `Cannot change format while session for '${setter}' is active.`,
-      };
-    }
-    // Precondition: setter must be the owner (handled by findOne({ owner: setter }) matching _id).
 
-    // Effect: The session's format is updated.
+    // requires: session's active Flag is currently False
+    if (sessionDoc.active) {
+      return { error: "Cannot change format while session is active." };
+    }
+    // requires: setter = owner
+    if (sessionDoc.owner !== setter) {
+      return { error: "Only the session owner can change format." };
+    }
+
+    // effects: format is set to newFormat
     await this.sessions.updateOne(
-      { _id: setter },
+      { _id: session },
       { $set: { format: newFormat } },
     );
-
     return {};
   }
 
   /**
-   * randomizeOrder (randomizer : User)
+   * @action randomizeOrder
    * @requires : session's ordering is set to "Random" and randomizer = owner
-   * @effects : each ListItems randomOrder value is updated at random, maintaining dependencies between tasks
+   * @effects : each ListItems randomOrder value is updated at random,
+   *            maintaining dependencies between tasks
    *
-   * Assigns unique random numbers to the `randomOrder` field for each item in the session's list.
-   * This implementation interprets "maintaining dependencies between tasks" as simply re-shuffling
-   * the relative order of tasks *if the ordering type is 'Random'*, without handling complex,
-   * external task dependency graphs not explicitly present in the SessionListItem state.
+   * Note on dependencies: The concept doesn't store task dependencies.
+   * This implementation will re-randomize `randomOrder` for all items,
+   * assuming that "maintaining dependencies" is either handled by the
+   * consumer of the `randomOrder` or is an external concern not managed
+   * by this concept's state. It assigns unique random numbers.
    */
-  async randomizeOrder(input: {
-    randomizer: User;
-  }): Promise<Empty | { error: string }> {
-    const { randomizer } = input;
-
-    const session = await this.sessions.findOne({ owner: randomizer });
-
-    // Precondition: A session must exist for the randomizer.
-    if (!session) {
-      return { error: `No session found for user '${randomizer}'.` };
+  async randomizeOrder(
+    { session, randomizer }: { session: Session; randomizer: User },
+  ): Promise<Empty | { error: string }> {
+    const sessionDoc = await this.sessions.findOne({ _id: session });
+    if (!sessionDoc) {
+      return { error: `Session with ID ${session} not found.` };
     }
-    // Precondition: The session's ordering must be set to "Random".
-    if (session.ordering !== OrderType.Random) {
-      return {
-        error:
-          `Cannot randomize order; session for '${randomizer}' is not set to random ordering.`,
-      };
+
+    // requires: session's ordering is set to "Random"
+    if (sessionDoc.ordering !== "Random") {
+      return { error: "Ordering must be set to 'Random' to randomize tasks." };
     }
-    // Precondition: randomizer must be the owner (implicit).
+    // requires: randomizer = owner
+    if (sessionDoc.owner !== randomizer) {
+      return { error: "Only the session owner can randomize order." };
+    }
 
-    // Effect: `randomOrder` values are updated.
-    const items = session.list.items;
-    // Create a shuffled array of indices/numbers to assign as new random orders.
-    const shuffledOrders = Array.from({ length: items.length }, (_, i) => i)
-      .sort(() => Math.random() - 0.5);
+    // effects: each ListItems randomOrder value is updated at random
+    const items = await this.listItems.find({ sessionId: session }).toArray();
+    if (items.length === 0) {
+      return { error: "No items to randomize in this session." };
+    }
 
-    const updatedItems = items.map((item, index) => ({
-      ...item,
-      randomOrder: shuffledOrders[index], // Assign a unique random order.
-    }));
-
-    await this.sessions.updateOne(
-      { _id: randomizer },
-      { $set: { "list.items": updatedItems } },
+    // Generate a permutation of indices for random ordering
+    const randomOrders: number[] = Array.from(
+      { length: items.length },
+      (_, i) => i,
     );
+    for (let i = randomOrders.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [randomOrders[i], randomOrders[j]] = [randomOrders[j], randomOrders[i]]; // Fisher-Yates shuffle
+    }
+
+    const updates = items.map((item, index) =>
+      this.listItems.updateOne(
+        { _id: item._id },
+        { $set: { randomOrder: randomOrders[index] } },
+      )
+    );
+    await Promise.all(updates);
 
     return {};
   }
 
   /**
-   * activateSession (activator : User)
+   * @action activateSession
    * @requires : session's active Flag is currently False and activator = owner
    * @effects : session's active Flag is set to True
-   *
-   * Activates the user's session, making it ready for task progression.
    */
-  async activateSession(input: {
-    activator: User;
-  }): Promise<Empty | { error: string }> {
-    const { activator } = input;
-
-    const session = await this.sessions.findOne({ owner: activator });
-
-    // Precondition: A session must exist for the activator.
-    if (!session) {
-      return { error: `No session found for user '${activator}'.` };
+  async activateSession(
+    { session, activator }: { session: Session; activator: User },
+  ): Promise<Empty | { error: string }> {
+    const sessionDoc = await this.sessions.findOne({ _id: session });
+    if (!sessionDoc) {
+      return { error: `Session with ID ${session} not found.` };
     }
-    // Precondition: The session's active flag must currently be False.
-    if (session.active) {
-      return { error: `Session for '${activator}' is already active.` };
-    }
-    // Precondition: activator must be the owner (implicit).
 
-    // Effect: The session's active flag is set to True.
+    // requires: session's active Flag is currently False
+    if (sessionDoc.active) {
+      return { error: "Session is already active." };
+    }
+    // requires: activator = owner
+    if (sessionDoc.owner !== activator) {
+      return { error: "Only the session owner can activate the session." };
+    }
+
+    // effects: session's active Flag is set to True
     await this.sessions.updateOne(
-      { _id: activator },
+      { _id: session },
       { $set: { active: true } },
     );
-
     return {};
   }
 
   /**
-   * startTask (task : Task, sessionOwner : User)
-   * @requires : task is in a ListItem for session's list, its status is currently "Incomplete", and no other task is "In Progress"
+   * @action startTask
+   * @requires : task is in a ListItem for session's list, its status is currently "Incomplete",
+   *            and no other task is "In Progress"
    * @effects : given ListItem's status is set to "In Progress"
-   *
-   * Marks a specific task as "In Progress" within an active session.
-   * Ensures only one task can be in progress at a time.
    */
-  async startTask(input: {
-    task: Task;
-    sessionOwner: User;
-  }): Promise<Empty | { error: string }> {
-    const { task, sessionOwner } = input;
-
-    const session = await this.sessions.findOne({ owner: sessionOwner });
-
-    // Precondition: A session must exist for the owner.
-    if (!session) {
-      return { error: `No session found for user '${sessionOwner}'.` };
-    }
-    // Ensure the session is active before starting tasks.
-    if (!session.active) {
-      return {
-        error:
-          `Session for user '${sessionOwner}' is not active. Activate it first.`,
-      };
+  async startTask(
+    { session, task }: { session: Session; task: Task },
+  ): Promise<Empty | { error: string }> {
+    const sessionDoc = await this.sessions.findOne({ _id: session });
+    if (!sessionDoc) {
+      return { error: `Session with ID ${session} not found.` };
     }
 
-    const currentItems = session.list.items;
-    const taskToStart = currentItems.find((item) => item.task === task);
+    const listItem = await this.listItems.findOne({
+      sessionId: session,
+      taskId: task,
+    });
+    if (!listItem) {
+      return { error: `Task ${task} not found in session ${session}.` };
+    }
 
-    // Precondition: The task must be present in the session's list items.
-    if (!taskToStart) {
-      return {
-        error: `Task '${task}' not found in session for '${sessionOwner}'.`,
-      };
+    // requires: its status is currently "Incomplete"
+    if (listItem.itemStatus !== "Incomplete") {
+      return { error: `Task ${task} is not in 'Incomplete' status.` };
     }
-    // Precondition: The task's status must currently be "Incomplete".
-    if (taskToStart.itemStatus !== TaskStatus.Incomplete) {
-      return {
-        error:
-          `Task '${task}' is not in 'Incomplete' status. Current: ${taskToStart.itemStatus}.`,
-      };
-    }
-    // Precondition: No other task should be "In Progress" simultaneously.
-    const inProgressTask = currentItems.find(
-      (item) => item.itemStatus === TaskStatus.InProgress,
-    );
+
+    // requires: and no other task is "In Progress"
+    const inProgressTask = await this.listItems.findOne({
+      sessionId: session,
+      itemStatus: "In Progress",
+    });
     if (inProgressTask) {
       return {
         error:
-          `Another task ('${inProgressTask.task}') is already 'In Progress'.`,
+          `Another task (${inProgressTask.taskId}) is already 'In Progress'.`,
       };
     }
 
-    // Effect: The specified task's status is updated to "In Progress".
-    const updatedItems = currentItems.map((item) =>
-      item.task === task ? { ...item, itemStatus: TaskStatus.InProgress } : item
+    // effects: given ListItem's status is set to "In Progress"
+    await this.listItems.updateOne(
+      { _id: listItem._id },
+      { $set: { itemStatus: "In Progress" } },
     );
-
-    await this.sessions.updateOne(
-      { _id: sessionOwner },
-      { $set: { "list.items": updatedItems } },
-    );
-
     return {};
   }
 
   /**
-   * completeTask (task : Task, sessionOwner : User)
+   * @action completeTask
    * @requires : task is in a ListItem for session's list and its status is currently "In Progress"
    * @effects : given ListItem's status is set to "Complete"
-   *
-   * Marks a specific task as "Complete" within a session.
    */
-  async completeTask(input: {
-    task: Task;
-    sessionOwner: User;
-  }): Promise<Empty | { error: string }> {
-    const { task, sessionOwner } = input;
-
-    const session = await this.sessions.findOne({ owner: sessionOwner });
-
-    // Precondition: A session must exist for the owner.
-    if (!session) {
-      return { error: `No session found for user '${sessionOwner}'.` };
-    }
-    // Ensure the session is active.
-    if (!session.active) {
-      return {
-        error:
-          `Session for user '${sessionOwner}' is not active. Activate it first.`,
-      };
+  async completeTask(
+    { session, task }: { session: Session; task: Task },
+  ): Promise<Empty | { error: string }> {
+    const sessionDoc = await this.sessions.findOne({ _id: session });
+    if (!sessionDoc) {
+      return { error: `Session with ID ${session} not found.` };
     }
 
-    const currentItems = session.list.items;
-    const taskToComplete = currentItems.find((item) => item.task === task);
-
-    // Precondition: The task must be present in the session's list items.
-    if (!taskToComplete) {
-      return {
-        error: `Task '${task}' not found in session for '${sessionOwner}'.`,
-      };
-    }
-    // Precondition: The task's status must currently be "In Progress".
-    if (taskToComplete.itemStatus !== TaskStatus.InProgress) {
-      return {
-        error:
-          `Task '${task}' is not in 'In Progress' status. Current: ${taskToComplete.itemStatus}.`,
-      };
+    const listItem = await this.listItems.findOne({
+      sessionId: session,
+      taskId: task,
+    });
+    if (!listItem) {
+      return { error: `Task ${task} not found in session ${session}.` };
     }
 
-    // Effect: The specified task's status is updated to "Complete".
-    const updatedItems = currentItems.map((item) =>
-      item.task === task ? { ...item, itemStatus: TaskStatus.Complete } : item
+    // requires: its status is currently "In Progress"
+    if (listItem.itemStatus !== "In Progress") {
+      return { error: `Task ${task} is not in 'In Progress' status.` };
+    }
+
+    // effects: given ListItem's status is set to "Complete"
+    await this.listItems.updateOne(
+      { _id: listItem._id },
+      { $set: { itemStatus: "Complete" } },
     );
-
-    await this.sessions.updateOne(
-      { _id: sessionOwner },
-      { $set: { "list.items": updatedItems } },
-    );
-
     return {};
   }
 
   /**
-   * endSession (sessionOwner : User)
+   * @action endSession
    * @requires : session's active Flag is currently True
    * @effects : session's active Flag is set to False
-   *
-   * Deactivates the user's session, indicating completion or suspension of work.
    */
-  async endSession(input: {
-    sessionOwner: User;
-  }): Promise<Empty | { error: string }> {
-    const { sessionOwner } = input;
-
-    const session = await this.sessions.findOne({ owner: sessionOwner });
-
-    // Precondition: A session must exist for the owner.
-    if (!session) {
-      return { error: `No session found for user '${sessionOwner}'.` };
-    }
-    // Precondition: The session's active flag must currently be True.
-    if (!session.active) {
-      return { error: `Session for '${sessionOwner}' is not active.` };
+  async endSession(
+    { session }: { session: Session },
+  ): Promise<Empty | { error: string }> {
+    const sessionDoc = await this.sessions.findOne({ _id: session });
+    if (!sessionDoc) {
+      return { error: `Session with ID ${session} not found.` };
     }
 
-    // Effect: The session's active flag is set to False.
+    // requires: session's active Flag is currently True
+    if (!sessionDoc.active) {
+      return { error: "Session is not active." };
+    }
+
+    // effects: session's active Flag is set to False
     await this.sessions.updateOne(
-      { _id: sessionOwner },
+      { _id: session },
       { $set: { active: false } },
+    );
+    return {};
+  }
+
+  // --- Queries (beginning with underscore) ---
+
+  /**
+   * @query _getSession
+   * @effects : return the full session document for a given session ID
+   */
+  async _getSession(
+    { session }: { session: Session },
+  ): Promise<SessionDoc | null> {
+    return await this.sessions.findOne({ _id: session });
+  }
+
+  /**
+   * @query _getTaskStatus
+   * @effects : return the status of a specific task within a session
+   */
+  async _getTaskStatus(
+    { session, task }: { session: Session; task: Task },
+  ): Promise<TaskStatus | null> {
+    const listItem = await this.listItems.findOne({
+      sessionId: session,
+      taskId: task,
+    });
+    return listItem ? listItem.itemStatus : null;
+  }
+
+  /**
+   * @query _getSessionListItems
+   * @effects : return all list items for a given session, ordered by default or random order
+   */
+  async _getSessionListItems(
+    { session }: { session: Session },
+  ): Promise<ListItemDoc[]> {
+    const sessionDoc = await this.sessions.findOne({ _id: session });
+    if (!sessionDoc) {
+      return [];
+    }
+    const sortField = sessionDoc.ordering === "Random"
+      ? "randomOrder"
+      : "defaultOrder";
+    return await this.listItems.find({ sessionId: session }).sort({
+      [sortField]: 1,
+    }).toArray();
+  }
+
+  /**
+   * @query _getActiveSessionForOwner
+   * @effects : returns the active session for a given owner, or null if none exists.
+   */
+  async _getActiveSessionForOwner(
+    { owner }: { owner: User },
+  ): Promise<SessionDoc | null> {
+    return await this.sessions.findOne({ owner: owner, active: true });
+  }
+
+  // --- Additional (non-specified) actions for ListItems management ---
+  // These are necessary given the current `changeSession` signature and concept independence
+  // to fulfill the principle of having an "ordered list of tasks".
+  // In a real design, these would be explicitly part of the concept spec or handled by syncs.
+
+  /**
+   * @action addListItem
+   * @purpose To allow tasks to be added to a session's list.
+   * @requires : session exists, and the task is not already in the session's list
+   * @effects : adds a new ListItem to the session with specified task, default order,
+   *            and "Incomplete" status. Increments session's itemCount.
+   */
+  async addListItem(
+    { session, task, defaultOrder }: {
+      session: Session;
+      task: Task;
+      defaultOrder: number;
+    },
+  ): Promise<Empty | { error: string }> {
+    const sessionDoc = await this.sessions.findOne({ _id: session });
+    if (!sessionDoc) {
+      return { error: `Session with ID ${session} not found.` };
+    }
+
+    const existingListItem = await this.listItems.findOne({
+      sessionId: session,
+      taskId: task,
+    });
+    if (existingListItem) {
+      return { error: `Task ${task} already exists in session ${session}.` };
+    }
+
+    const newListItem: ListItemDoc = {
+      _id: freshID(),
+      sessionId: session,
+      taskId: task,
+      defaultOrder: defaultOrder,
+      randomOrder: -1, // Will be set by randomizeOrder, or can be same as default initially
+      itemStatus: "Incomplete",
+    };
+    await this.listItems.insertOne(newListItem);
+
+    // Update session's itemCount
+    await this.sessions.updateOne(
+      { _id: session },
+      { $inc: { itemCount: 1 } },
     );
 
     return {};
   }
 
-  // --- Queries ---
-
   /**
-   * _getSession(sessionOwner: User): SessionDoc | null
-   * Returns the complete session document for a given owner.
-   * This query allows inspection of the entire state managed by the concept for a user.
+   * @action removeListItem
+   * @purpose To allow tasks to be removed from a session's list.
+   * @requires : session exists, and the task is in the session's list and not "In Progress"
+   * @effects : removes the ListItem from the session. Decrements session's itemCount.
    */
-  async _getSession(input: { sessionOwner: User }): Promise<SessionDoc | null> {
-    const { sessionOwner } = input;
-    return await this.sessions.findOne({ owner: sessionOwner });
-  }
-
-  /**
-   * _getTasksInOrder(sessionOwner: User): Array<{task: Task, order: number, status: TaskStatus}> | { error: string }
-   * Returns the tasks for the session, ordered according to the session's current `ordering` type.
-   * This is a non-trivial observation of the state as it involves sorting logic.
-   */
-  async _getTasksInOrder(input: {
-    sessionOwner: User;
-  }): Promise<
-    Array<{ task: Task; order: number; status: TaskStatus }> | { error: string }
-  > {
-    const { sessionOwner } = input;
-    const session = await this.sessions.findOne({ owner: sessionOwner });
-
-    if (!session) {
-      return { error: `No session found for user '${sessionOwner}'.` };
+  async removeListItem(
+    { session, task }: { session: Session; task: Task },
+  ): Promise<Empty | { error: string }> {
+    const sessionDoc = await this.sessions.findOne({ _id: session });
+    if (!sessionDoc) {
+      return { error: `Session with ID ${session} not found.` };
     }
 
-    let orderedItems = [...session.list.items]; // Create a mutable copy for sorting.
-
-    // Sort based on the session's current ordering type.
-    if (session.ordering === OrderType.Default) {
-      orderedItems.sort((a, b) => a.defaultOrder - b.defaultOrder);
-    } else if (session.ordering === OrderType.Random) {
-      orderedItems.sort((a, b) => a.randomOrder - b.randomOrder);
+    const listItem = await this.listItems.findOne({
+      sessionId: session,
+      taskId: task,
+    });
+    if (!listItem) {
+      return { error: `Task ${task} not found in session ${session}.` };
     }
 
-    // Map to a simpler output format for the query result.
-    return orderedItems.map((item) => ({
-      task: item.task,
-      order: session.ordering === OrderType.Default
-        ? item.defaultOrder
-        : item.randomOrder,
-      status: item.itemStatus,
-    }));
+    if (listItem.itemStatus === "In Progress") {
+      return {
+        error: `Cannot remove task ${task} as it is currently 'In Progress'.`,
+      };
+    }
+
+    await this.listItems.deleteOne({ _id: listItem._id });
+
+    // Update session's itemCount
+    await this.sessions.updateOne(
+      { _id: session },
+      { $inc: { itemCount: -1 } },
+    );
+
+    return {};
   }
 }

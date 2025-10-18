@@ -1,12 +1,8 @@
-[@concept-design-overview](../../background/concept-design-overview.md)
-
-[@concept-specifications](../../background/concept-specifications.md)
-
-[@implementing-concepts](../../background/implementing-concepts.md)
-
-[@specification](specification.md)
-
-# implement: Session
+---
+timestamp: 'Sat Oct 18 2025 15:02:08 GMT-0400 (Eastern Daylight Time)'
+parent: '[[..\20251018_150208.c937b3fc.md]]'
+content_id: 0cb1a74769429163e186a13fc67cdd94e9b7ebbe9d6e435dd3cdb4c09aeb19af
+---
 
 # response:
 
