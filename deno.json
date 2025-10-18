@@ -1,6 +1,7 @@
 {
-    "imports": {
-        "@concepts/": "./src/concepts/",
-        "@utils/": "./src/utils/"
-    }
+  "imports": {
+    "@concepts/": "./src/concepts/",
+    "@utils/": "./src/utils/",
+    "std/": "https://deno.land/std@0.218.2/"
+  }
 }

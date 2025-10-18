@@ -1,5 +1,3 @@
-import { Collection, Db } from "npm:mongodb";
-
 /**
  * @enum DayOfWeek
  * Represents the days of the week, typically used for scheduling classes.
@@ -11,8 +9,6 @@ export enum DayOfWeek {
   Wednesday = "W",
   Thursday = "R",
   Friday = "F",
-  Saturday = "S",
-  Sunday = "U",
 }
 
 /**
@@ -53,14 +49,15 @@ export interface Section {
 }
 
 /**
- * @interface StudentSchedule
+ * @interface Schedule
  * Represents a single schedule plan created by a student. A student might create
  * multiple potential schedules.
  */
-export interface StudentSchedule {
+export interface Schedule {
   id: string; // Unique ID for this schedule plan, e.g., "sched-fall-2024-main"
   name: string; // User-defined name, e.g., "My Ideal Schedule"
   sectionIds: string[]; // A list of Section IDs the student has added to this plan.
+  owner: string; // User ID of the student who owns this schedule
 }
 
 /**
@@ -82,7 +79,7 @@ export interface CourseSchedulingState {
   /**
    * A collection of all schedule plans created by the student, indexed by schedule ID.
    */
-  schedules: Record<string, StudentSchedule>;
+  schedules: Record<string, Schedule>;
 
   /**
    * The ID of the schedule currently being viewed or edited by the student.

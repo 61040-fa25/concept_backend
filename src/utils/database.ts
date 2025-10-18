@@ -1,8 +1,26 @@
 // This import loads the `.env` file as environment variables
 import "jsr:@std/dotenv/load";
 import { Db, MongoClient } from "npm:mongodb";
-import { ID } from "@utils\types.ts";
+import { ID } from "@utils/types.ts";
 import { generate } from "jsr:@std/uuid/unstable-v7";
+
+import {
+  Course,
+  Schedule,
+  Section,
+} from "../concepts/CourseScheduling/courseScheduling.ts"; //import interfaces for mongdb collections
+
+export function getCourseCollection(db: Db) {
+  return db.collection<Course>("courses");
+}
+
+export function getSectionCollection(db: Db) {
+  return db.collection<Section>("sections");
+}
+
+export function getScheduleCollection(db: Db) {
+  return db.collection<Schedule>("schedules");
+}
 
 async function initMongoClient() {
   const DB_CONN = Deno.env.get("MONGODB_URL");

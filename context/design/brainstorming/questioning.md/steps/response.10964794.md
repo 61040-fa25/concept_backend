@@ -1,13 +1,8 @@
-# prompt You are helping me write automated tests for a **Deno TypeScript backend project**.  The project manages course scheduling using MongoDB. Please implement **unit tests** (using Deno’s built-in test framework) for **all actions** in the file `courseScheduling_actions.ts`. The class in that file interacts directly with a MongoDB database via a `Db` object. Do **not** use a mock store or in-memory state. Instead, create a **mock MongoDB client** that simulates the behavior of collections (`insertOne`, `findOne`, `updateOne`, `deleteOne`, and `find().toArray()`), storing data in plain JavaScript objects. Each test should instantiate the `CourseScheduling_actions` class with this mock database. Each test should: Import the class from `courseScheduling_actions.ts, Initialize a mock database before each test, Call one action (e.g., `createCourse`, `createSection`, `createSchedule`, etc.) with realistic arguments, Verify the result using `assertEquals` or `assertRejects, Confirm that the mock database reflects the correct state after each operation, and Include a brief comment explaining what the test verifies Output a single Deno test file containing clear, organized test cases for each action method.  The generated tests should be runnable as-is with `deno test`.
-
-(@testing_instruction)[C:\Users\marin\OneDrive\Desktop\61040-portfolio\Academica\design\background\testing-concepts.md]
-
-(@courseScheduling_actions)[C:\Users\marin\OneDrive\Desktop\61040-portfolio\Academica\src\concepts\CourseScheduling\courseScheduling_actions.ts]
-
-(@courseScheduling_concept)[C:\Users\marin\OneDrive\Desktop\61040-portfolio\Academica\src\concepts\CourseScheduling\courseScheduling.ts]
-
-
-
+---
+timestamp: 'Fri Oct 17 2025 19:12:13 GMT-0400 (Eastern Daylight Time)'
+parent: '[[..\20251017_191213.079764d6.md]]'
+content_id: 10964794d652784f1b469d3f2e63d3bb89bdf92fc4901da68662c1f32031b382
+---
 
 # response:
 
