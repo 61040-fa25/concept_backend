@@ -15,7 +15,7 @@ Interestingly, these test cases were not all successful.
 
 In doing so, I also encountered some snags regarding whether my current concept design is at the right scale. As it stands, the concept encapsulates one Session, rather than a set of Sessions. For the sake of modularity, I feel as though this introduces some difficulties in verifying conditions for future actions. So, before tackling the test cases issue, I modified my spec to reflect instead the set of Sessions.
 
-[Modified spec](../../../design/concepts/Session/specification.md/steps/concept.53fc528b.md)
+[Modified spec](../../../context/design/concepts/Session/specification.md/steps/concept.53fc528b.md)
 
 Having modified the spec, I re-generated an implementation and test suite with Context.
 

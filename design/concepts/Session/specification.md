@@ -19,7 +19,7 @@
 * **actions**:
     * `changeSession (list : List, sessionOwner : User)`
         * **requires** : there is not an active session for sessionOwner 
-        * **effects** : creates new session with SessionList = list, randomOrder = defaultOrder, itemStatus = Incomplete, active = False, ordering = Default, and format = List
+        * **effects** : creates new session with SessionList = list, randomOrder = defaultOrder, itemStatus = Incomplete, active = False, ordering = Default, and format = List. deletes existing session for sessionOwner if one exists.
     * `setOrdering (session : Session, newType : OrderType, setter : Owner)`
         * **requires** : session's active Flag is currently False and setter = owner
         * **effects** : ordering is set to newType
