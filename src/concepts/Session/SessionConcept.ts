@@ -471,14 +471,14 @@ export default class SessionConcept {
   async _getSessionListItems(
     { session }: { session: Session },
   ): Promise<ListItemDoc[]> {
-    console.log("Looking for session: ", session.toString());
+    // console.log("Looking for session: ", session.toString());
     // const sessionDoc = await this.sessions.findOne({ _id: session });
 
     let sessionDoc: SessionDoc | null = null;
     let retries = 0;
 
     while (retries < 20) {
-      console.log("Retry: ", retries);
+      // console.log("Retry: ", retries);
       sessionDoc = await this.sessions.findOne({ _id: session });
       if (sessionDoc) break;
       await new Promise((r) => setTimeout(r, 10));

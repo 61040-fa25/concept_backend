@@ -656,7 +656,7 @@ Deno.test("Session Concept Tests", async (t) => {
       });
       assertExists(aliceNewSession);
       aliceSessionId = aliceNewSession._id;
-      console.log("Passing in: ", aliceSessionId.toString()); // 2. Add some tasks to the session (simulating "given an ordered list")
+      // console.log("Passing in: ", aliceSessionId.toString()); // 2. Add some tasks to the session (simulating "given an ordered list")
       await sessionConcept.addListItem({
         session: aliceSessionId,
         task: TASK_REPORT,
@@ -676,14 +676,14 @@ Deno.test("Session Concept Tests", async (t) => {
       let items = await sessionConcept._getSessionListItems({
         session: aliceSessionId,
       });
-      console.log(items.map((item) => ({
-        taskId: item.taskId,
-        defaultOrder: item.defaultOrder,
-        randomOrder: item.randomOrder,
-      })));
+      // // console.log(items.map((item) => ({
+      //   taskId: item.taskId,
+      //   defaultOrder: item.defaultOrder,
+      //   randomOrder: item.randomOrder,
+      // })));
 
       assertEquals(items.length, 3);
-      console.log("checking something");
+      // console.log("checking something");
       assertEquals(items.map((i) => i.taskId), [
         TASK_REPORT,
         TASK_BREAD,

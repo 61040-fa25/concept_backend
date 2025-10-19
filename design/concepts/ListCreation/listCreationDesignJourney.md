@@ -16,3 +16,7 @@ However, I ran into some snags with this test suite. Specifically, it was using 
 With this, I regenerated the test suite and was able to generate a valid set of tests.
 
 [Corrected test suite](../../../context/design/concepts/ListCreation/testing.md/steps/response.fef07ddb.md)
+
+Fortunately, all of these tests passed and behaved as desired.
+
+[Test output](../../../context/design/concepts/ListCreation/testOutput.md/steps/_.56b54974.md)
