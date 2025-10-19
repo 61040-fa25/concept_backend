@@ -18,7 +18,7 @@ export class CourseScheduling_actions {
   // ------------------------
 
   /** Create a new course with a fixed ID */
-  async createCourse(
+  async createCourse( //TESTED
     id: string,
     title: string,
     department: string,
@@ -33,7 +33,7 @@ export class CourseScheduling_actions {
   // ------------------------
 
   /** Create a new section for a course */
-  async createSection(
+  async createSection( //TESTED
     courseId: string,
     sectionNumber: string,
     instructor: string,
@@ -52,7 +52,7 @@ export class CourseScheduling_actions {
     return section;
   }
 
-  async editSection(
+  async editSection( //TESTED
     sectionId: string,
     updates: Partial<Omit<Section, "id" | "courseId">>,
   ): Promise<Section | null> {
@@ -76,7 +76,7 @@ export class CourseScheduling_actions {
   // ------------------------
 
   /** Create an empty schedule for a student */
-  async createSchedule(userId: string, name: string): Promise<Schedule> {
+  async createSchedule(userId: string, name: string): Promise<Schedule> { //TESTED
     const schedule: Schedule = {
       id: freshID(),
       name,
@@ -88,7 +88,7 @@ export class CourseScheduling_actions {
   }
 
   /** Delete a schedule (user must be owner) */
-  async deleteSchedule(userId: string, scheduleId: string): Promise<void> {
+  async deleteSchedule(userId: string, scheduleId: string): Promise<void> { //TESTED
     const schedule = await this.db.collection(this.schedulesCollection).findOne(
       { id: scheduleId },
     );
@@ -101,7 +101,7 @@ export class CourseScheduling_actions {
   }
 
   /** Add a course section to a student's schedule (atomic) */
-  async addSection(
+  async addSection( //TESTED
     userId: string,
     scheduleId: string,
     sectionId: string,
@@ -117,7 +117,7 @@ export class CourseScheduling_actions {
   }
 
   /** Remove a course section from a student's schedule (atomic) */
-  async removeSection(
+  async removeSection( //TESTED
     userId: string,
     scheduleId: string,
     sectionId: string,
@@ -132,7 +132,7 @@ export class CourseScheduling_actions {
   }
 
   /** Duplicate an existing schedule for a student */
-  async duplicateSchedule(
+  async duplicateSchedule( //TESTED
     userId: string,
     sourceScheduleId: string,
     newName: string,
@@ -169,7 +169,7 @@ export class CourseScheduling_actions {
   // RETRIEVAL ACTIONS
   // ------------------------
 
-  async getCourse(courseId: string): Promise<Course | null> {
+  async getCourse(courseId: string): Promise<Course | null> { //TESTED
     return await this.db.collection<Course>(this.coursesCollection).findOne({
       id: courseId,
     });

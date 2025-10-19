@@ -2,11 +2,11 @@ import {
   assertArrayIncludes,
   assertEquals,
   assertExists,
+  assertRejects,
 } from "std/assert/mod.ts";
 
 import { CourseScheduling_actions } from "./courseScheduling_actions.ts";
 import type { Course, Schedule, Section } from "./courseScheduling.ts";
-import { DayOfWeek } from "./courseScheduling.ts";
 
 // --- Mock MongoDB ObjectId ---
 class ObjectId {
@@ -108,7 +108,7 @@ function createMockDb(): MockDb {
           }
         }
 
-        // --- NEW: support $addToSet ---
+        // --- $addToSet ---
         if (update.$addToSet) {
           const field = Object.keys(update.$addToSet)[0];
           const value = update.$addToSet[field];
@@ -149,16 +149,16 @@ function createMockDb(): MockDb {
 }
 
 // --- Tests ---
+
+// ------------------------
+// Test Course Actions
+// ------------------------
+
 Deno.test("CourseScheduling_actions: Course Management", async (t) => {
   const course1: Omit<Course, "_id"> = {
     title: "Introduction to Programming",
     id: "CS111",
     department: "CS",
-  };
-  const course2: Omit<Course, "_id"> = {
-    title: "Combinatorics and Graph Theory",
-    id: "MATH225",
-    department: "Math",
   };
 
   await t.step("createCourse should add a new course", async () => {
@@ -202,6 +202,39 @@ Deno.test("CourseScheduling_actions: Course Management", async (t) => {
     },
   );
 
+  await t.step("getAllCourses should return all stored courses", async () => {
+    const mockDb = createMockDb();
+    const actions = new CourseScheduling_actions(mockDb as any);
+
+    const courses = [
+      { id: "C001", title: "Intro to Math", department: "MATH" },
+      { id: "C002", title: "English Literature", department: "ENG" },
+    ];
+
+    for (const c of courses) {
+      await mockDb.collection("courses").insertOne({
+        ...c,
+        _id: new ObjectId(c.id),
+      });
+    }
+
+    const all = await actions.getAllCourses();
+    assertEquals(all.length, 2);
+    assertEquals(all[0].title, "Intro to Math");
+  });
+});
+
+// ------------------------
+// Test Section Actions
+// ------------------------
+
+Deno.test("CourseScheduling_actions: Section Management", async (t) => {
+  const course1: Omit<Course, "_id"> = {
+    title: "Introduction to Programming",
+    id: "CS111",
+    department: "CS",
+  };
+
   await t.step("editSection should modify an existing section", async () => {
     const mockDb = createMockDb();
     const actions = new CourseScheduling_actions(mockDb as any);
@@ -230,6 +263,50 @@ Deno.test("CourseScheduling_actions: Course Management", async (t) => {
     assertEquals(result?.instructor, "Dr. Jones");
     assertEquals(result?.id, section.id);
   });
+
+  await t.step(
+    "createSection should add a new section for a course",
+    async () => {
+      const mockDb = createMockDb();
+      const actions = new CourseScheduling_actions(mockDb as any);
+
+      // Create a fake course to attach the section to
+      const course = {
+        id: "CS111",
+        title: "Intro to Programming",
+        department: "CS",
+      };
+      await mockDb.collection("courses").insertOne({
+        ...course,
+        _id: new ObjectId(course.id),
+      });
+
+      // TimeSlots can be empty or contain dummy values depending on your model
+      const timeSlots: any[] = [];
+
+      const section = await actions.createSection(
+        course.id,
+        "001",
+        "Dr. Rivera",
+        40,
+        timeSlots,
+      );
+
+      // Check returned object
+      assertExists(section.id);
+      assertEquals(section.courseId, course.id);
+      assertEquals(section.sectionNumber, "001");
+      assertEquals(section.instructor, "Dr. Rivera");
+      assertEquals(section.capacity, 40);
+      assertEquals(section.timeSlots, timeSlots);
+
+      // Check DB insertion
+      const dbState = mockDb._internal.collections.sections;
+      assertEquals(dbState.length, 1);
+      assertEquals(dbState[0].id, section.id);
+      assertEquals(dbState[0].courseId, course.id);
+    },
+  );
 
   await t.step(
     "removeSection should remove section from schedule",
@@ -308,4 +385,294 @@ Deno.test("CourseScheduling_actions: Course Management", async (t) => {
     assertExists(updatedSchedule);
     assertArrayIncludes(updatedSchedule.sectionIds, [section.id]);
   });
+
+  await t.step("getSection should return a section by ID", async () => {
+    const mockDb = createMockDb();
+    const actions = new CourseScheduling_actions(mockDb as any);
+
+    const section = {
+      id: "SEC101",
+      courseId: "COURSE001",
+      sectionNumber: "A",
+      instructor: "Prof. Lee",
+      capacity: 25,
+      timeSlots: [],
+    };
+
+    await mockDb.collection("sections").insertOne({
+      ...section,
+      _id: new ObjectId(section.id),
+    });
+
+    const found = await actions.getSection("SEC101");
+    assertEquals(found?.id, "SEC101");
+    assertEquals(found?.instructor, "Prof. Lee");
+  });
+
+  await t.step(
+    "getSection should return null for non-existent section",
+    async () => {
+      const mockDb = createMockDb();
+      const actions = new CourseScheduling_actions(mockDb as any);
+
+      const result = await actions.getSection("INVALID");
+      assertEquals(result, null);
+    },
+  );
+
+  await t.step("getAllSections should return all stored sections", async () => {
+    const mockDb = createMockDb();
+    const actions = new CourseScheduling_actions(mockDb as any);
+
+    const sections = [
+      {
+        id: "SEC1",
+        courseId: "C001",
+        sectionNumber: "A",
+        instructor: "Prof A",
+        capacity: 30,
+        timeSlots: [],
+      },
+      {
+        id: "SEC2",
+        courseId: "C001",
+        sectionNumber: "B",
+        instructor: "Prof B",
+        capacity: 25,
+        timeSlots: [],
+      },
+    ];
+
+    for (const s of sections) {
+      await mockDb.collection("sections").insertOne({
+        ...s,
+        _id: new ObjectId(s.id),
+      });
+    }
+
+    const all = await actions.getAllSections();
+    assertEquals(all.length, 2);
+    assertEquals(all[1].sectionNumber, "B");
+  });
+});
+// ------------------------
+// Test Schedule Actions
+// ------------------------
+
+Deno.test("CourseScheduling_actions: Schedule Management", async (t) => {
+  await t.step(
+    "createSchedule should create a new empty schedule for a user",
+    async () => {
+      const mockDb = createMockDb();
+      const actions = new CourseScheduling_actions(mockDb as any);
+
+      const userId = "user789";
+      const scheduleName = "Spring 2026";
+
+      const schedule = await actions.createSchedule(userId, scheduleName);
+
+      // Check returned schedule object
+      assertExists(schedule.id);
+      assertEquals(schedule.name, scheduleName);
+      assertEquals(schedule.owner, userId);
+      assertEquals(schedule.sectionIds, []);
+
+      // Check DB insertion
+      const dbState = mockDb._internal.collections.schedules;
+      assertEquals(dbState.length, 1);
+      assertEquals(dbState[0].name, scheduleName);
+      assertEquals(dbState[0].owner, userId);
+      assertEquals(dbState[0].sectionIds.length, 0);
+    },
+  );
+
+  await t.step(
+    "deleteSchedule should remove a schedule if owned by the user",
+    async () => {
+      const mockDb = createMockDb();
+      const actions = new CourseScheduling_actions(mockDb as any);
+
+      const schedule = {
+        id: "SCHED010",
+        name: "Winter Plan",
+        owner: "user123",
+        sectionIds: [],
+      };
+      await mockDb.collection("schedules").insertOne({
+        ...schedule,
+        _id: new ObjectId(schedule.id),
+      });
+
+      // Perform delete
+      await actions.deleteSchedule("user123", schedule.id);
+
+      // Verify schedule was deleted
+      const dbState = mockDb._internal.collections.schedules;
+      assertEquals(dbState.length, 0);
+    },
+  );
+
+  await t.step("should throw if user is not the owner", async () => {
+    const mockDb = createMockDb();
+    const actions = new CourseScheduling_actions(mockDb as any);
+
+    const schedule = {
+      id: "SCHED200",
+      name: "Unauthorized Delete",
+      owner: "user999",
+      sectionIds: [],
+    };
+    await mockDb.collection("schedules").insertOne({
+      ...schedule,
+      _id: new ObjectId(schedule.id),
+    });
+
+    let threw = false;
+    try {
+      await actions.deleteSchedule("user123", schedule.id);
+    } catch (err) {
+      threw = true;
+      if (err instanceof Error) {
+        assertEquals(err.message, "Unauthorized");
+      } else {
+        throw err; // rethrow unexpected error type
+      }
+    }
+    assertEquals(threw, true);
+
+    const dbState = mockDb._internal.collections.schedules;
+    assertEquals(dbState.length, 1); // should not have deleted
+  });
+
+  await t.step(
+    "deleteSchedule should throw if schedule does not exist",
+    async () => {
+      const mockDb = createMockDb();
+      const actions = new CourseScheduling_actions(mockDb as any);
+
+      let threw = false;
+      try {
+        await actions.deleteSchedule("user123", "NON_EXISTENT_ID");
+      } catch (err) {
+        threw = true;
+        if (err instanceof Error) {
+          assertEquals(err.message, "Schedule not found");
+        } else {
+          throw err;
+        }
+      }
+      assertEquals(threw, true);
+    },
+  );
+
+  await t.step(
+    "should duplicate an existing schedule with same sections",
+    async () => {
+      const mockDb = createMockDb();
+      const actions = new CourseScheduling_actions(mockDb as any);
+
+      // insert an existing schedule
+      const originalSchedule = {
+        id: "SCHED001",
+        name: "Original Schedule",
+        owner: "user123",
+        sectionIds: ["SEC001", "SEC002"],
+      };
+      await mockDb.collection("schedules").insertOne({
+        ...originalSchedule,
+        _id: new ObjectId(originalSchedule.id),
+      });
+
+      // duplicate it
+      const duplicated = await actions.duplicateSchedule(
+        "user123",
+        "SCHED001",
+        "Duplicated Schedule",
+      );
+
+      // verify new schedule was created
+      assertEquals(duplicated.name, "Duplicated Schedule");
+      assertEquals(duplicated.owner, "user123");
+      assertEquals(duplicated.sectionIds, ["SEC001", "SEC002"]);
+      assertEquals(duplicated.id !== "SCHED001", true); // should have new ID
+
+      // verify it exists in mock DB
+      const allSchedules = mockDb._internal.collections.schedules;
+      assertEquals(allSchedules.length, 2);
+    },
+  );
+
+  await t.step(
+    "duplicateSchedule should throw if user does not own the schedule",
+    async () => {
+      const mockDb = createMockDb();
+      const actions = new CourseScheduling_actions(mockDb as any);
+
+      const originalSchedule = {
+        id: "SCHED002",
+        name: "Private Schedule",
+        owner: "user999",
+        sectionIds: [],
+      };
+      await mockDb.collection("schedules").insertOne({
+        ...originalSchedule,
+        _id: new ObjectId(originalSchedule.id),
+      });
+
+      await assertRejects(
+        () =>
+          actions.duplicateSchedule("user123", "SCHED002", "Duplicate Fail"),
+        Error,
+        "Unauthorized",
+      );
+    },
+  );
+
+  await t.step(
+    "duplicateSchedule should throw if source schedule not found",
+    async () => {
+      const mockDb = createMockDb();
+      const actions = new CourseScheduling_actions(mockDb as any);
+
+      await assertRejects(
+        () =>
+          actions.duplicateSchedule(
+            "user123",
+            "NON_EXISTENT",
+            "Duplicate Fail",
+          ),
+        Error,
+        "Source schedule not found",
+      );
+    },
+  );
+
+  await t.step(
+    "getAllSchedules should return all stored schedules",
+    async () => {
+      const mockDb = createMockDb();
+      const actions = new CourseScheduling_actions(mockDb as any);
+
+      const schedules = [
+        {
+          id: "SCHED1",
+          name: "Fall Plan",
+          sectionIds: ["SEC1"],
+          owner: "userA",
+        },
+        { id: "SCHED2", name: "Spring Plan", sectionIds: [], owner: "userB" },
+      ];
+
+      for (const s of schedules) {
+        await mockDb.collection("schedules").insertOne({
+          ...s,
+          _id: new ObjectId(s.id),
+        });
+      }
+
+      const all = await actions.getAllSchedules();
+      assertEquals(all.length, 2);
+      assertEquals(all[0].name, "Fall Plan");
+    },
+  );
 });
