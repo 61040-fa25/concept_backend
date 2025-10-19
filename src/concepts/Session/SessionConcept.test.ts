@@ -27,7 +27,7 @@ Deno.test("Session Concept Tests", async (t) => {
       });
       assertEquals(result, {});
 
-      const session = await sessionConcept._getActiveSessionForOwner({
+      const session = await sessionConcept._getSessionForOwner({
         owner: USER_ALICE,
       });
       assertExists(session);
@@ -48,7 +48,7 @@ Deno.test("Session Concept Tests", async (t) => {
         list: LIST_WORK,
         sessionOwner: USER_ALICE,
       });
-      const newSession = await sessionConcept._getActiveSessionForOwner({
+      const newSession = await sessionConcept._getSessionForOwner({
         owner: USER_ALICE,
       });
       assertExists(newSession); // This confirms the new session was added.
@@ -106,7 +106,7 @@ Deno.test("Session Concept Tests", async (t) => {
   await t.step(
     "addListItem: should add a task to a session and update item count",
     async () => {
-      const session = await sessionConcept._getActiveSessionForOwner({
+      const session = await sessionConcept._getSessionForOwner({
         owner: USER_ALICE,
       });
       assertExists(session);
@@ -640,7 +640,7 @@ Deno.test("Session Concept Tests", async (t) => {
         sessionOwner: USER_ALICE,
       });
       assertEquals(createResult, {});
-      let aliceNewSession = await sessionConcept._getActiveSessionForOwner({
+      let aliceNewSession = await sessionConcept._getSessionForOwner({
         owner: USER_ALICE,
       });
       assertExists(aliceNewSession);
@@ -651,13 +651,12 @@ Deno.test("Session Concept Tests", async (t) => {
         sessionOwner: USER_ALICE,
       });
       assertEquals(secondCreateResult, {}); // Should succeed as previous was deactivated
-      aliceNewSession = await sessionConcept._getActiveSessionForOwner({
+      aliceNewSession = await sessionConcept._getSessionForOwner({
         owner: USER_ALICE,
       });
       assertExists(aliceNewSession);
       aliceSessionId = aliceNewSession._id;
-
-      // 2. Add some tasks to the session (simulating "given an ordered list")
+      console.log("Passing in: ", aliceSessionId.toString()); // 2. Add some tasks to the session (simulating "given an ordered list")
       await sessionConcept.addListItem({
         session: aliceSessionId,
         task: TASK_REPORT,
@@ -677,7 +676,14 @@ Deno.test("Session Concept Tests", async (t) => {
       let items = await sessionConcept._getSessionListItems({
         session: aliceSessionId,
       });
+      console.log(items.map((item) => ({
+        taskId: item.taskId,
+        defaultOrder: item.defaultOrder,
+        randomOrder: item.randomOrder,
+      })));
+
       assertEquals(items.length, 3);
+      console.log("checking something");
       assertEquals(items.map((i) => i.taskId), [
         TASK_REPORT,
         TASK_BREAD,

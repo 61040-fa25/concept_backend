@@ -30,3 +30,15 @@ Before I was able to test the new implementation against this test suite, I had 
 Unfortunately, upon running this, I found that most of the test cases were not passing.
 
 [New test output](../../../context/design/concepts/Session/testOutput.md/steps/_.68757996.md)
+
+To tackle this, I first had to modify a function definition in the implementation. With the generated implementation, it was assuming that a session would default to active on instantiation. This is the opposite of the spec, so I had to change it to not require this value. With this change, most of the test cases were passing.
+
+[New test output](../../../context/design/concepts/Session/testOutput.md/steps/_.de36b013.md)
+
+The first test case was failing due to a change to the spec. I realized that there is no reason for a user to have multiple sessions, so the change of session can delete the old session from the database. To do this, I added two new methods to the implementation: getSessionForOwner and deleteSession. Then, I modified the changeSession feature to delete an existing session. 
+
+For the second test case, I had quite a strange experience debugging it. The problem was that the sessionDoc was being read as empty, so we couldn't continue with subsequent checks. In my various iterations of running it, I uncovered that it was not failing all of the time. Instead, it seemed to fail something like 1 in every 8 runs. I added various print statements and checks, but could not find a way to avoid this or properly identify a root cause. Then, on one iteration, everything seemed to break.
+
+[Broken test output](../../../context/design/concepts/Session/testOutput.md/steps/_.2e28b97a.md)
+
+This situation was even less replicable as the smaller broken case. Still, from my exploration, it seems as though this must be the product of some sort of race condition. I attempted to remedy this, I added retries to hopefully give the database time to catch up and accurately reflect what has been added to it. Unfortunately, despite my best efforts, I could not find a way to get this case to pass 100% of the time.

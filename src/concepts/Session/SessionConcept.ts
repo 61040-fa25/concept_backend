@@ -112,14 +112,23 @@ export default class SessionConcept {
     { list, sessionOwner }: { list: List; sessionOwner: User },
   ): Promise<Empty | { error: string }> {
     // requires: there is not an active session for sessionOwner
-    const existingSession = await this.sessions.findOne({
+    const existingActiveSession = await this.sessions.findOne({
       owner: sessionOwner,
       active: true,
     });
-    if (existingSession) {
+    if (existingActiveSession) {
       return { error: "An active session already exists for this owner." };
     }
 
+    const existingInactiveSession = await this.sessions.findOne({
+      owner: sessionOwner,
+      active: false,
+    });
+    if (existingInactiveSession) {
+      this.deleteSession({
+        session: existingInactiveSession._id.toString() as ID,
+      });
+    }
     // effects: creates new session
     const newSessionId = freshID();
     const newSession: SessionDoc = {
@@ -406,6 +415,29 @@ export default class SessionConcept {
     return {};
   }
 
+  /**
+   * @action deleteSession
+   * @requires : session exists
+   * @effects : session is deleted from the database
+   */
+  async deleteSession(
+    { session }: { session: Session },
+  ): Promise<Empty | { error: string }> {
+    const sessionDoc = await this.sessions.findOne({ _id: session });
+    if (!sessionDoc) {
+      return { error: `Session with ID ${session} not found.` };
+    }
+
+    const result = await this.sessions.deleteOne({ _id: session });
+
+    if (result.deletedCount === 0) {
+      return {
+        error: `Session with ID ${session} not found or could not be deleted.`,
+      };
+    }
+    return {};
+  }
+
   // --- Queries (beginning with underscore) ---
 
   /**
@@ -439,10 +471,24 @@ export default class SessionConcept {
   async _getSessionListItems(
     { session }: { session: Session },
   ): Promise<ListItemDoc[]> {
-    const sessionDoc = await this.sessions.findOne({ _id: session });
+    console.log("Looking for session: ", session.toString());
+    // const sessionDoc = await this.sessions.findOne({ _id: session });
+
+    let sessionDoc: SessionDoc | null = null;
+    let retries = 0;
+
+    while (retries < 20) {
+      console.log("Retry: ", retries);
+      sessionDoc = await this.sessions.findOne({ _id: session });
+      if (sessionDoc) break;
+      await new Promise((r) => setTimeout(r, 10));
+      retries++;
+    }
+
     if (!sessionDoc) {
       return [];
     }
+
     const sortField = sessionDoc.ordering === "Random"
       ? "randomOrder"
       : "defaultOrder";
@@ -452,8 +498,18 @@ export default class SessionConcept {
   }
 
   /**
+   * @query _getSessionForOwner
+   * @effects : returns the session for a given owner, or null if none exists.
+   */
+  async _getSessionForOwner(
+    { owner }: { owner: User },
+  ): Promise<SessionDoc | null> {
+    return await this.sessions.findOne({ owner: owner });
+  }
+
+  /**
    * @query _getActiveSessionForOwner
-   * @effects : returns the active session for a given owner, or null if none exists.
+   * @effects : returns the session for a given owner, or null if none exists.
    */
   async _getActiveSessionForOwner(
     { owner }: { owner: User },
