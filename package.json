@@ -1,5 +1,18 @@
 {
+  "type": "module",
+  "scripts": {
+    "test:pose": "node --loader ts-node/esm src/mirrorMotion/ExtractPoseTest.ts"
+  },
   "dependencies": {
+    "@google-cloud/storage": "^7.17.2",
+    "@mediapipe/tasks-vision": "^0.10.22-rc.20250304",
+    "@types/jsdom": "^27.0.0",
+    "canvas": "^3.2.0",
+    "jsdom": "^27.0.0",
     "mongodb": "^6.20.0"
+  },
+  "devDependencies": {
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3"
   }
 }
