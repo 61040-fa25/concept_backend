@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "design/brainstorming/questioning.md",
+                "file": "README.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "questioning"
+              "title": "README"
             }
           }
         ]
@@ -171,6 +171,21 @@
   },
   "active": "60ccb8b74e272dda",
   "lastOpenFiles": [
+    "design/testOutputs/testOutputs.md",
+    "design/testOutputs",
+    "design/test outputs/testOutputs.md",
+    "design/test outputs",
+    "input/testPoseImgs/poseTest2.png",
+    "input/testPoseImgs/image.png",
+    "input/testPoseImgs/poseTest3.png",
+    "design/interestingMoments/assn4aGeneralDesignMoments.md",
+    "design/interestingMoments/assn4aConceptMoments.md",
+    "README.md",
+    "design/concepts/MirrorMotionConcepts/Feedback/DesignFile.md",
+    "design/concepts/MirrorMotionConcepts/ManageVideo/DesignFile.md",
+    "design/concepts/MirrorMotionConcepts/PoseBreakdown/DesignFile.md",
+    "design/concepts/MirrorMotionConcepts/User/DesignFile.md",
+    "design/brainstorming/questioning.md",
     "design/concepts/LikertSurvey/implementation.md",
     "design/concepts/LikertSurvey/testing.md",
     "design/concepts/LikertSurvey/LikertSurvey.md",
@@ -179,7 +194,6 @@
     "context/design/brainstorming/questioning.md/steps/response.9f9f2b2f.md",
     "context/design/brainstorming/questioning.md/steps/response.8e251d9c.md",
     "context/design/brainstorming/questioning.md/20251007_210412.34d993fb.md",
-    "context/design/brainstorming/questioning.md/20251007_210354.dbfa3313.md",
-    "README.md"
+    "context/design/brainstorming/questioning.md/20251007_210354.dbfa3313.md"
   ]
 }

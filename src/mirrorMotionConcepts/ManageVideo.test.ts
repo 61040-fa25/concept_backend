@@ -8,7 +8,7 @@ import { testDb } from "@utils/database.ts";
 import { ID } from "@utils/types.ts";
 import ManageVideoConcept from "./ManageVideoConcept.ts";
 import type { User } from "./UserConcept.ts";
-import type { Feedback } from "./ManageVideoConcept.ts";
+import type { Feedback } from "./FeedbackConcept.ts";
 
 const BUCKET_NAME = Deno.env.get("BUCKET_NAME") || "";
 
@@ -16,46 +16,101 @@ const testUser = "TestUser" as User;
 const anotherUser = "AnotherUser" as User; // A user for non-owner tests
 const nonExistentVideoId = "nonExistentVideo123" as ID; // A dummy ID for non-existent video tests
 
-Deno.test("Principle: After uploading a video, it can be retrieved for analysis, syncing, or feedback ", async () => {
-  const [db, client] = await testDb();
-  const manageVideoConcept = new ManageVideoConcept(db, BUCKET_NAME);
+Deno.test(
+  "Principle: After uploading a video, it can be retrieved for analysis, syncing, or feedback",
+  async () => {
+    const [db, client] = await testDb();
+    const manageVideoConcept = new ManageVideoConcept(db, BUCKET_NAME);
 
-  try {
-    // 1. Try to upload a practice video to Google Cloud Storage
-    const uploadVideoResult = await manageVideoConcept.upload({
-      owner: testUser,
-      videoType: "practice",
-      filePath: `${Deno.cwd()}/input/testVideos/testVideo1.mp4`,
-    });
+    try {
+      // -------------------------------
+      // Step 1: Upload a practice video
+      // -------------------------------
+      const uploadPracticeResult = await manageVideoConcept.upload({
+        owner: testUser,
+        videoType: "practice",
+        filePath: `${Deno.cwd()}/input/testVideos/testVideo1.mp4`,
+      });
+      assertNotEquals(
+        "error" in uploadPracticeResult,
+        true,
+        "Upload of practice video should succeed.",
+      );
+      const { video: practiceVideoId } = uploadPracticeResult as { video: ID };
+      assertExists(practiceVideoId, "Uploaded practice video ID should exist.");
 
-    assertNotEquals(
-      "error" in uploadVideoResult,
-      true,
-      "Upload video should not fail.",
-    );
-    const { video } = uploadVideoResult as { video: ID };
-    assertExists(video);
+      // -------------------------------
+      // Step 2: Upload a reference video
+      // -------------------------------
+      const uploadReferenceResult = await manageVideoConcept.upload({
+        owner: testUser,
+        videoType: "reference",
+        filePath: `${Deno.cwd()}/input/testVideos/testVideo2.mp4`,
+      });
+      assertNotEquals(
+        "error" in uploadReferenceResult,
+        true,
+        "Upload of reference video should succeed.",
+      );
+      const { video: referenceVideoId } = uploadReferenceResult as {
+        video: ID;
+      };
+      assertExists(
+        referenceVideoId,
+        "Uploaded reference video ID should exist.",
+      );
 
-    // 2. Try to upload a reference video to Google Cloud Storage
-    const uploadReferenceVideoResult = await manageVideoConcept.upload({
-      owner: testUser,
-      videoType: "reference",
-      filePath: `${Deno.cwd()}/input/testVideos/testVideo2.mp4`,
-    });
+      // -------------------------------
+      // Step 3: Retrieve the uploaded practice video
+      // -------------------------------
+      const retrievePracticeResult = await manageVideoConcept.retrieve({
+        video: practiceVideoId,
+        caller: testUser,
+      });
+      assertNotEquals(
+        "error" in retrievePracticeResult,
+        true,
+        "Retrieve should succeed for owner.",
+      );
+      const { videoType, gcsUrl, feedback } = retrievePracticeResult as {
+        videoType: "practice" | "reference";
+        gcsUrl: string;
+        feedback: Feedback[];
+      };
+      assertEquals(
+        videoType,
+        "practice",
+        "Video type should match uploaded type.",
+      );
+      assertExists(gcsUrl, "Retrieved video URL should exist.");
+      assertInstanceOf(feedback, Array, "Feedback should be an array.");
+      assertEquals(feedback.length, 0, "Initially, feedback should be empty.");
 
-    assertNotEquals(
-      "error" in uploadReferenceVideoResult,
-      true,
-      "Upload video should not fail.",
-    );
-    const { video: referenceVideo } = uploadReferenceVideoResult as {
-      video: ID;
-    };
-    assertExists(referenceVideo);
-  } finally {
-    await client.close();
-  }
-});
+      // -------------------------------
+      // Step 4: Retrieve the uploaded reference video
+      // -------------------------------
+      const retrieveReferenceResult = await manageVideoConcept.retrieve({
+        video: referenceVideoId,
+        caller: testUser,
+      });
+      assertNotEquals(
+        "error" in retrieveReferenceResult,
+        true,
+        "Retrieve should succeed for owner.",
+      );
+      const { videoType: refType } = retrieveReferenceResult as {
+        videoType: "practice" | "reference";
+      };
+      assertEquals(
+        refType,
+        "reference",
+        "Reference video type should match uploaded type.",
+      );
+    } finally {
+      await client.close();
+    }
+  },
+);
 
 Deno.test("Action: retrieve - Successfully retrieves video by owner", async () => {
   const [db, client] = await testDb();

@@ -1,1 +1,0 @@
-1. Based on assignment 2's comments, realized concept specs are wrong. Need to maintain separation of concerns between User and Video class. Also shouldn't have features as concepts (ProgressTracker is more of a feature).

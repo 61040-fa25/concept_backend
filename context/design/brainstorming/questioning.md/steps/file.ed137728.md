@@ -1,3 +1,12 @@
+---
+timestamp: 'Sun Oct 19 2025 20:23:56 GMT-0400 (Eastern Daylight Time)'
+parent: '[[..\20251019_202356.65116a2b.md]]'
+content_id: ed137728591518e2817cf8d4b2a20f4178304f6e9309529b36c8ee8601737520
+---
+
+# file: src\mirrorMotionConcepts\FeedbackConcept.ts
+
+```typescript
 import { Collection, Db } from "npm:mongodb";
 import { Empty, ID } from "@utils/types.ts";
 import { freshID } from "@utils/database.ts";
@@ -21,7 +30,7 @@ type PoseData = {
 /**
  * Internal entity type, represented as an ID
  */
-export type Feedback = ID;
+type Feedback = ID;
 
 /**
  * State: A set of Feedback records.
@@ -140,3 +149,9 @@ export default class FeedbackConcept {
     };
   }
 }
+
+```
+
+<!-- [@Feedback concept](../../src/mirrorMotionConcepts/) -->
+
+<!-- [@ManageVideo  concept idea](../../context/design/brainstorming/questioning.md/steps/response.4608b575.md) -->

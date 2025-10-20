@@ -4,13 +4,13 @@ import { freshID } from "@utils/database.ts"; // Assuming freshID() generates a 
 import { Storage } from "@google-cloud/storage"; // Import Google Cloud Storage client
 import { readFile } from "node:fs/promises"; // For reading local files in Deno/Node.js
 import type { User } from "./UserConcept.ts";
+import type { Feedback } from "./FeedbackConcept.ts";
 
 // Collection prefix to ensure namespace separation
 const PREFIX = "ManageVideo" + ".";
 
 // Internal entity types, represented as IDs
 type Video = ID;
-export type Feedback = ID; // Assuming Feedback is a separate entity/concept for now, linked by ID
 
 /**
  * State: A set of Videos with an owner, type, a Google Cloud Storage URL,

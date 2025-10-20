@@ -2,168 +2,96 @@
 <!-- [@Example LikertSurveyConcept concept](../../src/initialCode/concepts/LikertSurvey/LikertSurveyConcept.ts)
 [@Example LikertSurveyConcept test](../../src/initialCode/concepts/LikertSurvey/LikertSurveyConcept.test.ts) -->
 
-[@User concept to implement](../concepts/MirrorMotionConcepts/User/UserSpecs.md)
+<!-- [@User concept to implement](../concepts/MirrorMotionConcepts/User/UserSpecs.md) -->
 
 [@User concept](../../src/mirrorMotionConcepts/UserConcept.ts)
+
+[@Feedback concept](../../src/mirrorMotionConcepts/FeedbackConcept.ts)
+[@ManageVideo concept](../../src/mirrorMotionConcepts/ManageVideoConcept.ts)
+<!-- [@Feedback concept](../../src/mirrorMotionConcepts/) -->
 
 <!-- [@ManageVideo  concept idea](../../context/design/brainstorming/questioning.md/steps/response.4608b575.md) -->
 
 [@User test](../../src/mirrorMotionConcepts/User.test.ts)
 
-# prompt: Given the current User concept and test case as reference, create more test cases for the other actions in User
+[@curr readme](../../README.md)
+# prompt: Update the readme given the concepts we're wokring with/the general idea of this new file. keep info on how to setup the mirror motion specific concept tests w deno. remove everything else having to do with general recitatioon excercise.
 # response:
 
-Okay, let's add more test cases for the `UserConcept` to cover the explicit requirements and edge cases for the `register` and `login` actions.
+# Mirror Motion Backend
 
-Here are the additional test cases:
+This repository contains the backend implementation for Mirror Motion, a project designed to help users manage their videos and receive AI-generated feedback on their practice choreography. The backend is built using TypeScript with Deno and utilizes MongoDB for data storage.
 
-1.  **`register` with existing username:** Verify that `register` fails when the username is already taken.
-2.  **`login` with non-existent username:** Verify that `login` fails when the username does not exist.
-3.  **`login` with incorrect password:** Verify that `login` fails when the password does not match the registered password for an existing username.
+## Project Concepts
+
+The core of this backend is structured around several concepts:
+
+*   **UserConcept**: Manages user registration, login, and secure access to their own video content. Its purpose is to let users securely manage and access their own videos.
+*   **FeedbackConcept**: Compares practice video pose data against reference choreography to generate textual feedback and an accuracy score. Its purpose is to highlight differences between practice video and reference choreography.
+*   **ManageVideoConcept** (Assumed/Upcoming): This concept is responsible for handling video uploads, storage, and retrieval, providing the `Video` entities referenced by the `FeedbackConcept`.
+
+# Setup
+
+## 0. Fork this repository
+
+First, [fork](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/working-with-forks/fork-a-repo#forking-a-repository) this repository, and **rename** it to your desired project name, and give a description of your project.
+
+## 1. Install Deno
+
+[Install from Deno's website](https://deno.com)
+
+Deno is a secure runtime for JavaScript, TypeScript, and WebAssembly. It greatly simplifies tooling and offers a modern development experience.
+
+**Note:** when importing from `npm` packages, prefix with `npm:` as in:
 
 ```typescript
-import { assertEquals, assertExists, assertNotEquals } from "jsr:@std/assert";
-import { testDb } from "@utils/database.ts";
-import { ID } from "@utils/types.ts";
-
-// Using distinct usernames for different test cases to avoid clashes
-const userA = "username:Alice" as ID;
-const userB = "username:Bob" as ID;
-const userC = "username:Charlie" as ID;
-const userD = "username:David" as ID; // For non-existent login
-const userE = "username:Eve" as ID; // For incorrect password login
-
-import UserConcept from "./UserConcept.ts";
-
-Deno.test("Principle: After registering with a username and password, the user can log in to their account", async () => {
-  const [db, client] = await testDb();
-  const userConcept = new UserConcept(db);
-
-  try {
-    // 1. User creates a new user with username and password
-    const createUserResult = await userConcept.register({
-      username: userA,
-      password: "pswTest",
-    });
-    assertNotEquals(
-      "error" in createUserResult,
-      true,
-      "User creation should not fail.",
-    );
-    const { userID } = createUserResult as { userID: ID };
-    assertExists(userID);
-
-    // 2. User logs in with the correct username and password
-    const loginResult = await userConcept.login({
-      username: userA,
-      password: "pswTest",
-    });
-    assertNotEquals(
-      "error" in loginResult,
-      true,
-      "User login should not fail.",
-    );
-    const { userID: loggedInUserID } = loginResult as { userID: ID };
-    assertExists(loggedInUserID);
-    assertEquals(loggedInUserID, userID);
-  } finally {
-    await client.close();
-  }
-});
-
-Deno.test("Action: register - Requires username not already taken", async () => {
-  const [db, client] = await testDb();
-  const userConcept = new UserConcept(db);
-
-  try {
-    // 1. Register a user successfully
-    const registerResult1 = await userConcept.register({
-      username: userB,
-      password: "password123",
-    });
-    assertNotEquals("error" in registerResult1, true, "First registration should succeed.");
-    assertExists((registerResult1 as { userID: ID }).userID);
-
-    // 2. Attempt to register again with the same username
-    const registerResult2 = await userConcept.register({
-      username: userB,
-      password: "anotherPassword",
-    });
-
-    // Expect an error because the username is already taken
-    assertEquals(
-      "error" in registerResult2,
-      true,
-      "Second registration with same username should fail.",
-    );
-    assertEquals(
-      (registerResult2 as { error: string }).error,
-      `Username '${userB}' is already taken.`,
-      "Error message should indicate username taken.",
-    );
-  } finally {
-    await client.close();
-  }
-});
-
-Deno.test("Action: login - Requires username exists", async () => {
-  const [db, client] = await testDb();
-  const userConcept = new UserConcept(db);
-
-  try {
-    // 1. Attempt to login with a username that does not exist
-    const loginResult = await userConcept.login({
-      username: userD, // This user was never registered
-      password: "anyPassword",
-    });
-
-    // Expect an error
-    assertEquals(
-      "error" in loginResult,
-      true,
-      "Login with non-existent username should fail.",
-    );
-    assertEquals(
-      (loginResult as { error: string }).error,
-      "Invalid username or password.",
-      "Error message should be generic for security.",
-    );
-  } finally {
-    await client.close();
-  }
-});
-
-Deno.test("Action: login - Requires password matches", async () => {
-  const [db, client] = await testDb();
-  const userConcept = new UserConcept(db);
-
-  try {
-    // 1. Register a user successfully
-    const registerResult = await userConcept.register({
-      username: userE,
-      password: "correctPassword",
-    });
-    assertNotEquals("error" in registerResult, true, "Registration should succeed.");
-
-    // 2. Attempt to login with the correct username but incorrect password
-    const loginResult = await userConcept.login({
-      username: userE,
-      password: "wrongPassword",
-    });
-
-    // Expect an error
-    assertEquals(
-      "error" in loginResult,
-      true,
-      "Login with incorrect password should fail.",
-    );
-    assertEquals(
-      (loginResult as { error: string }).error,
-      "Invalid username or password.",
-      "Error message should be generic for security.",
-    );
-  } finally {
-    await client.close();
-  }
-});
+import { MongoClient } from "npm:mongo"
 ```
+
+For VSCode users, consider also installing the Deno [extension](https://marketplace.visualstudio.com/items?itemName=denoland.vscode-deno) for enhanced IDE support.
+
+## 2. Compile Context
+
+Context is a simple CLI tool that can be used to collaborate with LLMs and drive design. To create a convenient binary, run the following command from the root of the directory:
+
+```shell
+deno compile -A --output ctx .ctx/context.ts
+```
+
+## 3. Setup Gemini
+
+Copy or change `.env.template` to the environment file: `.env` and insert your Gemini API key:
+
+```env
+GEMINI_API_KEY=YOUR_KEY_HERE
+GEMINI_MODEL=gemini-2.5-flash
+```
+
+You can choose any [models](https://ai.google.dev/gemini-api/docs/models) using `GEMINI_MODEL`, such as `gemini-2.5-flash-lite` for faster responses, or `gemini-2.5-pro` for higher quality.
+
+## 4. Setup your MongoDB Atlas Cluster (free)
+
+For this project, we'll be using MongoDB as the database.
+
+### Instructions
+
+1.  Create your [MongoDB Atlas](https://www.mongodb.com/cloud/atlas/register) account.
+2.  When selecting a template, choose the **free** option, M0.
+3.  At the Security Quickstart page, select how you want to authenticate your connection and allow access to all IPs as shown in [this slide](https://docs.google.com/presentation/d/1DBOWIQ2AAGQPDRgmnad8wN9S9M955LcHYZQlnbu-QCs/edit?usp=sharing).
+4.  Once created, click the **CONNECT** button, select **driver**, and copy the srv connection string. If using username and password, the URL should look something like this: `mongodb+srv://<username>:<password>@cluster0.p82ijqd.mongodb.net/?retryWrites=true&w=majority`. Make sure to replace username and password with your actual values.
+5.  Add your connection URL (without `<` and `>`) to `MONGODB_URL=<connection url>` to your `.env` file.
+6.  Give your database a name under `DB_NAME=<your database name>`.
+
+# Running Mirror Motion Concept Tests
+
+To ensure the Mirror Motion concepts are functioning correctly, you can run the provided tests using the Deno testing framework.
+
+Tests are defined by any file with the name `filename.test.ts` in your directory. To run all tests for the Mirror Motion concepts (and any other `.test.ts` files), simply run:
+
+```shell
+deno test -A
+```
+
+The `-A` flag means to give all permissions. This is convenient for development but be mindful of Deno's security model for production environments.
+
+**Confirming your setup:** After running the tests, check your MongoDB Atlas console. You should see temporary collections created within the test database (`test-mirror-motion`). These are automatically wiped every time you start a new test run, ensuring a clean state for each test.

@@ -1,18 +1,9 @@
 {
-<<<<<<< HEAD
   "imports": {
     "@concepts/": "./src/concepts/",
-    "@utils/": "./src/utils/",
-    "nodeModulesDir": "./node_modules"
+    "@utils/": "./src/utils/"
+  },
+  "tasks": {
+    "concepts": "deno run --allow-net --allow-read --allow-sys --allow-env src/concept_server.ts --port 8000 --baseUrl /api"
   }
 }
-=======
-    "imports": {
-        "@concepts/": "./src/concepts/",
-        "@utils/": "./src/utils/"
-    },
-    "tasks": {
-        "concepts": "deno run --allow-net --allow-read --allow-sys --allow-env src/concept_server.ts --port 8000 --baseUrl /api"
-    }
-}
->>>>>>> 308ead3abcd5058f835c4cfbb03371e03384ceec
