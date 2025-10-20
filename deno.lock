@@ -10,6 +10,7 @@
     "jsr:@std/uuid@*": "1.0.7",
     "jsr:@std/yaml@*": "1.0.9",
     "npm:@google/genai@*": "1.21.0",
+    "npm:@google/generative-ai@*": "0.24.1",
     "npm:@ngneat/elf@^2.5.1": "2.5.1_rxjs@7.8.2",
     "npm:@types/mdast@4": "4.0.4",
     "npm:@types/node@*": "24.2.0",
@@ -57,6 +58,9 @@
         "google-auth-library",
         "ws"
       ]
+    },
+    "@google/generative-ai@0.24.1": {
+      "integrity": "sha512-MqO+MLfM6kjxcKoy0p1wRzG3b4ZZXtPI+z2IE26UogS2Cm/XHO+7gGRBh6gcJsOiIVoH93UwKvW4HdgiOZCy9Q=="
     },
     "@mongodb-js/saslprep@1.1.9": {
       "integrity": "sha512-tVkljjeEaAhCqTzajSdgbQ6gE6f3oneVwa3iXR6csiEwXXOFsiC6Uh9iAjAhXPtqa/XMDHWjjeNH/77m/Yq2dw==",
@@ -707,6 +711,9 @@
     "https://esm.sh/unist-util-visit@5.0.0/denonext/unist-util-visit.mjs": "a09fab16c3eafd466e5b5dab65ab76cb8f1eafa360b457eef35a529f59725d7f"
   },
   "workspace": {
+    "dependencies": [
+      "npm:@google/generative-ai@*"
+    ],
     "packageJson": {
       "dependencies": [
         "npm:@ngneat/elf@^2.5.1",

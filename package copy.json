@@ -1,0 +1,27 @@
+{
+  "name": "gemini-schedule-demo",
+  "version": "1.0.0",
+  "description": "Aa application that filters courses based on user-selected tags and suggests alternative courses using Google's Gemini API.",
+  "main": "dist/courseFiltering_tests.ts",
+  "scripts": {
+    "build": "tsc",
+    "start": "npm run build && node dist/courseFiltering_tests.js",
+    "dev": "ts-node --transpile-only courseFiltering_tests.ts",
+    "test": "npm run build && node dist/courseFiltering_tests.ts",
+    "manual": "npm run build && node -e \"require('./dist/courseFiltering_tests.ts').testManualFilters()\"",
+    "llm": "npm run build && node -e \"require('./dist/courseFiltering_tests.ts').testAISuggestions()\"",
+    "mixed": "npm run build && node dist/courseFiltering_tests.js"
+  
+  },
+  "keywords": ["gemini", "ai", "course", "student", "schedule", "typescript"],
+  "author": "Marin Gray",
+  "license": "MIT",
+  "dependencies": {
+    "@google/generative-ai": "^0.21.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0",
+    "ts-node": "^10.9.0"
+  }
+}

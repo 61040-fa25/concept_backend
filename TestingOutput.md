@@ -1,0 +1,28 @@
+
+running 23 tests from ./src/concepts/CourseScheduling/courseSchedulingConcept.test.ts
+Principle: Course scheduling full workflow (Create, schedule, manage student schedule) ... ok (1s)
+Action: createCourse - creates and retrieves a course successfully ... ok (690ms)
+Action: getCourse - returns null for non-existent course ... ok (622ms)
+Action: getAllCourses - retrieves all courses, including empty state ... ok (691ms)
+Action: createSection - creates and retrieves a section successfully ... ok (604ms)
+Action: editSection - updates section details ... ok (802ms)
+Action: editSection - returns null for non-existent section ... ok (580ms)
+Action: getSection - returns null for non-existent section ... ok (689ms)
+Action: getAllSections - retrieves all sections, including empty state ... ok (704ms)
+Action: createSchedule - creates an empty schedule for a user ... ok (756ms)
+Action: deleteSchedule - deletes a schedule by owner ... ok (639ms)
+Action: deleteSchedule - throws error if schedule not found ... ok (520ms)
+Action: deleteSchedule - throws error if unauthorized user ... ok (708ms)
+Action: addSection - adds a section to a schedule successfully ... ok (784ms)
+Action: addSection - does not add duplicate sections to a schedule ... ok (863ms)
+Action: addSection - throws error for non-existent schedule or unauthorized user ... ok (959ms)
+Action: removeSection - removes a section from a schedule successfully ... ok (937ms)
+Action: removeSection - handles removing non-existent section gracefully (no error, state unchanged) ... ok (864ms)
+Action: removeSection - handles non-existent schedule or unauthorized access gracefully (no error, state unchanged) ... ok
+ (860ms)
+Action: duplicateSchedule - duplicates a schedule successfully ... ok (977ms)
+Action: duplicateSchedule - throws error if source schedule not found ... ok (592ms)
+Action: duplicateSchedule - throws error if unauthorized user ... ok (551ms)
+Action: getAllSchedules - retrieves all schedules, including empty state ... ok (677ms)
+
+ok | 23 passed | 0 failed (22s)

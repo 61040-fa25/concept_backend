@@ -1,7 +1,6 @@
 {
-  "imports": {
-    "@concepts/": "./src/concepts/",
-    "@utils/": "./src/utils/",
-    "std/": "https://deno.land/std@0.218.2/"
+  "importMap": "./import_map.json",
+  "tasks": {
+    "test": "deno test"
   }
 }

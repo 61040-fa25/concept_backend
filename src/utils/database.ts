@@ -8,7 +8,7 @@ import {
   Course,
   Schedule,
   Section,
-} from "../concepts/CourseScheduling/courseScheduling.ts"; //import interfaces for mongdb collections
+} from "@concepts/CourseScheduling/courseSchedulingConcept.ts"; //import interfaces for mongdb collections
 
 export function getCourseCollection(db: Db) {
   return db.collection<Course>("courses");

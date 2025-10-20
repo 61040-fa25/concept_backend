@@ -13,26 +13,36 @@ State
     A set of courses
     An owner user
   A set of courses with
+    A set of Sections
+    A title String
+    A department String
+  A set of Sections with
     A day
     A start time
     An end time
+    A professor String
+    A capacity number
 
 Actions
-  createCourse (d : day, start : time, end : time) : (c : course)
-    requires valid day and start and end times. And that course does not already exist
+  createCourse (t: title, d: department) : (c : course)
+    requires course does not already exist
     effects creates course
+
+ createSection (d : day, start : time, end : time) : (s : section)
+    requires section is valid, section does not already exist in schedule and user is the owner of the schedule
+    effects section is added to the schedule
   
-  addCourse (c : course, u: user, s : schedule)
-    requires course is valid, course does not already exist in schedule and user is the owner of the schedule
-    effects course is added to the schedule
+  addSection (s : section, u: user, s : schedule)
+    requires section is valid, course does not already exist in schedule and user is the owner of the schedule
+    effects section is added to the schedule
 
-  editCourse (c: course, d: day, start: time, end: time)
-    requires course, day, start, and end times are valid
-    effects changes the course features to specified day and times
+  editSection (s: section, d: day, start: time, end: time)
+    requires section, day, start, and end times are valid
+    effects changes the section features to specified day and times
 
-  removeCourse (c : course, u : user, s : schedule)
-    requires course is valid, course exists on the schedule, and that user is the owner of the schedule
-    effects course is removed from the schedule
+  removeSection (s : section, u : user, s : schedule)
+    requires section is valid, section exists on the schedule, and that user is the owner of the schedule
+    effects section is removed from the schedule
 
   createSchedule (u : user) : (s : schedule)
     effects creates empty schedule with user as the owner

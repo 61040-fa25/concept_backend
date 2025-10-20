@@ -1,363 +1,362 @@
-# prompt You are helping me write automated tests for a **Deno TypeScript backend project**.  The project manages course scheduling using MongoDB. Please implement **unit tests** (using Deno’s built-in test framework) for **all actions** in the file `courseScheduling_actions.ts`. The class in that file interacts directly with a MongoDB database via a `Db` object. Do **not** use a mock store or in-memory state. Instead, create a **mock MongoDB client** that simulates the behavior of collections (`insertOne`, `findOne`, `updateOne`, `deleteOne`, and `find().toArray()`), storing data in plain JavaScript objects. Each test should instantiate the `CourseScheduling_actions` class with this mock database. Each test should: Import the class from `courseScheduling_actions.ts, Initialize a mock database before each test, Call one action (e.g., `createCourse`, `createSection`, `createSchedule`, etc.) with realistic arguments, Verify the result using `assertEquals` or `assertRejects, Confirm that the mock database reflects the correct state after each operation, and Include a brief comment explaining what the test verifies Output a single Deno test file containing clear, organized test cases for each action method.  The generated tests should be runnable as-is with `deno test`.
+# prompt Create a markdown document exactly like testing for courseSchedulingConcept.test.ts given the test output of courseSchedulingConcept.test.ts  stored in TestingOutput. Use the instructions in CourseSchedulingNotes.
 
-(@testing_instruction)[C:\Users\marin\OneDrive\Desktop\61040-portfolio\Academica\design\background\testing-concepts.md]
+[@courseSchedulingConcept.test.ts](../../src/concepts/CourseScheduling/courseSchedulingConcept.test.ts)
 
-(@courseScheduling_actions)[C:\Users\marin\OneDrive\Desktop\61040-portfolio\Academica\src\concepts\CourseScheduling\courseScheduling_actions.ts]
+[@testing](../concepts/LikertSurvey/testing.md)
 
-(@courseScheduling_concept)[C:\Users\marin\OneDrive\Desktop\61040-portfolio\Academica\src\concepts\CourseScheduling\courseScheduling.ts]
+[@TestingOutput](../../TestingOutput.md)
 
-
-
+[@CourseSchedulingNotes](../../CourseSchedulingNotes.md)
 
 # response:
 
-Of course. Here is a complete Deno test file for `courseScheduling_actions.ts`. This file implements a mock MongoDB client as requested and provides comprehensive unit tests for each action.
+# Test Results for `courseSchedulingConcept.test.ts`
 
-This single file can be saved as `courseScheduling_actions.test.ts` in the same directory as the source files and run directly with the `deno test` command.
+This document outlines the detailed results of running the `courseSchedulingConcept.test.ts` test suite. Each test case is described with its initial setup ("Given"), the actions performed ("Action"), and the observed outcomes ("Result"), following the specified format.
 
-```typescript
-// courseScheduling_actions.test.ts
+## Principle: Course scheduling full workflow (Create, schedule, manage student schedule)
 
-import {
-  assertEquals,
-  assertExists,
-} from "https://deno.land/std@0.218.2/assert/mod.ts";
+This test validates the end-to-end functionality, from creating courses and sections, to managing a student's schedule, including adding, removing, duplicating, and deleting schedules.
 
-// Note: Adjust the import paths according to your project's file structure.
-// This example assumes the test file is in the same directory as the source files.
-import { CourseScheduling_actions } from "./courseScheduling_actions.ts";
-import type { Course, Section, Schedule } from "./courseScheduling.ts";
+*   **Given**:
+    *   A fresh in-memory database and an instance of `CourseScheduling_actions`.
+    *   Predefined test data including two courses (`CS101`, `MA201`), two time slots, and two user IDs (`user:alice`, `user:bob`).
+*   **Action**:
+    1.  Create `CS101` and `MA201` courses.
+    2.  Retrieve all courses to confirm creation.
+    3.  Create section `001` for `CS101` with `Dr. Ada Lovelace` and `sampleTimeSlot1`.
+    4.  Create section `002` for `MA201` with `Dr. Alan Turing` and `sampleTimeSlot2`.
+    5.  Retrieve all sections to confirm creation.
+    6.  Alice (`user:alice`) creates a new schedule named "Fall 2024 Classes".
+    7.  Alice adds `section1` and `section2` to her schedule.
+    8.  Retrieve Alice's schedule from the database to verify sections.
+    9.  Alice removes `section1` from her schedule.
+    10. Retrieve Alice's schedule from the database to verify the removal.
+    11. Alice duplicates her updated schedule (which now only contains `section2`) as "Backup Schedule".
+    12. Alice deletes her original schedule.
+    13. Retrieve the original schedule to confirm deletion.
+    14. Retrieve all schedules to confirm only the duplicated one remains.
+*   **Result**:
+    1.  Courses `CS101` and `MA201` are successfully created and retrieved, with two courses total.
+    2.  Sections `001` and `002` are successfully created, linked to their respective courses, and retrieved, with two sections total.
+    3.  Alice's schedule "Fall 2024 Classes" is created with an empty `sectionIds` array.
+    4.  After adding sections, Alice's schedule contains `[section1.id, section2.id]`.
+    5.  After removing `section1`, Alice's schedule contains `[section2.id]`.
+    6.  A new `duplicatedSchedule` is created, with a unique ID, owner `user:alice`, name "Backup Schedule", and `sectionIds` matching `[section2.id]` (the state of the original schedule at duplication).
+    7.  Alice's original schedule is deleted (returns `null` on lookup).
+    8.  Only the `duplicatedSchedule` remains when all schedules are retrieved.
 
-// --- Mock MongoDB ObjectId ---
-// The actions class likely uses the official MongoDB driver's ObjectId.
-// We create a simple mock class to simulate its behavior for our tests.
-class ObjectId {
-  private readonly id: string;
-  constructor(id?: string | ObjectId) {
-    if (id instanceof ObjectId) {
-      this.id = id.toString();
-    } else {
-      // In a real scenario this would be a 24-char hex string, but UUID is fine for mocking.
-      this.id = id || crypto.randomUUID();
-    }
-  }
-  toString() {
-    return this.id;
-  }
-  toHexString() {
-    return this.id;
-  }
-}
+## Action: createCourse - creates and retrieves a course successfully
 
-// --- Mock Database Implementation ---
-// This mock simulates the MongoDB driver's behavior for testing purposes.
-// It stores data in-memory in plain JavaScript objects instead of a real database.
+This test verifies the successful creation and retrieval of a single course.
 
-interface MockCollection {
-  insertOne(doc: any): Promise<{ insertedId: ObjectId }>;
-  findOne(query: any): Promise<any | null>;
-  updateOne(
-    query: any,
-    update: any,
-  ): Promise<{ modifiedCount: number; matchedCount: number }>;
-  deleteOne(query: any): Promise<{ deletedCount: number }>;
-  find(query?: any): { toArray(): Promise<any[]> };
-}
+*   **Given**:
+    *   A fresh in-memory database and an instance of `CourseScheduling_actions`.
+*   **Action**:
+    1.  Create a course: `actions.createCourse("PH101", "Introduction to Philosophy", "Philosophy")`.
+    2.  Retrieve the course using its ID: `actions.getCourse("PH101")`.
+*   **Result**:
+    1.  The course is created with ID "PH101", title "Introduction to Philosophy", and department "Philosophy".
+    2.  The retrieved course matches the created course's properties (excluding the `_id` field).
 
-interface MockDb {
-  collection: (name: string) => MockCollection;
-  _internal: { // Helper to inspect the DB state directly in tests
-    collections: Record<string, any[]>;
-  };
-}
+## Action: getCourse - returns null for non-existent course
 
-/**
- * Creates a mock database object that mimics a subset of the MongoDB Db object's API.
- */
-function createMockDb(): MockDb {
-  const collections: Record<string, any[]> = {
-    courses: [],
-    sections: [],
-    schedules: [],
-  };
+This test ensures that attempting to retrieve a non-existent course correctly returns `null`.
 
-  const getCollection = (name: string): MockCollection => {
-    if (!collections[name]) {
-      collections[name] = []; // Dynamically create collection array if not present
-    }
-    const data = collections[name];
+*   **Given**:
+    *   A fresh in-memory database and an instance of `CourseScheduling_actions`.
+    *   No courses have been created in the database.
+*   **Action**:
+    1.  Attempt to retrieve a course with a non-existent ID: `actions.getCourse("NONEXISTENT")`.
+*   **Result**:
+    1.  The retrieval attempt returns `null`, indicating no course was found.
 
-    return {
-      async insertOne(doc: any) {
-        const newDoc = { ...doc };
-        if (!newDoc._id) {
-          newDoc._id = new ObjectId();
-        }
-        data.push(newDoc);
-        return { insertedId: newDoc._id };
-      },
+## Action: getAllCourses - retrieves all courses, including empty state
 
-      async findOne(query: any) {
-        if (query?._id) {
-          const idString = query._id.toString();
-          const found = data.find((d) => d._id.toString() === idString);
-          return found ? JSON.parse(JSON.stringify(found)) : null; // Return a copy
-        }
-        return null;
-      },
+This test checks the `getAllCourses` action, ensuring it works correctly for both empty and populated states.
 
-      async updateOne(query: any, update: any) {
-        if (!query?._id) return { modifiedCount: 0, matchedCount: 0 };
-        const idString = query._id.toString();
-        const index = data.findIndex((d) => d._id.toString() === idString);
+*   **Given**:
+    *   A fresh in-memory database and an instance of `CourseScheduling_actions`.
+    *   `sampleCourse1` and `sampleCourse2` as predefined test data.
+*   **Action**:
+    1.  Retrieve all courses initially (empty state): `actions.getAllCourses()`.
+    2.  Create `sampleCourse1`.
+    3.  Create `sampleCourse2`.
+    4.  Retrieve all courses again (populated state): `actions.getAllCourses()`.
+*   **Result**:
+    1.  Initially, `courses.length` is `0`.
+    2.  After creating two courses, `courses.length` is `2`.
+    3.  The retrieved courses include both `sampleCourse1` and `sampleCourse2`.
 
-        if (index === -1) {
-          return { modifiedCount: 0, matchedCount: 0 };
-        }
+## Action: createSection - creates and retrieves a section successfully
 
-        let modified = false;
-        // Handle $set operator
-        if (update.$set) {
-          data[index] = { ...data[index], ...update.$set };
-          modified = true;
-        }
-        // Handle $push operator (for adding sections to a schedule)
-        if (update.$push) {
-          const field = Object.keys(update.$push)[0];
-          if (!data[index][field]) data[index][field] = [];
-          data[index][field].push(update.$push[field]);
-          modified = true;
-        }
-        // Handle $pull operator (for removing sections from a schedule)
-        if (update.$pull) {
-          const field = Object.keys(update.$pull)[0];
-          if (Array.isArray(data[index][field])) {
-            const valueToPull = update.$pull[field].toString();
-            const initialLength = data[index][field].length;
-            data[index][field] = data[index][field].filter(
-              (item: any) => item.toString() !== valueToPull,
-            );
-            if (data[index][field].length < initialLength) modified = true;
-          }
-        }
-        return { modifiedCount: modified ? 1 : 0, matchedCount: 1 };
-      },
+This test confirms that a course section can be created and then successfully retrieved from the database.
 
-      async deleteOne(query: any) {
-        if (query?._id) {
-          const idString = query._id.toString();
-          const initialLength = data.length;
-          collections[name] = data.filter((d) => d._id.toString() !== idString);
-          return { deletedCount: initialLength - collections[name].length };
-        }
-        return { deletedCount: 0 };
-      },
+*   **Given**:
+    *   A fresh in-memory database and an instance of `CourseScheduling_actions`.
+    *   `sampleCourse1` is first created to serve as a reference for the section.
+*   **Action**:
+    1.  Create `sampleCourse1`.
+    2.  Create a section for `sampleCourse1`: `actions.createSection(sampleCourse1.id, "001", "Dr. Jane Doe", 25, [sampleTimeSlot1])`.
+    3.  Retrieve the newly created section using its generated ID: `actions.getSection(section.id)`.
+*   **Result**:
+    1.  The section is created with a unique ID, correctly linked to `sampleCourse1.id`, section number "001", instructor "Dr. Jane Doe", capacity 25, and `sampleTimeSlot1`.
+    2.  The retrieved section matches the properties of the created section (excluding the `_id` field).
 
-      find(_query?: any) {
-        // Simplified find that ignores the query and returns all documents.
-        return {
-          async toArray() {
-            return JSON.parse(JSON.stringify(data)); // Return a deep copy
-          },
-        };
-      },
-    };
-  };
+## Action: editSection - updates section details
 
-  return {
-    collection: (name: string) => getCollection(name),
-    _internal: { collections },
-  };
-}
+This test verifies the ability to modify an existing course section's details.
 
-// --- Test Suites ---
+*   **Given**:
+    *   A fresh in-memory database and an instance of `CourseScheduling_actions`.
+    *   `sampleCourse1` is created, and an `originalSection` is created for it.
+*   **Action**:
+    1.  Update the `originalSection` by changing its instructor, capacity, and time slots: `actions.editSection(originalSection.id, { instructor: "Prof. John Smith", capacity: 35, timeSlots: [sampleTimeSlot2] })`.
+    2.  Retrieve the updated section to confirm changes: `actions.getSection(originalSection.id)`.
+*   **Result**:
+    1.  The `updatedSection` exists with the same ID as the original.
+    2.  Its `instructor` is now "Prof. John Smith", `capacity` is 35, `timeSlots` is `[sampleTimeSlot2]`.
+    3.  The `sectionNumber` remains unchanged.
+    4.  The retrieved section matches the `updatedSection` properties (excluding the `_id` field).
 
-Deno.test("CourseScheduling_actions: Course Management", async (t) => {
-  const course1: Omit<Course, "_id"> = {
-    name: "Introduction to TypeScript",
-    code: "CS101",
-    credits: 3,
-    description: "A foundational course on TypeScript.",
-  };
-  const course2: Omit<Course, "_id"> = {
-    name: "Advanced Deno",
-    code: "CS404",
-    credits: 4,
-    description: "Deep dive into the Deno runtime.",
-  };
+## Action: editSection - returns null for non-existent section
 
-  await t.step("createCourse should add a new course to the database", async () => {
-    const mockDb = createMockDb();
-    const actions = new CourseScheduling_actions(mockDb as any);
+This test ensures that attempting to edit a section that does not exist gracefully returns `null`.
 
-    const newCourseId = await actions.createCourse(course1);
-    assertExists(newCourseId);
+*   **Given**:
+    *   A fresh in-memory database and an instance of `CourseScheduling_actions`.
+    *   No sections have been created in the database.
+*   **Action**:
+    1.  Attempt to edit a section with a non-existent ID: `actions.editSection("NONEXISTENT_SEC_ID", { capacity: 100 })`.
+*   **Result**:
+    1.  The update attempt returns `null`, indicating no section was found to update.
 
-    const dbState = mockDb._internal.collections.courses;
-    assertEquals(dbState.length, 1);
-    assertEquals(dbState[0].name, course1.name);
-    assertEquals(dbState[0].code, course1.code);
-  });
+## Action: getSection - returns null for non-existent section
 
-  await t.step("getCourse should retrieve a course by its ID", async () => {
-    const mockDb = createMockDb();
-    const actions = new CourseScheduling_actions(mockDb as any);
-    const { insertedId } = await mockDb.collection("courses").insertOne(course1);
-    const courseId = insertedId.toString();
+This test confirms that retrieving a non-existent section returns `null`.
 
-    const fetchedCourse = await actions.getCourse(courseId);
-    assertExists(fetchedCourse);
-    assertEquals(fetchedCourse.name, course1.name);
-    assertEquals(fetchedCourse._id.toString(), courseId);
-  });
+*   **Given**:
+    *   A fresh in-memory database and an instance of `CourseScheduling_actions`.
+    *   No sections have been created in the database.
+*   **Action**:
+    1.  Attempt to retrieve a section with a non-existent ID: `actions.getSection("NONEXISTENT_SEC_ID")`.
+*   **Result**:
+    1.  The retrieval attempt returns `null`.
 
-  await t.step("getCourse should return null for a non-existent course", async () => {
-    const mockDb = createMockDb();
-    const actions = new CourseScheduling_actions(mockDb as any);
-    const result = await actions.getCourse(new ObjectId().toString());
-    assertEquals(result, null);
-  });
+## Action: getAllSections - retrieves all sections, including empty state
 
-  await t.step("updateCourse should modify an existing course", async () => {
-    const mockDb = createMockDb();
-    const actions = new CourseScheduling_actions(mockDb as any);
-    const { insertedId } = await mockDb.collection("courses").insertOne(course1);
-    const courseId = insertedId.toString();
+This test ensures the `getAllSections` action works correctly for both empty and populated states.
 
-    const updates = { credits: 4, description: "Updated description." };
-    const result = await actions.updateCourse(courseId, updates);
+*   **Given**:
+    *   A fresh in-memory database and an instance of `CourseScheduling_actions`.
+    *   `sampleCourse1` is created to provide a valid `courseId` for sections.
+*   **Action**:
+    1.  Retrieve all sections initially (empty state): `actions.getAllSections()`.
+    2.  Create `section1` and `section2` for `sampleCourse1`.
+    3.  Retrieve all sections again (populated state): `actions.getAllSections()`.
+*   **Result**:
+    1.  Initially, `sections.length` is `0`.
+    2.  After creating two sections, `sections.length` is `2`.
+    3.  The retrieved sections include both `section1` and `section2`.
 
-    assertEquals(result.modifiedCount, 1);
-    const updatedCourse = await mockDb.collection("courses").findOne({ _id: insertedId });
-    assertEquals(updatedCourse?.credits, 4);
-    assertEquals(updatedCourse?.description, "Updated description.");
-  });
+## Action: createSchedule - creates an empty schedule for a user
 
-  await t.step("deleteCourse should remove a course from the database", async () => {
-    const mockDb = createMockDb();
-    const actions = new CourseScheduling_actions(mockDb as any);
-    const { insertedId } = await mockDb.collection("courses").insertOne(course1);
+This test verifies that a new schedule can be successfully created for a user.
 
-    const result = await actions.deleteCourse(insertedId.toString());
-    assertEquals(result.deletedCount, 1);
-    assertEquals(mockDb._internal.collections.courses.length, 0);
-  });
+*   **Given**:
+    *   A fresh in-memory database and an instance of `CourseScheduling_actions`.
+    *   User `user:alice`.
+*   **Action**:
+    1.  Create a schedule for `user:alice`: `actions.createSchedule("user:alice", "My New Schedule")`.
+    2.  Retrieve the newly created schedule from the database using its ID.
+*   **Result**:
+    1.  A `schedule` is created with a unique ID, `owner` "user:alice", `name` "My New Schedule", and an empty `sectionIds` array.
+    2.  The `retrievedSchedule` matches the properties of the created `schedule` (excluding the `_id` field).
 
-  await t.step("listCourses should return all courses", async () => {
-    const mockDb = createMockDb();
-    const actions = new CourseScheduling_actions(mockDb as any);
-    await mockDb.collection("courses").insertOne(course1);
-    await mockDb.collection("courses").insertOne(course2);
+## Action: deleteSchedule - deletes a schedule by owner
 
-    const allCourses = await actions.listCourses();
-    assertEquals(allCourses.length, 2);
-    assertEquals(allCourses.some((c) => c.code === "CS101"), true);
-    assertEquals(allCourses.some((c) => c.code === "CS404"), true);
-  });
-});
+This test ensures that a user can successfully delete their own schedule.
 
-Deno.test("CourseScheduling_actions: Section Management", async (t) => {
-  const sampleCourseId = new ObjectId().toString();
-  const section1: Omit<Section, "_id"> = {
-    courseId: sampleCourseId,
-    instructor: "Dr. Ada Lovelace",
-    capacity: 30,
-    timeSlot: "MWF 10:00-10:50",
-  };
+*   **Given**:
+    *   A fresh in-memory database and an instance of `CourseScheduling_actions`.
+    *   A `schedule` is created for `user:alice`.
+*   **Action**:
+    1.  Delete the `schedule` by `user:alice`: `actions.deleteSchedule("user:alice", schedule.id)`.
+    2.  Attempt to find the deleted schedule in the database.
+*   **Result**:
+    1.  The schedule is successfully deleted.
+    2.  The attempt to find the schedule returns `null`.
 
-  await t.step("createSection should add a new section", async () => {
-    const mockDb = createMockDb();
-    const actions = new CourseScheduling_actions(mockDb as any);
+## Action: deleteSchedule - throws error if schedule not found
 
-    const newSectionId = await actions.createSection(section1);
-    assertExists(newSectionId);
-    const dbState = mockDb._internal.collections.sections;
-    assertEquals(dbState.length, 1);
-    assertEquals(dbState[0].instructor, section1.instructor);
-  });
+This test confirms that attempting to delete a non-existent schedule results in an error.
 
-  await t.step("getSection should retrieve a section by ID", async () => {
-    const mockDb = createMockDb();
-    const actions = new CourseScheduling_actions(mockDb as any);
-    const { insertedId } = await mockDb.collection("sections").insertOne(section1);
-    const sectionId = insertedId.toString();
+*   **Given**:
+    *   A fresh in-memory database and an instance of `CourseScheduling_actions`.
+    *   No schedules have been created in the database.
+*   **Action**:
+    1.  Attempt to delete a schedule with a non-existent ID: `actions.deleteSchedule("user:alice", "NONEXISTENT_SCHED")`.
+*   **Result**:
+    1.  The action rejects with an `Error` containing the message "Schedule not found".
 
-    const fetchedSection = await actions.getSection(sectionId);
-    assertExists(fetchedSection);
-    assertEquals(fetchedSection.instructor, section1.instructor);
-  });
+## Action: deleteSchedule - throws error if unauthorized user
 
-  await t.step("updateSection should modify an existing section", async () => {
-    const mockDb = createMockDb();
-    const actions = new CourseScheduling_actions(mockDb as any);
-    const { insertedId } = await mockDb.collection("sections").insertOne(section1);
-    const sectionId = insertedId.toString();
-    const updates = { capacity: 35 };
+This test verifies that only the owner of a schedule can delete it; unauthorized attempts result in an error.
 
-    const result = await actions.updateSection(sectionId, updates);
-    assertEquals(result.modifiedCount, 1);
-    const updatedSection = await mockDb.collection("sections").findOne({ _id: insertedId });
-    assertEquals(updatedSection?.capacity, 35);
-  });
+*   **Given**:
+    *   A fresh in-memory database and an instance of `CourseScheduling_actions`.
+    *   A `schedule` is created for `user:alice`.
+*   **Action**:
+    1.  User `user:bob` attempts to delete `user:alice`'s schedule: `actions.deleteSchedule("user:bob", schedule.id)`.
+    2.  Verify that `user:alice`'s schedule still exists.
+*   **Result**:
+    1.  The action rejects with an `Error` containing the message "Unauthorized".
+    2.  Alice's schedule remains in the database, untouched.
 
-  await t.step("deleteSection should remove a section", async () => {
-    const mockDb = createMockDb();
-    const actions = new CourseScheduling_actions(mockDb as any);
-    const { insertedId } = await mockDb.collection("sections").insertOne(section1);
+## Action: addSection - adds a section to a schedule successfully
 
-    const result = await actions.deleteSection(insertedId.toString());
-    assertEquals(result.deletedCount, 1);
-    assertEquals(mockDb._internal.collections.sections.length, 0);
-  });
-});
+This test confirms that a section can be successfully added to a user's schedule.
 
-Deno.test("CourseScheduling_actions: Schedule Management & Relations", async (t) => {
-  const scheduleData: Omit<Schedule, "_id"> = {
-    studentId: "student-123",
-    term: "Fall 2024",
-    sectionIds: [],
-  };
-  const sectionId1 = new ObjectId();
-  const sectionId2 = new ObjectId();
+*   **Given**:
+    *   A fresh in-memory database and an instance of `CourseScheduling_actions`.
+    *   `sampleCourse1` is created, a `section` is created, and a `schedule` is created for `user:alice`.
+*   **Action**:
+    1.  Alice adds the `section` to her `schedule`: `actions.addSection("user:alice", schedule.id, section.id)`.
+    2.  Retrieve the `schedule` from the database to verify the addition.
+*   **Result**:
+    1.  The `updatedSchedule` exists.
+    2.  Its `sectionIds` array correctly contains `[section.id]`.
 
-  await t.step("createSchedule should add a new schedule", async () => {
-    const mockDb = createMockDb();
-    const actions = new CourseScheduling_actions(mockDb as any);
-    const newScheduleId = await actions.createSchedule(scheduleData);
+## Action: addSection - does not add duplicate sections to a schedule
 
-    assertExists(newScheduleId);
-    const dbState = mockDb._internal.collections.schedules;
-    assertEquals(dbState.length, 1);
-    assertEquals(dbState[0].studentId, "student-123");
-  });
+This test ensures that adding the same section multiple times to a schedule does not create duplicates.
 
-  await t.step("assignSectionToSchedule should add a section ID to a schedule", async () => {
-    const mockDb = createMockDb();
-    const actions = new CourseScheduling_actions(mockDb as any);
-    const { insertedId: scheduleId } = await mockDb.collection("schedules").insertOne(scheduleData);
+*   **Given**:
+    *   A fresh in-memory database and an instance of `CourseScheduling_actions`.
+    *   `sampleCourse1` is created, a `section` is created, and a `schedule` is created for `user:alice`.
+*   **Action**:
+    1.  Alice adds the `section` to her `schedule` once: `actions.addSection("user:alice", schedule.id, section.id)`.
+    2.  Alice attempts to add the *same* `section` to her `schedule` again: `actions.addSection("user:alice", schedule.id, section.id)`.
+    3.  Retrieve the `schedule` from the database to verify its contents.
+*   **Result**:
+    1.  The `updatedSchedule` exists.
+    2.  Its `sectionIds` array has a `length` of `1`, and still contains only `[section.id]`, confirming no duplicate was added.
 
-    const result = await actions.assignSectionToSchedule(sectionId1.toString(), scheduleId.toString());
+## Action: addSection - throws error for non-existent schedule or unauthorized user
 
-    assertEquals(result.modifiedCount, 1);
-    const updatedSchedule = await mockDb.collection("schedules").findOne({ _id: scheduleId });
-    assertExists(updatedSchedule);
-    assertEquals(updatedSchedule.sectionIds.length, 1);
-    assertEquals(updatedSchedule.sectionIds[0].toString(), sectionId1.toString());
-  });
+This test verifies that `addSection` correctly throws an error when the target schedule does not exist or the user is unauthorized.
 
-  await t.step("removeSectionFromSchedule should remove a section ID from a schedule", async () => {
-    const mockDb = createMockDb();
-    const actions = new CourseScheduling_actions(mockDb as any);
-    const scheduleWithSections = { ...scheduleData, sectionIds: [sectionId1, sectionId2] };
-    const { insertedId: scheduleId } = await mockDb.collection("schedules").insertOne(scheduleWithSections);
+*   **Given**:
+    *   A fresh in-memory database and an instance of `CourseScheduling_actions`.
+    *   `sampleCourse1` is created, a `section` is created, and a `schedule` is created for `user:alice`.
+*   **Action**:
+    1.  Alice attempts to add a `section` to a non-existent schedule: `actions.addSection("user:alice", "NONEXISTENT_SCHED", section.id)`.
+    2.  Bob (`user:bob`) attempts to add a `section` to Alice's `schedule`: `actions.addSection("user:bob", schedule.id, section.id)`.
+*   **Result**:
+    1.  Both attempts reject with an `Error` containing the message "Schedule not found or unauthorized".
 
-    const result = await actions.removeSectionFromSchedule(sectionId1.toString(), scheduleId.toString());
+## Action: removeSection - removes a section from a schedule successfully
 
-    assertEquals(result.modifiedCount, 1);
-    const updatedSchedule = await mockDb.collection("schedules").findOne({ _id: scheduleId });
-    assertExists(updatedSchedule);
-    assertEquals(updatedSchedule.sectionIds.length, 1);
-    assertEquals(updatedSchedule.sectionIds[0].toString(), sectionId2.toString());
-  });
-});
+This test confirms that a section can be successfully removed from a user's schedule.
+
+*   **Given**:
+    *   A fresh in-memory database and an instance of `CourseScheduling_actions`.
+    *   `sampleCourse1` is created. `section1` and `section2` are created. A `schedule` for `user:alice` is created, and both `section1` and `section2` are added to it.
+*   **Action**:
+    1.  Alice removes `section1` from her `schedule`: `actions.removeSection("user:alice", schedule.id, section1.id)`.
+    2.  Retrieve the `schedule` from the database to verify the removal.
+*   **Result**:
+    1.  The `updatedSchedule` exists.
+    2.  Its `sectionIds` array has a `length` of `1`, and correctly contains `[section2.id]`. `section1` was removed.
+
+## Action: removeSection - handles removing non-existent section gracefully (no error, state unchanged)
+
+This test ensures that attempting to remove a section that was never in the schedule does not cause an error and leaves the schedule state unchanged.
+
+*   **Given**:
+    *   A fresh in-memory database and an instance of `CourseScheduling_actions`.
+    *   `sampleCourse1` is created, `section1` is created, and a `schedule` for `user:alice` is created with `section1` added.
+*   **Action**:
+    1.  Alice attempts to remove a non-existent section from her `schedule`: `actions.removeSection("user:alice", schedule.id, "NONEXISTENT_SEC_ID")`.
+    2.  Retrieve the `schedule` from the database to verify its contents.
+*   **Result**:
+    1.  The action completes without throwing an error.
+    2.  The `updatedSchedule` exists, its `sectionIds` array has a `length` of `1`, and still contains `[section1.id]`. The schedule state is unchanged.
+
+## Action: removeSection - handles non-existent schedule or unauthorized access gracefully (no error, state unchanged)
+
+This test confirms that attempts to remove a section from a non-existent schedule or by an unauthorized user do not result in errors and do not change existing state.
+
+*   **Given**:
+    *   A fresh in-memory database and an instance of `CourseScheduling_actions`.
+    *   `sampleCourse1` is created, `section1` is created, and a `schedule` for `user:alice` is created with `section1` added.
+*   **Action**:
+    1.  Alice attempts to remove `section1` from a non-existent schedule: `actions.removeSection("user:alice", "NONEXISTENT_SCHED", section1.id)`.
+    2.  Bob (`user:bob`) attempts to remove `section1` from Alice's `schedule`: `actions.removeSection("user:bob", schedule.id, section1.id)`.
+    3.  Retrieve Alice's `schedule` from the database to verify its contents after these attempts.
+*   **Result**:
+    1.  Both actions complete without throwing an error.
+    2.  The `updatedSchedule` exists, its `sectionIds` array has a `length` of `1`, and still contains `[section1.id]`. The schedule state is unchanged.
+
+## Action: duplicateSchedule - duplicates a schedule successfully
+
+This test ensures that a user can successfully duplicate their own schedule, resulting in a new, independent schedule with the same contents.
+
+*   **Given**:
+    *   A fresh in-memory database and an instance of `CourseScheduling_actions`.
+    *   `sampleCourse1` is created, `section1` is created, and an `originalSchedule` for `user:alice` is created with `section1` added to it.
+*   **Action**:
+    1.  Alice duplicates her `originalSchedule` as "Duplicated Schedule": `actions.duplicateSchedule("user:alice", originalSchedule.id, "Duplicated Schedule")`.
+    2.  Retrieve both the original and duplicated schedules from the database.
+*   **Result**:
+    1.  A `duplicatedSchedule` is successfully created and returned.
+    2.  The `duplicatedSchedule.id` is different from `originalSchedule.id`.
+    3.  The `duplicatedSchedule.name` is "Duplicated Schedule" and `owner` is "user:alice".
+    4.  The `duplicatedSchedule.sectionIds` (`[section1.id]`) matches the sections in the `originalSchedule`.
+    5.  Both schedules exist independently in the database.
+
+## Action: duplicateSchedule - throws error if source schedule not found
+
+This test confirms that attempting to duplicate a non-existent schedule results in an error.
+
+*   **Given**:
+    *   A fresh in-memory database and an instance of `CourseScheduling_actions`.
+    *   No schedules have been created in the database.
+*   **Action**:
+    1.  Alice attempts to duplicate a schedule with a non-existent ID: `actions.duplicateSchedule("user:alice", "NONEXISTENT_SOURCE", "New Name")`.
+*   **Result**:
+    1.  The action rejects with an `Error` containing the message "Source schedule not found".
+
+## Action: duplicateSchedule - throws error if unauthorized user
+
+This test verifies that only the owner of a schedule can duplicate it; unauthorized attempts result in an error and no new schedule being created.
+
+*   **Given**:
+    *   A fresh in-memory database and an instance of `CourseScheduling_actions`.
+    *   An `originalSchedule` is created for `user:alice`.
+*   **Action**:
+    1.  Bob (`user:bob`) attempts to duplicate Alice's `originalSchedule`: `actions.duplicateSchedule("user:bob", originalSchedule.id, "Bob's Copy")`.
+    2.  Retrieve all schedules to ensure no new schedule was created for Bob.
+*   **Result**:
+    1.  The action rejects with an `Error` containing the message "Unauthorized".
+    2.  Only `originalSchedule` remains in the database, with no new schedule created for Bob.
+
+## Action: getAllSchedules - retrieves all schedules, including empty state
+
+This test ensures the `getAllSchedules` action works correctly for both empty and populated states, including schedules owned by different users.
+
+*   **Given**:
+    *   A fresh in-memory database and an instance of `CourseScheduling_actions`.
+*   **Action**:
+    1.  Retrieve all schedules initially (empty state): `actions.getAllSchedules()`.
+    2.  Alice creates a schedule: `actions.createSchedule("user:alice", "Alice's Schedule")`.
+    3.  Bob creates a schedule: `actions.createSchedule("user:bob", "Bob's Schedule")`.
+    4.  Retrieve all schedules again (populated state): `actions.getAllSchedules()`.
+*   **Result**:
+    1.  Initially, `schedules.length` is `0`.
+    2.  After creating two schedules, `schedules.length` is `2`.
+    3.  The retrieved schedules include both `schedule1` (Alice's) and `schedule2` (Bob's).
+
+```text
+ok | 23 passed | 0 failed (22s)
 ```
