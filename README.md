@@ -1,3 +1,7 @@
+# CourseScheduling Concept
+1. [Testing Output](design/concepts/CourseScheduling/test_output.md)
+2. [Design](design/concepts/CourseScheduling/design_changes.md)
+
 # 6.104 Assignment 4: Implementing Concepts
 
 In this assignment, you'll begin creating your backend by implementing your concepts in TypeScript. You'll learn to use Context, a simple CLI tool and a new way to both collaborate with LLMs and drive your implementation through design.
