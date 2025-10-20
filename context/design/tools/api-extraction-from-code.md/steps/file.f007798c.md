@@ -1,12 +1,13 @@
+---
+timestamp: 'Sat Oct 11 2025 22:34:05 GMT-0400 (Eastern Daylight Time)'
+parent: '[[../20251011_223405.71e58731.md]]'
+content_id: f007798cee8dbad948a72301632eac639c7079e1d9b6a228f87cdefb15cfe116
+---
+
+# file: deno.json
+
+```json
 {
-<<<<<<< HEAD
-  "imports": {
-    "@concepts/": "./src/concepts/",
-    "@utils/": "./src/utils/",
-    "nodeModulesDir": "./node_modules"
-  }
-}
-=======
     "imports": {
         "@concepts/": "./src/concepts/",
         "@utils/": "./src/utils/"
@@ -15,4 +16,4 @@
         "concepts": "deno run --allow-net --allow-read --allow-sys --allow-env src/concept_server.ts --port 8000 --baseUrl /api"
     }
 }
->>>>>>> 308ead3abcd5058f835c4cfbb03371e03384ceec
+```
