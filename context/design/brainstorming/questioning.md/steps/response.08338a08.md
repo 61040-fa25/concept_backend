@@ -1,18 +1,9 @@
-# questioning
-<!-- [@Example LikertSurveyConcept concept](../../src/initialCode/concepts/LikertSurvey/LikertSurveyConcept.ts)
-[@Example LikertSurveyConcept test](../../src/initialCode/concepts/LikertSurvey/LikertSurveyConcept.test.ts) -->
+---
+timestamp: 'Sun Oct 19 2025 23:28:39 GMT-0400 (Eastern Daylight Time)'
+parent: '[[..\20251019_232839.45870d13.md]]'
+content_id: 08338a086dfccc1884d7fd1a2ac4265fe523529d9c5c0bd7d17c40a54be4096c
+---
 
-<!-- [@User concept to implement](../concepts/MirrorMotionConcepts/User/UserSpecs.md) -->
-
-[@PoseBreakdown concept spec](../concepts/MirrorMotionConcepts/PoseBreakdown/PoseBreakdownSpecs.md)
-
-[@Postbreakdown js](../../src/frontend/poseBreakdownTest.js)
-[@Postbreakdown test ui](../../src/frontend/postBreakdownTestUI.html)
-
-[@Concept example](../../src/mirrorMotionConcepts/UserConcept.ts)
-
-
-# prompt: given the concept example, turn post breakdonw js into a concept like .ts file following the posebreakdown spec, update the ui so it still works with the ts tho
 # response:
 
 Here's the PoseBreakdown concept implemented as a TypeScript file and the updated frontend UI to interact with it.
@@ -412,161 +403,161 @@ updateExtractedPosesUI();
 
 **To make this work in your browser:**
 
-1.  **File Structure:**
-    ```
-    .
-    ├── public/
-    │   ├── index.html
-    │   └── models/
-    │       └── pose_landmarker_lite.task
-    ├── src/
-    │   ├── frontend/
-    │   │   └── poseBreakdownUI.js
-    │   └── mirrorMotionConcepts/
-    │       ├── PoseBreakdownConcept.ts
-    │       └── UserConcept.ts
-    │       └── User/
-    │           └── UserSpecs.md
-    └── @utils/ (or wherever your ID/freshID are defined)
-        ├── database.ts
-        └── types.ts
-    ```
-    (Ensure `pose_landmarker_lite.task` is downloaded into your `public/models` directory or adjust the `modelAssetPath` accordingly).
+1. **File Structure:**
+   ```
+   .
+   ├── public/
+   │   ├── index.html
+   │   └── models/
+   │       └── pose_landmarker_lite.task
+   ├── src/
+   │   ├── frontend/
+   │   │   └── poseBreakdownUI.js
+   │   └── mirrorMotionConcepts/
+   │       ├── PoseBreakdownConcept.ts
+   │       └── UserConcept.ts
+   │       └── User/
+   │           └── UserSpecs.md
+   └── @utils/ (or wherever your ID/freshID are defined)
+       ├── database.ts
+       └── types.ts
+   ```
+   (Ensure `pose_landmarker_lite.task` is downloaded into your `public/models` directory or adjust the `modelAssetPath` accordingly).
 
-2.  **HTML Setup:** Create an `index.html` (or similar) in your `public` folder that includes the necessary `div` elements and links to the `poseBreakdownUI.js` script:
+2. **HTML Setup:** Create an `index.html` (or similar) in your `public` folder that includes the necessary `div` elements and links to the `poseBreakdownUI.js` script:
 
-    ```html
-    <!DOCTYPE html>
-    <html lang="en">
-      <head>
-        <meta charset="UTF-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>PoseBreakdown Concept Demo</title>
-        <style>
-          body {
-            font-family: Arial, sans-serif;
-            margin: 20px;
-            background-color: #f4f4f4;
-            color: #333;
-          }
-          h1,
-          h2,
-          h3 {
-            color: #007bff;
-          }
-          #demos {
-            display: flex;
-            gap: 20px;
-            flex-wrap: wrap;
-            margin-bottom: 20px;
-          }
-          #demos.invisible {
-            display: none;
-          }
-          .detectOnClick {
-            position: relative;
-            border: 1px solid #ddd;
-            padding: 10px;
-            border-radius: 8px;
-            cursor: pointer;
-            text-align: center;
-            background-color: #fff;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-          }
-          .detectOnClick img {
-            max-width: 200px;
-            height: auto;
-            display: block;
-            margin: 0 auto 10px;
-            border-radius: 4px;
-          }
-          .detectOnClick canvas {
-            position: absolute;
-            left: 0;
-            top: 0;
-            pointer-events: none; /* Make canvas non-interactive */
-            /* Ensure canvas covers the image correctly */
-            max-width: 100%;
-            height: 100%;
-          }
-          #extractedPosesList {
-            margin-top: 20px;
-            border-top: 1px solid #eee;
-            padding-top: 10px;
-          }
-          .extracted-pose-item {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            margin-bottom: 5px;
-            padding: 5px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            background-color: #f9f9f9;
-          }
-          .extracted-pose-item button {
-            padding: 5px 10px;
-            cursor: pointer;
-            border: 1px solid #007bff;
-            background-color: #007bff;
-            color: white;
-            border-radius: 4px;
-            transition: background-color 0.2s;
-          }
-          .extracted-pose-item button:hover {
-            background-color: #0056b3;
-          }
-          #testResults {
-            white-space: pre-wrap;
-            background-color: #333;
-            color: #0f0;
-            padding: 15px;
-            border-radius: 8px;
-            font-family: monospace;
-            max-height: 400px;
-            overflow-y: auto;
-            margin-top: 20px;
-          }
-        </style>
-      </head>
-      <body>
-        <h1>PoseBreakdown Concept Demo</h1>
+   ```html
+   <!DOCTYPE html>
+   <html lang="en">
+     <head>
+       <meta charset="UTF-8" />
+       <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+       <title>PoseBreakdown Concept Demo</title>
+       <style>
+         body {
+           font-family: Arial, sans-serif;
+           margin: 20px;
+           background-color: #f4f4f4;
+           color: #333;
+         }
+         h1,
+         h2,
+         h3 {
+           color: #007bff;
+         }
+         #demos {
+           display: flex;
+           gap: 20px;
+           flex-wrap: wrap;
+           margin-bottom: 20px;
+         }
+         #demos.invisible {
+           display: none;
+         }
+         .detectOnClick {
+           position: relative;
+           border: 1px solid #ddd;
+           padding: 10px;
+           border-radius: 8px;
+           cursor: pointer;
+           text-align: center;
+           background-color: #fff;
+           box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+         }
+         .detectOnClick img {
+           max-width: 200px;
+           height: auto;
+           display: block;
+           margin: 0 auto 10px;
+           border-radius: 4px;
+         }
+         .detectOnClick canvas {
+           position: absolute;
+           left: 0;
+           top: 0;
+           pointer-events: none; /* Make canvas non-interactive */
+           /* Ensure canvas covers the image correctly */
+           max-width: 100%;
+           height: 100%;
+         }
+         #extractedPosesList {
+           margin-top: 20px;
+           border-top: 1px solid #eee;
+           padding-top: 10px;
+         }
+         .extracted-pose-item {
+           display: flex;
+           align-items: center;
+           gap: 10px;
+           margin-bottom: 5px;
+           padding: 5px;
+           border: 1px solid #ccc;
+           border-radius: 4px;
+           background-color: #f9f9f9;
+         }
+         .extracted-pose-item button {
+           padding: 5px 10px;
+           cursor: pointer;
+           border: 1px solid #007bff;
+           background-color: #007bff;
+           color: white;
+           border-radius: 4px;
+           transition: background-color 0.2s;
+         }
+         .extracted-pose-item button:hover {
+           background-color: #0056b3;
+         }
+         #testResults {
+           white-space: pre-wrap;
+           background-color: #333;
+           color: #0f0;
+           padding: 15px;
+           border-radius: 8px;
+           font-family: monospace;
+           max-height: 400px;
+           overflow-y: auto;
+           margin-top: 20px;
+         }
+       </style>
+     </head>
+     <body>
+       <h1>PoseBreakdown Concept Demo</h1>
 
-        <section id="demos" class="demos invisible">
-          <h2>Click an image to extract poses</h2>
-          <p>Detected poses will be stored and listed below. Click "Get Pose Data" to retrieve.</p>
+       <section id="demos" class="demos invisible">
+         <h2>Click an image to extract poses</h2>
+         <p>Detected poses will be stored and listed below. Click "Get Pose Data" to retrieve.</p>
 
-          <div class="detectOnClick">
-            <img src="https://assets.codepen.io/160120/pose.jpg" alt="Person posing" />
-            <p>Image 1</p>
-          </div>
-          <div class="detectOnClick">
-            <img src="https://assets.codepen.io/160120/pose2.jpg" alt="Another person posing" />
-            <p>Image 2</p>
-          </div>
-          <!-- Add more images if desired -->
-        </section>
+         <div class="detectOnClick">
+           <img src="https://assets.codepen.io/160120/pose.jpg" alt="Person posing" />
+           <p>Image 1</p>
+         </div>
+         <div class="detectOnClick">
+           <img src="https://assets.codepen.io/160120/pose2.jpg" alt="Another person posing" />
+           <p>Image 2</p>
+         </div>
+         <!-- Add more images if desired -->
+       </section>
 
-        <h3>Extracted Poses (Concept Store)</h3>
-        <div id="extractedPosesList">
-          <!-- Extracted poses will be listed here -->
-        </div>
+       <h3>Extracted Poses (Concept Store)</h3>
+       <div id="extractedPosesList">
+         <!-- Extracted poses will be listed here -->
+       </div>
 
-        <h3>Test Results Log</h3>
-        <pre id="testResults"></pre>
+       <h3>Test Results Log</h3>
+       <pre id="testResults"></pre>
 
-        <!-- Use type="module" for ES module imports -->
-        <!-- For local development, you might need a simple HTTP server (e.g., `npx http-server`)
-             and potentially a TypeScript transpiler/bundler (like esbuild, Vite, Parcel)
-             if your browser does not natively support direct .ts imports with Node-style module resolution. -->
-        <script type="module" src="./src/frontend/poseBreakdownUI.js"></script>
-      </body>
-    </html>
-    ```
+       <!-- Use type="module" for ES module imports -->
+       <!-- For local development, you might need a simple HTTP server (e.g., `npx http-server`)
+            and potentially a TypeScript transpiler/bundler (like esbuild, Vite, Parcel)
+            if your browser does not natively support direct .ts imports with Node-style module resolution. -->
+       <script type="module" src="./src/frontend/poseBreakdownUI.js"></script>
+     </body>
+   </html>
+   ```
 
-3.  **Running the Demo:**
-    *   Since `PoseBreakdownConcept.ts` is a TypeScript file and `poseBreakdownUI.js` imports it, you'll need a way to serve and potentially transpile TypeScript in the browser.
-    *   **Simplest for local testing:** If you have `http-server` installed (`npm install -g http-server`), navigate to your project root in the terminal and run `http-server .`. Then open `http://localhost:8080/public/index.html` in your browser. Modern browsers often handle `import ... from '...'` for `.ts` files when served locally, though this is not always guaranteed without explicit server configuration or a build step.
-    *   **Recommended for robust development:** Use a build tool like **Vite** or **Parcel**. They handle TypeScript transpilation and module resolution automatically.
+3. **Running the Demo:**
+   * Since `PoseBreakdownConcept.ts` is a TypeScript file and `poseBreakdownUI.js` imports it, you'll need a way to serve and potentially transpile TypeScript in the browser.
+   * **Simplest for local testing:** If you have `http-server` installed (`npm install -g http-server`), navigate to your project root in the terminal and run `http-server .`. Then open `http://localhost:8080/public/index.html` in your browser. Modern browsers often handle `import ... from '...'` for `.ts` files when served locally, though this is not always guaranteed without explicit server configuration or a build step.
+   * **Recommended for robust development:** Use a build tool like **Vite** or **Parcel**. They handle TypeScript transpilation and module resolution automatically.
 
 This setup correctly separates the pose detection logic (MediaPipe in `poseBreakdownUI.js`) from the data structuring and storage logic (`PoseBreakdownConcept.ts`), adhering to the "Concept" pattern.

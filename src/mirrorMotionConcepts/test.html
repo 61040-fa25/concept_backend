@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>PoseLandmarker Test UI</title>
+    <script type="module" src="./PoseBreakdownTest.js"></script>
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        background: #fafafa;
+        margin: 2rem;
+        color: #222;
+        line-height: 1.6;
+      }
+      h1,
+      h2 {
+        font-size: 1.5rem;
+        margin-bottom: 1rem;
+        color: #333;
+      }
+      p {
+        margin-bottom: 1rem;
+      }
+      #testResults {
+        background: #1e1e1e;
+        color: #d4d4d4;
+        padding: 1rem;
+        margin-top: 1rem;
+        border-radius: 8px;
+        white-space: pre-wrap; /* Preserves whitespace and line breaks */
+        max-height: 400px;
+        overflow-y: auto; /* Scroll for long output */
+        font-family: monospace;
+        font-size: 0.85em;
+      }
+      .demos-container {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1.5rem;
+        margin-bottom: 2rem;
+      }
+      .testImage {
+        position: relative;
+        display: inline-block; /* Aligns items in a row */
+        margin: 0; /* Remove default margin from old structure */
+        cursor: pointer;
+        border-radius: 10px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        overflow: hidden; /* Ensures child elements respect border-radius */
+      }
+      .testImage img {
+        display: block; /* Remove extra space below image */
+        border-radius: 10px; /* Rounded corners for the image */
+        transition: transform 0.2s ease-in-out;
+        width: 320px;
+        height: auto;
+      }
+      .testImage img:hover {
+        transform: scale(1.03); /* Slight zoom on hover */
+      }
+      canvas {
+        position: absolute;
+        left: 0;
+        top: 0;
+        pointer-events: none; /* Allows clicks to pass through to the image */
+      }
+
+      /* Styles for the new extracted poses list */
+      #extractedPosesSection {
+        margin-top: 2rem;
+        background: #fdfdfd;
+        padding: 1.5rem;
+        border-radius: 10px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+      }
+      #extractedPosesList {
+        margin-top: 1rem;
+        border: 1px solid #eee;
+        border-radius: 5px;
+        padding: 1rem;
+        min-height: 80px; /* Ensure some visibility even if empty */
+        background: #ffffff;
+      }
+      .extracted-pose-item {
+        background: #e8f4fd; /* Light blue background for each item */
+        border: 1px solid #b3e0ff;
+        padding: 0.75rem 1rem;
+        margin-bottom: 0.5rem;
+        border-radius: 5px;
+        display: flex;
+        align-items: center;
+        gap: 15px; /* Space between ID and button */
+        font-size: 0.95em;
+        color: #333;
+      }
+      .extracted-pose-item:last-child {
+        margin-bottom: 0; /* No margin after the last item */
+      }
+      .extracted-pose-item button {
+        padding: 8px 15px;
+        background-color: #007bff; /* Primary blue button */
+        color: white;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        font-size: 0.9em;
+        transition: background-color 0.2s ease-in-out;
+      }
+      .extracted-pose-item button:hover {
+        background-color: #0056b3; /* Darker blue on hover */
+      }
+
+      /* Utility for initial hiding */
+      .invisible {
+        display: none;
+      }
+    </style>
+  </head>
+
+  <body>
+    <h1>Pose Breakdown Test Interface</h1>
+    <p>
+      This UI demonstrates the `extractPoses` and `getPoseData` actions from the
+      `PoseBreakdown` concept.
+    </p>
+
+    <section id="demos" class="demos-container invisible">
+      <div class="testImage detectOnClick">
+        <img
+          src="../../input/testPoseImgs/poseTest1.png"
+          crossorigin="anonymous"
+          title="Click to simulate `extractPoses` for this image"
+        />
+        <p>Test case: image with multiple poses</p>
+      </div>
+      <div class="testImage detectOnClick">
+        <img
+          src="../../input/testPoseImgs/poseTest2.png"
+          crossorigin="anonymous"
+          title="Click to simulate `extractPoses` for this image"
+        />
+        <p>Test case: image with sitting pose</p>
+      </div>
+      <div class="testImage detectOnClick">
+        <img
+          src="../../input/testPoseImgs/poseTest3.png"
+          crossorigin="anonymous"
+          title="Click to simulate `extractPoses` for this image"
+        />
+        <p>Test case: image with no poses</p>
+      </div>
+    </section>
+
+    <section id="extractedPosesSection">
+      <h2>Extracted Poses (Simulated Storage)</h2>
+      <p>
+        Click an image above to `extractPoses`. Then, click a "Get Pose Data"
+        button below to `getPoseData` for that specific pose.
+      </p>
+      <div id="extractedPosesList">
+        <p>No poses extracted yet. Click an image above to start!</p>
+      </div>
+    </section>
+
+    <h2>Test Output</h2>
+    <pre id="testResults">(Click an image above to start test)</pre>
+  </body>
+</html>

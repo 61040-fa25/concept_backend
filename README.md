@@ -28,7 +28,7 @@ Due to an error discussed [here](https://piazza.com/class/melw05erqym3qt/post/17
 
 **Instructions:**
 
-1. Open `poseBreakdownTestUI.html` in a browser.
+1. Open `poseBreakdownTest.html` in a browser.
     
 2. Follow the on-page instructions:
     

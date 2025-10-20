@@ -2,7 +2,6 @@ import { Collection, Db } from "npm:mongodb";
 import { Empty, ID } from "@utils/types.ts"; // Assuming ID is `string` and Empty is `{}`
 import { freshID } from "@utils/database.ts"; // Assuming freshID() generates a unique string ID
 import { Storage } from "@google-cloud/storage"; // Import Google Cloud Storage client
-import { readFile } from "node:fs/promises"; // For reading local files in Deno/Node.js
 import type { User } from "./UserConcept.ts";
 import type { Feedback } from "./FeedbackConcept.ts";
 
@@ -10,7 +9,7 @@ import type { Feedback } from "./FeedbackConcept.ts";
 const PREFIX = "ManageVideo" + ".";
 
 // Internal entity types, represented as IDs
-type Video = ID;
+export type Video = ID;
 
 /**
  * State: A set of Videos with an owner, type, a Google Cloud Storage URL,

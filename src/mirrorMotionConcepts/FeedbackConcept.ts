@@ -1,13 +1,10 @@
 import { Collection, Db } from "npm:mongodb";
-import { Empty, ID } from "@utils/types.ts";
+import { ID } from "@utils/types.ts";
 import { freshID } from "@utils/database.ts";
+import type { Video } from "./ManageVideoConcept.ts";
 
 // Collection prefix to ensure namespace separation
 const PREFIX = "Feedback" + ".";
-
-// Generic types for the concept's external dependencies
-// Assuming Video is an ID type from another concept (e.g., ManageVideoConcept)
-type Video = ID;
 
 // Placeholder for PoseData structure.
 // This type represents the output of a pose estimation process,

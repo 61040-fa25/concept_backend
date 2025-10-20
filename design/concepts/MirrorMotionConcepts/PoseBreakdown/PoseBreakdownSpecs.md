@@ -9,11 +9,12 @@ A set of **PoseData** with:
 
 A set of **PartData** with:  
 - a part Enum (Arm, Leg, etc.)  
-- a pointData Set of PointData  
+- a PointData
 
 A set of **PointData** with:  
-- a orderID Number  
-- a location Number  
+- a x Number  
+- a y Number  
+- a z Number  
 
 **Actions**  
 - `extractPoses(videoID: String): (poseIDs: Set of String)`  
