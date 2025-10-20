@@ -1,0 +1,17 @@
+---
+timestamp: 'Mon Oct 20 2025 12:59:13 GMT-0400 (Eastern Daylight Time)'
+parent: '[[..\20251020_125913.e6d35477.md]]'
+content_id: 61d27be0d2ee09ea260bfe8479ff3afee8777863cc3bb0ace26ac9b5b75ad57f
+---
+
+# file: deno.json
+
+```json
+{
+  "importMap": "./import_map.json",
+  "tasks": {
+    "test": "deno test"
+  }
+}
+
+```
