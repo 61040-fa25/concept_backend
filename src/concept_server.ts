@@ -24,6 +24,24 @@ async function main() {
   const [db] = await getDb();
   const app = new Hono();
 
+  // --- Handle preflight OPTIONS requests first ---
+  app.options("*", (c) => {
+    return c.text("", 204, {
+      "Access-Control-Allow-Origin": "http://localhost:8080",
+      "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type",
+    });
+  });
+
+  // --- Middleware for all other requests ---
+  app.use("*", async (c, next) => {
+    const res = await next(); // run downstream handlers
+    c.header("Access-Control-Allow-Origin", "http://localhost:8080");
+    c.header("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    c.header("Access-Control-Allow-Headers", "Content-Type");
+    return res;
+  });
+
   app.get("/", (c) => c.text("Concept Server is running."));
 
   // --- Dynamic Concept Loading and Routing ---
@@ -75,7 +93,27 @@ async function main() {
 
         app.post(route, async (c) => {
           try {
-            const body = await c.req.json().catch(() => ({})); // Handle empty body
+            // const body = await c.req.json().catch(() => ({})); // Handle empty body
+            // const result = await instance[methodName](body);
+            // return c.json(result);
+            let body: Record<string, any> = {};
+
+            const contentType = c.req.header("content-type") || "";
+
+            if (contentType.includes("application/json")) {
+              // Parse JSON requests
+              body = await c.req.json().catch(() => ({}));
+            } else if (contentType.includes("multipart/form-data")) {
+              // Parse FormData requests
+              const form = await c.req.formData();
+
+              body = {};
+              for (const [key, value] of form.entries()) {
+                console.log("FormData entry:", key, value);
+                body[key] = value;
+              }
+            }
+
             const result = await instance[methodName](body);
             return c.json(result);
           } catch (e) {

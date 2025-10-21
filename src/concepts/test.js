@@ -5,6 +5,10 @@ import {
   DrawingUtils,
 } from "https://cdn.skypack.dev/@mediapipe/tasks-vision@0.10.0";
 
+import PoseBreakdownConcept from "./PoseBreakdownConcept.js";
+
+// const poseBreakdownConcept = new PoseBreakdownConcept();
+
 const demosSection = document.getElementById("demos");
 const resultsBox = document.getElementById("testResults");
 const extractedPosesListDiv = document.getElementById("extractedPosesList"); // New element for listing extracted poses
@@ -111,6 +115,28 @@ async function createPoseLandmarker() {
 
 // Initialize the PoseLandmarker when the script loads
 await createPoseLandmarker();
+
+// --- Attach click handlers for video detection ---
+// const videoContainers = document.getElementsByClassName("videoDetectOnClick");
+// for (let i = 0; i < videoContainers.length; i++) {
+//   const vid = videoContainers[i].querySelector("video");
+//   vid.addEventListener("click", () => handleVidClick(vid));
+// }
+
+// // Handler for when an image is clicked, simulating 'extractPoses'
+// async function handleVidClick(image) {
+//   if (!poseLandmarker) {
+//     logResult(
+//       "ERROR",
+//       "PoseLandmarker not ready yet!",
+//       "Please wait for initialization to complete."
+//     );
+//     return;
+//   }
+//   logResult("INFO", `Simulating extractPoses for video`, image.src);
+//   poseBreakdownConcept.extractPoses(image); // Simulate concept extraction
+//   // runVidDetection(image); // Proceed with pose detection and storage simulation
+// }
 
 // --- Attach click handlers for image detection ---
 const imageContainers = document.getElementsByClassName("detectOnClick");
@@ -246,3 +272,11 @@ function getPoseDataAction(poseID) {
 
 // Initialize the extracted poses UI on load to show its initial empty state
 updateExtractedPosesUI();
+
+// <!-- <div class="testVideo videoDetectOnClick">
+//         <video
+//           src="../../input/testVideos/testVideo1.mp4"
+//           crossorigin="anonymous"
+//           title="video"
+//         ></video>
+//         <p>Test case: video</p> -->

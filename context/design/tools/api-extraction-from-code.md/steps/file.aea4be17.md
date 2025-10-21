@@ -1,3 +1,12 @@
+---
+timestamp: 'Tue Oct 21 2025 10:13:47 GMT-0400 (Eastern Daylight Time)'
+parent: '[[..\20251021_101347.1ec691c6.md]]'
+content_id: aea4be179042758ff454c57a31a1ad19fcf790283d9116226101dd6d2bc9c0eb
+---
+
+# file: src\concepts\PoseBreakdown\PoseBreakdownConcept.ts
+
+```typescript
 import { ID } from "@utils/types.ts"; // Assuming @utils/types.ts provides ID type.
 import { freshID } from "@utils/database.ts"; // Assuming @utils/database.ts provides freshID.
 import { FilesetResolver, PoseLandmarker } from "@mediapipe/tasks-vision";
@@ -79,6 +88,8 @@ export default class PoseBreakdownConcept {
         },
         runningMode: "VIDEO",
       });
+
+      console.log("PoseLandmarker initialized.");
     }
 
     const video: HTMLVideoElement = typeof videoSource === "string"
@@ -111,8 +122,8 @@ export default class PoseBreakdownConcept {
           if (result.landmarks && result.landmarks[0]) {
             const landmarks = result.landmarks[0];
             const partDataArray: PartData[] = landmarks.map((l, index) => ({
-              part: Object.values(PartEnum)[index] as PartEnum,
-              pointData: [{ x: l.x, y: l.y, z: l.z }],
+              part: Object.values(PartEnum)[index],
+              pointData: { x: l.x, y: l.y, z: l.z },
             }));
 
             const poseID = freshID() as ID;
@@ -125,6 +136,7 @@ export default class PoseBreakdownConcept {
         };
       });
     }
+    console.log(poseIDs.size + " poses extracted.");
 
     return poseIDs;
   }
@@ -147,4 +159,5 @@ export default class PoseBreakdownConcept {
     return this.poses.get(poseID);
   }
 }
-F;
+
+```

@@ -6,9 +6,9 @@ import {
 } from "jsr:@std/assert";
 import { testDb } from "@utils/database.ts";
 import { ID } from "@utils/types.ts";
-import ManageVideoConcept from "./ManageVideoConcept.ts";
-import type { User } from "./UserConcept.ts";
-import type { Feedback } from "./FeedbackConcept.ts";
+import ManageVideoConcept from "../manageVideo/ManageVideoConcept.ts";
+import type { User } from "../UserConcept.ts";
+import type { Feedback } from "../feedback/FeedbackConcept.ts";
 
 const BUCKET_NAME = Deno.env.get("BUCKET_NAME") || "";
 

@@ -6,7 +6,7 @@ import {
 } from "jsr:@std/assert";
 import { testDb } from "@utils/database.ts";
 import { ID } from "@utils/types.ts";
-import FeedbackConcept from "./FeedbackConcept.ts";
+import FeedbackConcept from "../feedback/FeedbackConcept.ts";
 
 // Dummy IDs for videos. In a real application, these would come from the ManageVideoConcept.
 const DUMMY_REFERENCE_VIDEO_ID = "refVideo123" as ID;
