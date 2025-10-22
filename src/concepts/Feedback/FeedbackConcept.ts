@@ -58,7 +58,16 @@ export default class FeedbackConcept {
       referencePoseData: PoseData;
       practicePoseData: PoseData;
     },
-  ): Promise<{ feedback: Feedback } | { error: string }> {
+  ): Promise<{ feedback: Feedback; feedbackText: string } | { error: string }> {
+    console.log("in FeedbackConcept.analyze:");
+    console.log("referenceVideo:", referenceVideo);
+    console.log("practiceVideo:", practiceVideo);
+    console.log("referencePoseData keys:", referencePoseData);
+    console.log("practicePoseData keys:", Object.keys(practicePoseData));
+
+    // referencePoseDataTest = JSON.parse(referencePoseData);
+    // practicePoseDataTest = JSON.parse(practicePoseData);
+
     // Basic validation for pose data presence (mocking an actual analysis requirement)
     if (
       !referencePoseData || Object.keys(referencePoseData).length === 0 ||
@@ -76,7 +85,10 @@ export default class FeedbackConcept {
         accuracyValue: 0, // Indicate no meaningful analysis
         createdAt: new Date(),
       });
-      return { feedback: feedbackId };
+      return {
+        feedback: feedbackId,
+        feedbackText: "No pose data available for analysis.",
+      };
     }
 
     // --- Simulate actual pose analysis logic here ---
@@ -104,6 +116,7 @@ export default class FeedbackConcept {
     }
     // --- End simulation ---
 
+    console.log("Generated feedback:", feedbackText);
     const feedbackId = freshID() as Feedback;
     await this.feedback.insertOne({
       _id: feedbackId,
@@ -113,7 +126,7 @@ export default class FeedbackConcept {
       accuracyValue,
       createdAt: new Date(),
     });
-    return { feedback: feedbackId };
+    return { feedback: feedbackId, feedbackText };
   }
 
   /**

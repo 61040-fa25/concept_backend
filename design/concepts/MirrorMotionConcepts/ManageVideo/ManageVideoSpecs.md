@@ -1,4 +1,4 @@
-## Concept: ManageVideo  
+## Concept: ManageVideo[User, Feedback, PoseData]  
 **Purpose**: allow dancers and choreographers to upload and manage practice/reference videos  
 **Principle**: after uploading a video, it can be retrieved for analysis, syncing, or feedback  
 
@@ -9,6 +9,7 @@ A set of **Videos** with:
 - a videoFile File  
 - a owner User  
 - a feedback Set of Feedback  
+- a poseData Set of PoseData
 
 **Actions**  
 - `upload(videoFile, videoType: String, owner: User): (videoID: String)`  
@@ -22,3 +23,7 @@ A set of **Videos** with:
 - `delete(videoID: String, caller: User)`  
   - Requires: video exists and the caller is the owner of the video
   - Effect: removes the video and its metadata  
+
+- `addPosesToVideo(videoID: String, poses: PoseData[])`  
+  - Requires: video and all PoseData in poses exists 
+  - Effect: add poses to the video

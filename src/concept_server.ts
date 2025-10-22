@@ -3,6 +3,9 @@ import { getDb } from "@utils/database.ts";
 import { walk } from "jsr:@std/fs";
 import { parseArgs } from "jsr:@std/cli/parse-args";
 import { toFileUrl } from "jsr:@std/path/to-file-url";
+import ManageVideoConcept from "@concepts/manageVideo/ManageVideoConcept.ts";
+import type { User } from "@concepts/User/UserConcept.ts";
+import type { Video } from "@concepts/manageVideo/ManageVideoConcept.ts";
 
 // Parse command-line arguments for port and base URL
 const flags = parseArgs(Deno.args, {
@@ -109,7 +112,7 @@ async function main() {
 
               body = {};
               for (const [key, value] of form.entries()) {
-                console.log("FormData entry:", key, value);
+                console.log("FormData entry:", key, typeof value);
                 body[key] = value;
               }
             }
@@ -130,6 +133,23 @@ async function main() {
       );
     }
   }
+
+  // === Video streaming route ===
+  const manageVideoInstance = new ManageVideoConcept(db);
+  console.log("Registering video streaming endpoint...");
+
+  app.get("/api/ManageVideo/:videoId", async (c) => {
+    const videoId = c.req.param("videoId") as Video;
+    const caller = "testOwner" as User; // Replace with real authenticated user later
+    console.log(`Streaming video with ID: ${videoId} for caller: ${caller}`);
+
+    const result = await manageVideoInstance.streamVideo({
+      video: videoId,
+      caller,
+      c,
+    });
+    return result;
+  });
 
   console.log(`\nServer listening on http://localhost:${PORT}`);
   Deno.serve({ port: PORT }, app.fetch);

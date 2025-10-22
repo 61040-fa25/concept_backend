@@ -4,6 +4,7 @@ import { freshID } from "@utils/database.ts"; // Assuming freshID() generates a 
 import { Storage } from "@google-cloud/storage"; // Import Google Cloud Storage client
 import type { User } from "../UserConcept.ts";
 import type { Feedback } from "../feedback/FeedbackConcept.ts";
+import type { PoseData } from "../PoseBreakdown/PoseBreakdownConcept.ts";
 
 // Collection prefix to ensure namespace separation
 const PREFIX = "ManageVideo" + ".";
@@ -22,6 +23,7 @@ interface VideoDoc {
   gcsUrl: string; // The public URL of the video in Google Cloud Storage
   gcsFileName: string; // The object name in GCS, needed for deletion
   feedback: Feedback[]; // Array of Feedback IDs, assuming Feedback is managed separately
+  poseData: PoseData[]; // Array of PoseData associated with this video
 }
 
 const PROJECT_ID = Deno.env.get("PROJECT_ID");
@@ -117,6 +119,7 @@ export default class ManageVideoConcept {
         gcsUrl,
         gcsFileName,
         feedback: [],
+        poseData: [],
       });
 
       return { video: videoId };
@@ -138,6 +141,84 @@ export default class ManageVideoConcept {
   }
 
   /**
+   * Action: Adds pose data and optional frame range to a video.
+   * @param video The video ID to update.
+   * @param poseData An array of PoseData to be added.
+   * @param caller The user attempting to update the video.
+   * @param startFrame (optional) The start frame of the pose data range.
+   * @param endFrame (optional) The end frame of the pose data range.
+   * @requires The video and all posesData in poseData must exist.
+   * @requires The caller must be the owner of the video.
+   * @effects Updates the video with pose data and optional frame range.
+   * @returns The updated video details or an error message.
+   */
+  async addPosesToVideo(
+    { video: videoId, poseData, caller, startFrame, endFrame }: {
+      video: Video;
+      poseData: PoseData[] | string;
+      caller: User;
+      startFrame?: number;
+      endFrame?: number;
+    },
+  ): Promise<
+    | {
+      videoType: "practice" | "reference";
+      gcsUrl: string;
+      poseData: PoseData[];
+      startFrame?: number;
+      endFrame?: number;
+    }
+    | { error: string }
+  > {
+    // Parse poseData if it's a JSON string
+    if (typeof poseData === "string") {
+      try {
+        poseData = JSON.parse(poseData);
+      } catch {
+        console.warn("Pose data could not be parsed; leaving as string.");
+      }
+    }
+
+    const videoDoc = await this.videos.findOne({ _id: videoId });
+
+    if (!videoDoc) {
+      return { error: `Video with ID ${videoId} not found.` };
+    }
+
+    // Ensure the caller is the owner
+    if (videoDoc.owner.toString() !== caller.toString()) {
+      return { error: "Caller is not the owner of this video." };
+    }
+
+    // Prepare update payload
+    const updatePayload: Record<string, any> = { poseData };
+
+    if (typeof startFrame === "number") updatePayload.startFrame = startFrame;
+    if (typeof endFrame === "number") updatePayload.endFrame = endFrame;
+
+    // Update the video document with new data
+    const updateResult = await this.videos.updateOne(
+      { _id: videoId },
+      { $set: updatePayload },
+    );
+
+    console.log("Updated poseData type:", typeof poseData);
+
+    if (updateResult.matchedCount === 0) {
+      return { error: "Failed to update pose data." };
+    }
+
+    // Return updated video info
+    return {
+      videoType: videoDoc.videoType,
+      gcsUrl: videoDoc.gcsUrl,
+      poseData: poseData as PoseData[],
+      startFrame,
+      endFrame,
+    };
+  }
+
+  /**
    * Action: Retrieves video metadata and its Google Cloud Storage URL.
    * @param video The ID of the video to retrieve.
    * @param caller The ID of the user attempting to retrieve the video.
@@ -153,6 +234,7 @@ export default class ManageVideoConcept {
       videoType: "practice" | "reference";
       gcsUrl: string;
       feedback: Feedback[];
+      poseData: PoseData[];
     }
     | { error: string }
   > {
@@ -173,7 +255,61 @@ export default class ManageVideoConcept {
       videoType: videoDoc.videoType,
       gcsUrl: videoDoc.gcsUrl,
       feedback: videoDoc.feedback,
+      poseData: videoDoc.poseData,
     };
+  }
+  /**
+   * Action: Streams the actual video file from Google Cloud Storage.
+   * @param video The ID of the video to stream.
+   * @param caller The ID of the user requesting the video.
+   * @param c The Hono context (to build the response)
+   * @effects Streams video data directly to the client.
+   */
+  async streamVideo(
+    { video, caller, c }: { video: Video; caller: User; c: any },
+  ): Promise<Response> {
+    // TODO: Assume streamVideo is only called after retrieve has verified ownership
+    // So no need to re-check here, unless we want extra safety
+    console.log("Streaming video:", video, "for caller:", caller);
+
+    const videoDoc = await this.videos.findOne({ _id: video });
+    if (!videoDoc) {
+      return c.json({ error: `Video with ID ${video} not found.` }, 404);
+    }
+
+    // Ensure ownership
+    if (videoDoc.owner.toString() !== caller.toString()) {
+      return c.json({ error: "Caller is not the owner of this video." }, 403);
+    }
+
+    try {
+      const bucket = this.storage.bucket(this.bucketName);
+      const file = bucket.file(videoDoc.gcsFileName);
+
+      // Check existence
+      const [exists] = await file.exists();
+      if (!exists) {
+        return c.json({ error: "Video file not found in storage." }, 404);
+      }
+
+      // Fetch metadata for headers
+      const [metadata] = await file.getMetadata();
+      console.log("Video metadata:", metadata);
+
+      // Create readable stream
+      const [fileStream] = await file.download();
+
+      // Return streaming response with headers
+      return new Response(fileStream, {
+        headers: {
+          "Content-Type": metadata.contentType || "video/mp4",
+          "Accept-Ranges": "bytes",
+        },
+      });
+    } catch (error) {
+      console.error("Error streaming video:", error);
+      return c.json({ error: "Failed to stream video." }, 500);
+    }
   }
 
   /**
