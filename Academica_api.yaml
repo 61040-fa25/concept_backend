@@ -1,0 +1,423 @@
+openapi: 3.0.0
+info:
+  title: Academica Course Scheduling API
+  version: 1.0.0
+  description: API specification for the Academica course scheduling system.
+servers:
+  - url: http://localhost:8000
+paths:
+  /api/CourseScheduling/createCourse:
+    post:
+      summary: Create a new course
+      description: Creates a new course with a specified title and department.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                id: { type: string }
+                title: { type: string }
+                department: { type: string }
+      responses:
+        "200":
+          description: Course created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  c:
+                    type: object
+                    properties:
+                      id: { type: string }
+                      title: { type: string }
+                      department: { type: string }
+        "400":
+          description: Error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string }
+
+  /api/CourseScheduling/createSection:
+    post:
+      summary: Create a new section
+      description: Creates a new section for an existing course.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                courseId: { type: string }
+                sectionNumber: { type: string }
+                instructor: { type: string }
+                capacity: { type: integer }
+                timeSlots:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      days: { type: array, items: { type: string } }
+                      startTime: { type: string }
+                      endTime: { type: string }
+                      location: { type: string }
+      responses:
+        "200":
+          description: Section created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  s:
+                    type: object
+                    properties:
+                      id: { type: string }
+                      courseId: { type: string }
+                      sectionNumber: { type: string }
+                      instructor: { type: string }
+                      capacity: { type: integer }
+                      timeSlots:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            days: { type: array, items: { type: string } }
+                            startTime: { type: string }
+                            endTime: { type: string }
+                            location: { type: string }
+        "400":
+          description: Error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string }
+
+  /api/CourseScheduling/addSection:
+    post:
+      summary: Add section to schedule
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                userId: { type: string }
+                scheduleId: { type: string }
+                sectionId: { type: string }
+      responses:
+        "200":
+          description: Section added
+          content:
+            application/json:
+              schema: { type: object }
+        "400":
+          description: Error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string }
+
+  /api/CourseScheduling/editSection:
+    post:
+      summary: Edit existing section
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                sectionId: { type: string }
+                updates:
+                  type: object
+                  properties:
+                    sectionNumber: { type: string }
+                    instructor: { type: string }
+                    capacity: { type: integer }
+                    timeSlots:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          days: { type: array, items: { type: string } }
+                          startTime: { type: string }
+                          endTime: { type: string }
+                          location: { type: string }
+      responses:
+        "200":
+          description: Section edited
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  s:
+                    $ref: "#/components/schemas/Section"
+        "400":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/CourseScheduling/removeSection:
+    post:
+      summary: Remove section from schedule
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                userId: { type: string }
+                scheduleId: { type: string }
+                sectionId: { type: string }
+      responses:
+        "200": { description: Section removed }
+        "400":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/CourseScheduling/createSchedule:
+    post:
+      summary: Create a new schedule
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                userId: { type: string }
+                name: { type: string }
+      responses:
+        "200":
+          description: Schedule created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  s:
+                    $ref: "#/components/schemas/Schedule"
+        "400":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/CourseScheduling/deleteSchedule:
+    post:
+      summary: Delete schedule
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                userId: { type: string }
+                scheduleId: { type: string }
+      responses:
+        "200": { description: Schedule deleted }
+        "400":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/CourseScheduling/duplicateSchedule:
+    post:
+      summary: Duplicate existing schedule
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                userId: { type: string }
+                sourceScheduleId: { type: string }
+                newName: { type: string }
+      responses:
+        "200":
+          description: Schedule duplicated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  s:
+                    $ref: "#/components/schemas/Schedule"
+        "400":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/CourseScheduling/getCourse:
+    post:
+      summary: Get a single course
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                courseId: { type: string }
+      responses:
+        "200":
+          description: Course retrieved
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Course"
+        "400":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/CourseScheduling/getSection:
+    post:
+      summary: Get a single section
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                sectionId: { type: string }
+      responses:
+        "200":
+          description: Section retrieved
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Section"
+        "400":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/CourseScheduling/getAllCourses:
+    post:
+      summary: Get all courses
+      responses:
+        "200":
+          description: All courses retrieved
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Course"
+        "400":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/CourseScheduling/getAllSections:
+    post:
+      summary: Get all sections
+      responses:
+        "200":
+          description: All sections retrieved
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Section"
+        "400":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/CourseScheduling/getAllSchedules:
+    post:
+      summary: Get all schedules
+      responses:
+        "200":
+          description: All schedules retrieved
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Schedule"
+        "400":
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+components:
+  schemas:
+    Course:
+      type: object
+      properties:
+        id: { type: string }
+        title: { type: string }
+        department: { type: string }
+    Section:
+      type: object
+      properties:
+        id: { type: string }
+        courseId: { type: string }
+        sectionNumber: { type: string }
+        instructor: { type: string }
+        capacity: { type: integer }
+        timeSlots:
+          type: array
+          items:
+            type: object
+            properties:
+              days: { type: array, items: { type: string } }
+              startTime: { type: string }
+              endTime: { type: string }
+              location: { type: string }
+    Schedule:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        sectionIds: { type: array, items: { type: string } }
+        owner: { type: string }
+    Error:
+      type: object
+      properties:
+        error: { type: string }

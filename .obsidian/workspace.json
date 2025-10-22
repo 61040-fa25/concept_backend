@@ -199,6 +199,14 @@
   },
   "active": "cd6770289b3dee24",
   "lastOpenFiles": [
+    "context/design/brainstorming/questioning.md/20251021_190240.9dd5358d.md",
+    "context/design/brainstorming/questioning.md/steps/API Specification.92a4f871.md",
+    "context/design/brainstorming/questioning.md/20251021_190211.d9c5784a.md",
+    "context/design/brainstorming/questioning.md/steps/file.3db70b54.md",
+    "context/design/brainstorming/questioning.md/steps/_.c36b21bc.md",
+    "context/deno.json/20251021_190211.3db70b54.md",
+    "src/concepts/LikertSurvey/LikertSurveyConcept.test.ts",
+    "src/concepts/LikertSurvey/LikertSurveyConcept.ts",
     "context/design/brainstorming/questioning.md/20251020_130001.1206c69a.md",
     "context/design/brainstorming/questioning.md/steps/API Specification.81647b2c.md",
     "context/design/brainstorming/questioning.md/20251020_125913.e6d35477.md",
@@ -220,20 +228,12 @@
     "context/deno.json/20251020_125914.61d27be0.md",
     "context/src/concepts/CourseScheduling/CourseScheduling.spec/20251020_125914.858adb87.md",
     "context/src/concepts/CourseScheduling/CourseScheduling.spec",
-    "design/tools/api-extraction-from-code.md",
-    "design/brainstorming/questioning.md",
-    "design/tools/api-extraction-from-spec.md",
-    "design/background/Errors.md",
-    "design/background/CourseSchedulingNotes.md",
-    "context/design/brainstorming/questioning.md/20251019_222448.c402c485.md",
     "src/concepts/CourseFiltering/courses_archive.json",
     "package copy.json",
     "gemini-llm.ts",
     "src/concepts/CourseFiltering/gemini-llm.ts",
     "src/concepts/CourseFiltering/courseFilteringConcept.test.ts",
     "src/concepts/CourseFiltering/CourseFilteringConcept.ts",
-    "src/concepts/CourseFiltering",
-    "src/concepts/New folder",
-    "context/src/concepts/CourseScheduling/courseSchedulingConcept.test.ts"
+    "src/concepts/CourseFiltering"
   ]
 }
