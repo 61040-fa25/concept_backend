@@ -80,6 +80,13 @@ async function main() {
             return c.json(result);
           } catch (e) {
             console.error(`Error in ${conceptName}.${methodName}:`, e);
+
+            // Check if it's a validation error (should return 400)
+            if (e instanceof Error && e.message.includes("required")) {
+              return c.json({ error: e.message }, 400);
+            }
+
+            // Default to 500 for other errors
             return c.json({ error: "An internal server error occurred." }, 500);
           }
         });
