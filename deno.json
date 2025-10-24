@@ -1,6 +1,12 @@
 {
     "imports": {
         "@concepts/": "./src/concepts/",
-        "@utils/": "./src/utils/"
+        "@utils/": "./src/utils/",
+        "bcrypt": "https://deno.land/x/bcrypt@v0.4.1/mod.ts"
+    },
+    "lint": {
+    "rules": {
+      "exclude": ["no-import-prefix", "no-unversioned-import"]
     }
+  }
 }
