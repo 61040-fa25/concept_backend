@@ -619,11 +619,13 @@
     }
   },
   "redirects": {
+    "https://deno.land/x/hono/middleware/cors/index.ts": "https://deno.land/x/hono@v4.3.11/middleware/cors/index.ts",
     "https://esm.sh/unist-util-is@^6.0.0?target=denonext": "https://esm.sh/unist-util-is@6.0.0?target=denonext",
     "https://esm.sh/unist-util-visit-parents@^6.0.0?target=denonext": "https://esm.sh/unist-util-visit-parents@6.0.1?target=denonext",
     "https://esm.sh/unist-util-visit@5": "https://esm.sh/unist-util-visit@5.0.0"
   },
   "remote": {
+    "https://deno.land/x/hono@v4.3.11/middleware/cors/index.ts": "976eb9ce8cefc214b403a2939503a13177cec76223274609a07ca554e0dc623b",
     "https://esm.sh/unist-util-is@6.0.0/denonext/unist-util-is.mjs": "bbc00c612fd8daa022e50a0061856c52be17e0caa699dffa1e7b83b3bbe7b9f2",
     "https://esm.sh/unist-util-is@6.0.0?target=denonext": "7ac7092e893f27ed8edacb142d04dcc37169fdcfaa2ae8833a51fb9762d5e41f",
     "https://esm.sh/unist-util-visit-parents@6.0.1/denonext/do-not-use-color.mjs": "94b57609e52050f8d615ab3d096a2efb7183053a494dee89f9af2fe6c8fb9f0b",

@@ -5,7 +5,7 @@ import {
   assertNotEquals,
 } from "jsr:@std/assert";
 import { testDb } from "../../utils/database.ts"; // Adjust path as necessary
-import TaskBankConcept, { RelationType } from "../TaskBank/TaskBank.ts"; // Adjust path as necessary
+import TaskBankConcept, { RelationType } from "./TaskBankConcept.ts"; // Adjust path as necessary
 import { ID } from "../../utils/types.ts";
 
 // Utility for creating mock User IDs
