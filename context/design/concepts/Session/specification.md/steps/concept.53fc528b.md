@@ -1,0 +1,50 @@
+---
+timestamp: 'Sat Oct 18 2025 14:43:56 GMT-0400 (Eastern Daylight Time)'
+parent: '[[..\20251018_144356.0ed3fcf7.md]]'
+content_id: 53fc528b564f0df7b533b5963b5f691bd8acaaf5090bdcf8e5c7bc27e8698c95
+---
+
+# concept: Session
+
+* **concept**: Session
+* **purpose**: a focused session of completing all tasks on a list
+* **principle**: a user will "activate" a list to start a session and be given an ordered list (either default ordering or generated) of tasks on the list to complete
+* **state**:
+  * a set of `Sessions` with
+    * an `owner` of type `User`
+    * a `SessionList` with
+      * a `title` of type `String`
+      * a set of `ListItems` with
+        * a `task` of type `Task`
+        * a `defaultOrder` of type `Number`
+        * a `randomOrder` of type  `Number`
+        * an `itemStatus` of type `TaskStatus`
+      * an `itemCount` of type Number
+    * an `active` of type `Flag`
+    * an `ordering` of type `OrderType`
+    * a `format` of type `FormatType`
+* **actions**:
+  * `changeSession (list : List, sessionOwner : User)`
+    * **requires** : there is not an active session for sessionOwner
+    * **effects** : creates new session with SessionList = list, randomOrder = defaultOrder, itemStatus = Incomplete, active = False, ordering = Default, and format = List
+  * `setOrdering (session : Session, newType : OrderType, setter : Owner)`
+    * **requires** : session's active Flag is currently False and setter = owner
+    * **effects** : ordering is set to newType
+  * `setFormat (session : Session, newFormat : FormatType, setter : Owner)`
+    * **requires** : session's active Flag is currently False and setter = owner
+    * **effects** : format is set to newFormat
+  * `randomizeOrder (session : Session, randomizer : User)`
+    * **requires** : session's ordering is set to "Random" and randomizer = owner
+    * **effects** : each ListItems randomOrder value is updated at random, maintaining dependencies between tasks
+  * `activateSession (session : Session, activator : User)`
+    * **requires** : session's active Flag is currently False and activator = owner
+    * **effects** : session's active Flag is set to True
+  * `startTask (session : Session, task : Task)`
+    * **requires** : task is in a ListItem for session's list, its status is currently "Incomplete", and no other task is "In Progress"
+    * **effects** : given ListItem's status is set to "In Progress"
+  * `completeTask (session : Session, task : Task)`
+    * **requires** : task is in a ListItem for session's list and its status is currently "In Progress"
+    * **effects** : given ListItem's status is set to "Complete"
+  * `endSession (session : Session)`
+    * **requires** : session's active Flag is currently True
+    * **effects** : session's active Flag is set to False

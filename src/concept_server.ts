@@ -3,6 +3,9 @@ import { getDb } from "@utils/database.ts";
 import { walk } from "jsr:@std/fs";
 import { parseArgs } from "jsr:@std/cli/parse-args";
 import { toFileUrl } from "jsr:@std/path/to-file-url";
+import { basename } from "jsr:@std/path";
+import { cors } from "@hono/cors";
+// import { cors } from "https://deno.land/x/hono/middleware/cors/index.ts";
 
 // Parse command-line arguments for port and base URL
 const flags = parseArgs(Deno.args, {
@@ -24,6 +27,15 @@ async function main() {
   const [db] = await getDb();
   const app = new Hono();
 
+  app.use(
+    cors({
+      origin: "http://localhost:5173",
+      allowMethods: ["GET", "POST", "OPTIONS"],
+      allowHeaders: ["Content-Type"],
+      credentials: true,
+    }) as any,
+  );
+
   app.get("/", (c) => c.text("Concept Server is running."));
 
   // --- Dynamic Concept Loading and Routing ---
@@ -36,7 +48,7 @@ async function main() {
       includeFiles: false,
     })
   ) {
-    if (entry.path === CONCEPTS_DIR) continue; // Skip the root directory
+    if (basename(entry.path) === basename(CONCEPTS_DIR)) continue; // Skip the root directory
 
     const conceptName = entry.name;
     const conceptFilePath = `${entry.path}/${conceptName}Concept.ts`;

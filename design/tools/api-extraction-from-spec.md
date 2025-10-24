@@ -84,3 +84,97 @@ Generate the output in Markdown using the following template. For each action an
 
 Now, analyze the following Concept Specification and generate the API documentation based on these instructions.
 
+
+# response:
+
+# API Specification: Counter Concept
+
+**Purpose:** count the number of occurrences of something
+
+---
+
+## API Endpoints
+
+### POST /api/Counter/increment
+
+**Description:** Increments the counter by one.
+
+**Requirements:**
+- true
+
+**Effects:**
+- count := count + 1
+
+**Request Body:**
+```json
+{}
+```
+
+**Success Response Body (Action):**
+```json
+{}
+```
+
+**Error Response Body:**
+```json
+{
+  "error": "string"
+}
+```
+---
+
+### POST /api/Counter/decrement
+
+**Description:** Decrements the counter by one, if the current count is greater than zero.
+
+**Requirements:**
+- count > 0
+
+**Effects:**
+- count := count - 1
+
+**Request Body:**
+```json
+{}
+```
+
+**Success Response Body (Action):**
+```json
+{}
+```
+
+**Error Response Body:**
+```json
+{
+  "error": "string"
+}
+```
+---
+
+### POST /api/Counter/reset
+
+**Description:** Resets the counter to zero.
+
+**Requirements:**
+- true
+
+**Effects:**
+- count := 0
+
+**Request Body:**
+```json
+{}
+```
+
+**Success Response Body (Action):**
+```json
+{}
+```
+
+**Error Response Body:**
+```json
+{
+  "error": "string"
+}
+```
+---

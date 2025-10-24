@@ -34,7 +34,7 @@ Deno.test("...", async () => {
 });
 ```
 
-The database is already automatically dropped before every test file using the `Deno.test.beforeAll` hook: do not include any additional manipulation of the database for this purpose.
+The database is already automatically dropped before every test file using the `Deno.test.beforeAll` hook: do not include any additional manipulation of the database for this purpose. Do not use t.beforeAll(), t.afterAll(), or t.beforeEach() as they are not supported in the Deno.test framework. All setup and teardown must happen inside the main Deno.test() function or within t.step(...) blocks, not globally or with lifecycle hooks.
 
 Use the Deno.test framework, splitting by appropriate test steps and describing each behavior. Import helpers from:
 
