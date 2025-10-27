@@ -1,10 +1,9 @@
-# prompt Create the concept and actions for a Session Concept based on the Session specifications following the example set by LikertSurveyConcept.ts.
+---
+timestamp: 'Wed Oct 22 2025 18:32:47 GMT-0400 (Eastern Daylight Time)'
+parent: '[[..\20251022_183247.0c124b87.md]]'
+content_id: b362b6b2cf258bb067d73a604b2a814510966e3bddb51a2f5f7585ca26e0409d
+---
 
-[@example](../../src/concepts/LikertSurvey/LikertSurveyConcept.test.ts)
-
-[@INSTRUCTIONS](../background/CourseSchedulingNotes.md)
-
-[@Session](../../src/concepts/Session/SessionConcept.ts)
 # response:
 
 ```typescript

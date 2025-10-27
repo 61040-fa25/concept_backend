@@ -1,3 +1,4 @@
+import "jsr:@std/dotenv/load";
 import { Hono } from "jsr:@hono/hono";
 import { getDb } from "@utils/database.ts";
 import { walk } from "jsr:@std/fs";
@@ -84,6 +85,16 @@ async function main() {
             // Check if it's a validation error (should return 400)
             if (e instanceof Error && e.message.includes("required")) {
               return c.json({ error: e.message }, 400);
+            }
+
+            // Check if it's an authorization error (should return 401)
+            if (e instanceof Error && e.message.includes("Unauthorized")) {
+              return c.json({ error: e.message }, 401);
+            }
+
+            // Check if it's a not found error (should return 404)
+            if (e instanceof Error && e.message.includes("not found")) {
+              return c.json({ error: e.message }, 404);
             }
 
             // Default to 500 for other errors

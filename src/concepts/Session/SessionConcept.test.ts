@@ -1,13 +1,3 @@
-# prompt Create the concept and actions for a Session Concept based on the Session specifications following the example set by LikertSurveyConcept.ts.
-
-[@example](../../src/concepts/LikertSurvey/LikertSurveyConcept.test.ts)
-
-[@INSTRUCTIONS](../background/CourseSchedulingNotes.md)
-
-[@Session](../../src/concepts/Session/SessionConcept.ts)
-# response:
-
-```typescript
 import { assertEquals, assertExists, assertNotEquals } from "jsr:@std/assert";
 import { testDb } from "@utils/database.ts";
 import { ID } from "@utils/types.ts";
@@ -76,11 +66,19 @@ Deno.test("Principle: User starts a session, uses it, extends it, or ends it.", 
       );
       const { session: newSessionID } = extendResult as { session: ID };
       assertExists(newSessionID);
-      assertNotEquals(newSessionID, sessionID, "A new session ID should be returned.");
+      assertNotEquals(
+        newSessionID,
+        sessionID,
+        "A new session ID should be returned.",
+      );
 
       // Verify old session is gone
       const oldSession = await sessionConcept._getSession({ s: sessionID });
-      assertEquals(oldSession, null, "Old session should be deleted after extension.");
+      assertEquals(
+        oldSession,
+        null,
+        "Old session should be deleted after extension.",
+      );
 
       // Verify new session exists and has updated expiry
       const newSession = await sessionConcept._getSession({ s: newSessionID });
@@ -107,10 +105,16 @@ Deno.test("Principle: User starts a session, uses it, extends it, or ends it.", 
       );
 
       const endedSession = await sessionConcept._getSession({ s: sessionID });
-      assertEquals(endedSession, null, "Session should be deleted after ending.");
+      assertEquals(
+        endedSession,
+        null,
+        "Session should be deleted after ending.",
+      );
 
       // Trying to use it again should fail
-      const useAfterEndResult = await sessionConcept.useSession({ s: sessionID });
+      const useAfterEndResult = await sessionConcept.useSession({
+        s: sessionID,
+      });
       assertEquals(
         "error" in useAfterEndResult,
         true,
@@ -146,7 +150,11 @@ Deno.test("Action: startSession creates a new session correctly", async () => {
 
     const createdSession = await sessionConcept._getSession({ s: session });
     assertExists(createdSession, "The session should exist in the database.");
-    assertEquals(createdSession.userID, userB, "Session should be linked to the correct user.");
+    assertEquals(
+      createdSession.userID,
+      userB,
+      "Session should be linked to the correct user.",
+    );
     assertEquals(
       createdSession.expiryTime.getTime(),
       startTime + DEFAULT_SESSION_DURATION_MS,
@@ -156,8 +164,11 @@ Deno.test("Action: startSession creates a new session correctly", async () => {
     // Verify a different user gets a different session and ID
     const result2 = await sessionConcept.startSession({ u: userA });
     const { session: session2 } = result2 as { session: ID };
-    assertNotEquals(session, session2, "Each startSession call should create a unique session ID.");
-
+    assertNotEquals(
+      session,
+      session2,
+      "Each startSession call should create a unique session ID.",
+    );
   } finally {
     await client.close();
     Date.now = originalDateNow;
@@ -170,7 +181,9 @@ Deno.test("Action: endSession deletes an existing session", async () => {
 
   try {
     // Setup: Create a session to end
-    const { session: sessionToEnd } = await sessionConcept.startSession({ u: userA }) as { session: ID };
+    const { session: sessionToEnd } = await sessionConcept.startSession({
+      u: userA,
+    }) as { session: ID };
     assertExists(sessionToEnd);
     assertEquals(
       (await sessionConcept._getSession({ s: sessionToEnd }))?.userID,
@@ -187,11 +200,19 @@ Deno.test("Action: endSession deletes an existing session", async () => {
     );
 
     // Verify: Session no longer exists
-    const deletedSession = await sessionConcept._getSession({ s: sessionToEnd });
-    assertEquals(deletedSession, null, "Session should be deleted from the database.");
+    const deletedSession = await sessionConcept._getSession({
+      s: sessionToEnd,
+    });
+    assertEquals(
+      deletedSession,
+      null,
+      "Session should be deleted from the database.",
+    );
 
     // Test: Ending a non-existent session
-    const endNonExistentResult = await sessionConcept.endSession({ s: nonExistentId });
+    const endNonExistentResult = await sessionConcept.endSession({
+      s: nonExistentId,
+    });
     assertEquals(
       "error" in endNonExistentResult,
       true,
@@ -202,7 +223,6 @@ Deno.test("Action: endSession deletes an existing session", async () => {
       `Session with ID ${nonExistentId} not found.`,
       "Error message should indicate session not found.",
     );
-
   } finally {
     await client.close();
   }
@@ -217,7 +237,9 @@ Deno.test("Action: useSession verifies session validity", async (t) => {
     Date.now = () => creationTime; // Fix time for session creation
 
     // Setup: Create an active session
-    const { session: activeSession } = await sessionConcept.startSession({ u: userA }) as { session: ID };
+    const { session: activeSession } = await sessionConcept.startSession({
+      u: userA,
+    }) as { session: ID };
 
     await t.step("Allows use of an active session", async () => {
       Date.now = () => creationTime + 1000; // Just after creation, well before expiry
@@ -230,7 +252,9 @@ Deno.test("Action: useSession verifies session validity", async (t) => {
     });
 
     await t.step("Fails for a non-existent session", async () => {
-      const useNonExistentResult = await sessionConcept.useSession({ s: nonExistentId });
+      const useNonExistentResult = await sessionConcept.useSession({
+        s: nonExistentId,
+      });
       assertEquals(
         "error" in useNonExistentResult,
         true,
@@ -244,16 +268,25 @@ Deno.test("Action: useSession verifies session validity", async (t) => {
 
     await t.step("Fails for an expired session", async () => {
       // Create a session for userB and immediately expire it for testing purposes
-      const { session: expiredSession } = await sessionConcept.startSession({ u: userB }) as { session: ID };
-      const sessionDoc = await sessionConcept._getSession({ s: expiredSession });
+      const { session: expiredSession } = await sessionConcept.startSession({
+        u: userB,
+      }) as { session: ID };
+      const sessionDoc = await sessionConcept._getSession({
+        s: expiredSession,
+      });
       assertExists(sessionDoc);
 
       // Manually set expiry time to be in the past
       sessionDoc.expiryTime = new Date(creationTime - 1000);
-      await sessionConcept.sessions.replaceOne({ _id: expiredSession }, sessionDoc);
+      await sessionConcept.sessions.replaceOne(
+        { _id: expiredSession },
+        sessionDoc,
+      );
 
       Date.now = () => creationTime; // Set current time to be after the modified expiry
-      const useExpiredResult = await sessionConcept.useSession({ s: expiredSession });
+      const useExpiredResult = await sessionConcept.useSession({
+        s: expiredSession,
+      });
       assertEquals(
         "error" in useExpiredResult,
         true,
@@ -264,7 +297,6 @@ Deno.test("Action: useSession verifies session validity", async (t) => {
         `Session with ID ${expiredSession} has expired.`,
       );
     });
-
   } finally {
     await client.close();
     Date.now = originalDateNow; // Restore Date.now
@@ -280,15 +312,21 @@ Deno.test("Action: extendSession renews an active session", async (t) => {
     Date.now = () => creationTime; // Fix time for session creation
 
     // Setup: Create an active session
-    const { session: originalSession } = await sessionConcept.startSession({ u: userA }) as { session: ID };
-    const originalDoc = await sessionConcept._getSession({ s: originalSession });
+    const { session: originalSession } = await sessionConcept.startSession({
+      u: userA,
+    }) as { session: ID };
+    const originalDoc = await sessionConcept._getSession({
+      s: originalSession,
+    });
     assertExists(originalDoc);
 
     await t.step("Successfully extends an active session", async () => {
       const extendCallTime = creationTime + 5 * 60 * 1000; // 5 minutes after creation
       Date.now = () => extendCallTime;
 
-      const extendResult = await sessionConcept.extendSession({ s: originalSession });
+      const extendResult = await sessionConcept.extendSession({
+        s: originalSession,
+      });
       assertNotEquals(
         "error" in extendResult,
         true,
@@ -296,16 +334,30 @@ Deno.test("Action: extendSession renews an active session", async (t) => {
       );
       const { session: newSession } = extendResult as { session: ID };
       assertExists(newSession);
-      assertNotEquals(newSession, originalSession, "A new session ID should be generated.");
+      assertNotEquals(
+        newSession,
+        originalSession,
+        "A new session ID should be generated.",
+      );
 
       // Verify old session is deleted
-      const deletedOriginal = await sessionConcept._getSession({ s: originalSession });
-      assertEquals(deletedOriginal, null, "The original session should be deleted.");
+      const deletedOriginal = await sessionConcept._getSession({
+        s: originalSession,
+      });
+      assertEquals(
+        deletedOriginal,
+        null,
+        "The original session should be deleted.",
+      );
 
       // Verify new session's properties
       const newDoc = await sessionConcept._getSession({ s: newSession });
       assertExists(newDoc);
-      assertEquals(newDoc.userID, userA, "New session should belong to the same user.");
+      assertEquals(
+        newDoc.userID,
+        userA,
+        "New session should belong to the same user.",
+      );
       assertEquals(
         newDoc.expiryTime.getTime(),
         extendCallTime + DEFAULT_SESSION_DURATION_MS,
@@ -314,7 +366,9 @@ Deno.test("Action: extendSession renews an active session", async (t) => {
     });
 
     await t.step("Fails to extend a non-existent session", async () => {
-      const extendNonExistentResult = await sessionConcept.extendSession({ s: nonExistentId });
+      const extendNonExistentResult = await sessionConcept.extendSession({
+        s: nonExistentId,
+      });
       assertEquals(
         "error" in extendNonExistentResult,
         true,
@@ -328,16 +382,25 @@ Deno.test("Action: extendSession renews an active session", async (t) => {
 
     await t.step("Fails to extend an expired session", async () => {
       // Create a session for userB and immediately expire it for testing purposes
-      const { session: expiredSession } = await sessionConcept.startSession({ u: userB }) as { session: ID };
-      const expiredDoc = await sessionConcept._getSession({ s: expiredSession });
+      const { session: expiredSession } = await sessionConcept.startSession({
+        u: userB,
+      }) as { session: ID };
+      const expiredDoc = await sessionConcept._getSession({
+        s: expiredSession,
+      });
       assertExists(expiredDoc);
 
       // Manually set expiry time to be in the past
       expiredDoc.expiryTime = new Date(creationTime - 1000);
-      await sessionConcept.sessions.replaceOne({ _id: expiredSession }, expiredDoc);
+      await sessionConcept.sessions.replaceOne(
+        { _id: expiredSession },
+        expiredDoc,
+      );
 
       Date.now = () => creationTime; // Set current time to be after the modified expiry
-      const extendExpiredResult = await sessionConcept.extendSession({ s: expiredSession });
+      const extendExpiredResult = await sessionConcept.extendSession({
+        s: expiredSession,
+      });
       assertEquals(
         "error" in extendExpiredResult,
         true,
@@ -348,7 +411,6 @@ Deno.test("Action: extendSession renews an active session", async (t) => {
         `Session with ID ${expiredSession} has expired and cannot be extended.`,
       );
     });
-
   } finally {
     await client.close();
     Date.now = originalDateNow;
@@ -365,21 +427,27 @@ Deno.test("System Action: _expireSessions deletes all expired sessions", async (
 
     // Setup: Create multiple sessions with different expiry statuses
     // Session 1: Expired
-    const { session: session1 } = await sessionConcept.startSession({ u: userA }) as { session: ID };
+    const { session: session1 } = await sessionConcept.startSession({
+      u: userA,
+    }) as { session: ID };
     const doc1 = await sessionConcept._getSession({ s: session1 });
     assertExists(doc1);
     doc1.expiryTime = new Date(currentTime - 1000); // Set expiry to 1 second in the past
     await sessionConcept.sessions.replaceOne({ _id: session1 }, doc1); // Manually update expiry in DB
 
     // Session 2: Active (should remain)
-    const { session: session2 } = await sessionConcept.startSession({ u: userA }) as { session: ID };
+    const { session: session2 } = await sessionConcept.startSession({
+      u: userA,
+    }) as { session: ID };
     const doc2 = await sessionConcept._getSession({ s: session2 });
     assertExists(doc2);
     doc2.expiryTime = new Date(currentTime + DEFAULT_SESSION_DURATION_MS); // Set expiry to future
     await sessionConcept.sessions.replaceOne({ _id: session2 }, doc2);
 
     // Session 3: Expired (for userB)
-    const { session: session3 } = await sessionConcept.startSession({ u: userB }) as { session: ID };
+    const { session: session3 } = await sessionConcept.startSession({
+      u: userB,
+    }) as { session: ID };
     const doc3 = await sessionConcept._getSession({ s: session3 });
     assertExists(doc3);
     doc3.expiryTime = new Date(currentTime - 5 * 60 * 1000); // 5 minutes in the past
@@ -387,22 +455,33 @@ Deno.test("System Action: _expireSessions deletes all expired sessions", async (
 
     await t.step("Initially, all sessions exist", async () => {
       const allSessions = await sessionConcept.sessions.find().toArray();
-      assertEquals(allSessions.length, 3, "All 3 sessions should exist before expiry run.");
+      assertEquals(
+        allSessions.length,
+        3,
+        "All 3 sessions should exist before expiry run.",
+      );
     });
 
     // Test: Run the expiry action
     await sessionConcept._expireSessions();
 
-    await t.step("Only non-expired sessions remain after _expireSessions", async () => {
-      const remainingSessions = await sessionConcept.sessions.find().toArray();
-      assertEquals(remainingSessions.length, 1, "Only 1 session (session2) should remain.");
-      assertEquals(
-        remainingSessions[0]._id,
-        session2,
-        "The remaining session should be the non-expired one.",
-      );
-    });
-
+    await t.step(
+      "Only non-expired sessions remain after _expireSessions",
+      async () => {
+        const remainingSessions = await sessionConcept.sessions.find()
+          .toArray();
+        assertEquals(
+          remainingSessions.length,
+          1,
+          "Only 1 session (session2) should remain.",
+        );
+        assertEquals(
+          remainingSessions[0]._id,
+          session2,
+          "The remaining session should be the non-expired one.",
+        );
+      },
+    );
   } finally {
     await client.close();
     Date.now = originalDateNow;
@@ -418,9 +497,15 @@ Deno.test("Query: _getUserSessions returns only active sessions for a user", asy
     Date.now = () => currentTime; // Fix current time for consistent testing
 
     // Setup: Create several sessions for userA and userB, some active, some expired
-    const { session: userASession1 } = await sessionConcept.startSession({ u: userA }) as { session: ID };
-    const { session: userASession2 } = await sessionConcept.startSession({ u: userA }) as { session: ID };
-    const { session: userBSession1 } = await sessionConcept.startSession({ u: userB }) as { session: ID };
+    const { session: userASession1 } = await sessionConcept.startSession({
+      u: userA,
+    }) as { session: ID };
+    const { session: userASession2 } = await sessionConcept.startSession({
+      u: userA,
+    }) as { session: ID };
+    const { session: userBSession1 } = await sessionConcept.startSession({
+      u: userB,
+    }) as { session: ID };
 
     // Manually expire userASession1
     const doc1 = await sessionConcept._getSession({ s: userASession1 });
@@ -431,35 +516,70 @@ Deno.test("Query: _getUserSessions returns only active sessions for a user", asy
     // userASession2 and userBSession1 are active by default
 
     await t.step("Returns active sessions for userA", async () => {
-      const activeSessionsA = await sessionConcept._getUserSessions({ u: userA });
-      assertEquals(activeSessionsA.length, 1, "User A should have 1 active session.");
+      const activeSessionsA = await sessionConcept._getUserSessions({
+        u: userA,
+      });
+      assertEquals(
+        activeSessionsA.length,
+        1,
+        "User A should have 1 active session.",
+      );
       assertEquals(activeSessionsA[0]._id, userASession2);
-      assertNotEquals(activeSessionsA[0]._id, userASession1, "Expired session should not be returned.");
+      assertNotEquals(
+        activeSessionsA[0]._id,
+        userASession1,
+        "Expired session should not be returned.",
+      );
     });
 
     await t.step("Returns active sessions for userB", async () => {
-      const activeSessionsB = await sessionConcept._getUserSessions({ u: userB });
-      assertEquals(activeSessionsB.length, 1, "User B should have 1 active session.");
+      const activeSessionsB = await sessionConcept._getUserSessions({
+        u: userB,
+      });
+      assertEquals(
+        activeSessionsB.length,
+        1,
+        "User B should have 1 active session.",
+      );
       assertEquals(activeSessionsB[0]._id, userBSession1);
     });
 
-    await t.step("Returns empty array for a user with no active sessions", async () => {
-      const noUserSessions = await sessionConcept._getUserSessions({ u: "user:nonexistent" as ID });
-      assertEquals(noUserSessions.length, 0, "Non-existent user should have no sessions.");
-    });
+    await t.step(
+      "Returns empty array for a user with no active sessions",
+      async () => {
+        const noUserSessions = await sessionConcept._getUserSessions({
+          u: "user:nonexistent" as ID,
+        });
+        assertEquals(
+          noUserSessions.length,
+          0,
+          "Non-existent user should have no sessions.",
+        );
+      },
+    );
 
-    await t.step("Returns empty array for a user whose sessions are all expired", async () => {
-      // Create a user with only expired sessions
-      const { session: userCSession1 } = await sessionConcept.startSession({ u: "user:Charlie" as ID }) as { session: ID };
-      const docC1 = await sessionConcept._getSession({ s: userCSession1 });
-      assertExists(docC1);
-      docC1.expiryTime = new Date(currentTime - 1000); // Expired
-      await sessionConcept.sessions.replaceOne({ _id: userCSession1 }, docC1);
+    await t.step(
+      "Returns empty array for a user whose sessions are all expired",
+      async () => {
+        // Create a user with only expired sessions
+        const { session: userCSession1 } = await sessionConcept.startSession({
+          u: "user:Charlie" as ID,
+        }) as { session: ID };
+        const docC1 = await sessionConcept._getSession({ s: userCSession1 });
+        assertExists(docC1);
+        docC1.expiryTime = new Date(currentTime - 1000); // Expired
+        await sessionConcept.sessions.replaceOne({ _id: userCSession1 }, docC1);
 
-      const charlieSessions = await sessionConcept._getUserSessions({ u: "user:Charlie" as ID });
-      assertEquals(charlieSessions.length, 0, "User Charlie should have no active sessions.");
-    });
-
+        const charlieSessions = await sessionConcept._getUserSessions({
+          u: "user:Charlie" as ID,
+        });
+        assertEquals(
+          charlieSessions.length,
+          0,
+          "User Charlie should have no active sessions.",
+        );
+      },
+    );
   } finally {
     await client.close();
     Date.now = originalDateNow;
@@ -475,7 +595,9 @@ Deno.test("Query: _getSession retrieves a specific session document", async (t) 
     Date.now = () => creationTime;
 
     // Setup: Create a session
-    const { session: testSession } = await sessionConcept.startSession({ u: userA }) as { session: ID };
+    const { session: testSession } = await sessionConcept.startSession({
+      u: userA,
+    }) as { session: ID };
 
     await t.step("Retrieves an existing session", async () => {
       const sessionDoc = await sessionConcept._getSession({ s: testSession });
@@ -489,13 +611,17 @@ Deno.test("Query: _getSession retrieves a specific session document", async (t) 
     });
 
     await t.step("Returns null for a non-existent session", async () => {
-      const nonExistentDoc = await sessionConcept._getSession({ s: nonExistentId });
-      assertEquals(nonExistentDoc, null, "Should return null for a non-existent session ID.");
+      const nonExistentDoc = await sessionConcept._getSession({
+        s: nonExistentId,
+      });
+      assertEquals(
+        nonExistentDoc,
+        null,
+        "Should return null for a non-existent session ID.",
+      );
     });
-
   } finally {
     await client.close();
     Date.now = originalDateNow;
   }
 });
-```
