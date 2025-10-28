@@ -96,6 +96,7 @@ Deno.test("ListCreationConcept", async (t) => {
 
       // Add first task
       const addTask1Result = await concept.addTask({
+        name: "Task Alpha",
         list: aliceListId,
         task: taskA,
         adder: userAlice,
@@ -122,6 +123,7 @@ Deno.test("ListCreationConcept", async (t) => {
 
       // Add second task
       const addTask2Result = await concept.addTask({
+        name: "Task Beta",
         list: aliceListId,
         task: taskB,
         adder: userAlice,
@@ -149,6 +151,7 @@ Deno.test("ListCreationConcept", async (t) => {
     "should prevent adding a task that already exists in the list",
     async () => {
       const result = await concept.addTask({
+        name: "Task Alpha",
         list: aliceListId,
         task: taskA,
         adder: userAlice,
@@ -168,6 +171,7 @@ Deno.test("ListCreationConcept", async (t) => {
     "should prevent non-owners from adding tasks to a list",
     async () => {
       const result = await concept.addTask({
+        name: "Task C",
         list: aliceListId,
         task: taskC,
         adder: userBob,
@@ -191,6 +195,7 @@ Deno.test("ListCreationConcept", async (t) => {
     async () => {
       // Add taskC to have 3 items: A(1), B(2), C(3)
       await concept.addTask({
+        name: "Task C",
         list: aliceListId,
         task: taskC,
         adder: userAlice,
@@ -273,7 +278,12 @@ Deno.test("ListCreationConcept", async (t) => {
   await t.step("should reassign task order (move up)", async () => {
     // Current state: A(1), C(2)
     // Add D to make it: A(1), C(2), D(3)
-    await concept.addTask({ list: aliceListId, task: taskD, adder: userAlice });
+    await concept.addTask({
+      name: "Task D",
+      list: aliceListId,
+      task: taskD,
+      adder: userAlice,
+    });
     let tasksBefore =
       (await concept._getTasksInList({ listId: aliceListId })) || [];
     assertEquals(tasksBefore.map((t) => t.task), [taskA, taskC, taskD]);
@@ -427,16 +437,19 @@ Deno.test("ListCreationConcept", async (t) => {
 
       // 2. User selects tasks from their task bank to add to it (and they get default ordering)
       await concept.addTask({
+        name: "Task Milk",
         list: shoppingListId,
         task: "task:Milk" as ID,
         adder: userChris,
       });
       await concept.addTask({
+        name: "Task Bread",
         list: shoppingListId,
         task: "task:Bread" as ID,
         adder: userChris,
       });
       await concept.addTask({
+        name: "Task Eggs",
         list: shoppingListId,
         task: "task:Eggs" as ID,
         adder: userChris,
@@ -490,9 +503,24 @@ Deno.test("ListCreationConcept", async (t) => {
         listId: shoppingListId,
       });
       assertArrayIncludes(finalShoppingList?.listItems || [], [
-        { task: "task:Eggs" as ID, orderNumber: 1, taskStatus: "incomplete" },
-        { task: "task:Milk" as ID, orderNumber: 2, taskStatus: "incomplete" },
-        { task: "task:Bread" as ID, orderNumber: 3, taskStatus: "incomplete" },
+        {
+          name: "Task Eggs",
+          task: "task:Eggs" as ID,
+          orderNumber: 1,
+          taskStatus: "incomplete",
+        },
+        {
+          name: "Task Milk",
+          task: "task:Milk" as ID,
+          orderNumber: 2,
+          taskStatus: "incomplete",
+        },
+        {
+          name: "Task Bread",
+          task: "task:Bread" as ID,
+          orderNumber: 3,
+          taskStatus: "incomplete",
+        },
       ]);
     },
   );

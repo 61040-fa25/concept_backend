@@ -158,6 +158,7 @@ export default class TaskBankConcept {
       };
 
       await this.tasks.insertOne(newTask);
+      console.log("Added new task:", name);
       return { task: newTaskId };
     } catch (e: any) {
       console.error("Error adding task:", e);
@@ -398,6 +399,43 @@ export default class TaskBankConcept {
     } catch (e: any) {
       console.error("Error getting dependencies:", e);
       return { error: `Failed to get dependencies: ${e.message}` };
+    }
+  }
+
+  /**
+   * @query listTasks
+   * @requires : owner is a valid User
+   * @effects : returns all TaskDoc objects in the owner's bank
+   */
+  async listTasks(
+    { owner }: { owner: User },
+  ): Promise<{ tasks: TaskDoc[] } | { error: string }> {
+    try {
+      const bank = await this._getOrCreateBank(owner);
+      const tasks = await this.tasks.find({ bankId: bank._id }).toArray();
+      return { tasks };
+    } catch (e: any) {
+      console.error("Error listing tasks:", e);
+      return { error: `Failed to list tasks: ${e.message}` };
+    }
+  }
+
+  /**
+   * @query getTask
+   * @requires : owner and task id are valid
+   * @effects : returns a single TaskDoc for the given task id in the owner's bank
+   */
+  async getTask(
+    { owner, task }: { owner: User; task: Task },
+  ): Promise<{ task: TaskDoc } | { error: string }> {
+    try {
+      const bank = await this._getOrCreateBank(owner);
+      const taskDoc = await this.tasks.findOne({ _id: task, bankId: bank._id });
+      if (!taskDoc) return { error: `Task '${task}' not found in your bank.` };
+      return { task: taskDoc };
+    } catch (e: any) {
+      console.error("Error getting task:", e);
+      return { error: `Failed to get task: ${e.message}` };
     }
   }
 

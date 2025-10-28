@@ -1,6 +1,7 @@
 import { Collection, Db } from "npm:mongodb";
 import { Empty, ID } from "@utils/types.ts"; // Assuming @utils/types.ts provides ID and Empty
 import { freshID } from "@utils/database.ts"; // Assuming @utils/database.ts provides freshID
+import { usernameToUserId } from "@utils/users.ts";
 
 // Declare collection prefix, use concept name
 const PREFIX = "ListCreation" + ".";
@@ -20,6 +21,7 @@ type Task = ID; // The ID of a Task, e.g., from a TaskManagement concept, extern
  *   a taskStatus of type String ("incomplete" or "complete")
  */
 interface ListItem {
+  name: string;
   task: Task;
   orderNumber: number;
   taskStatus: "incomplete" | "complete"; // Defaulted to "incomplete" on addition
@@ -116,7 +118,12 @@ export default class ListCreationConcept {
    *          itemCount is incremented. The new listItem is returned and added to list's set of listItems.
    */
   async addTask(
-    { list: listId, task, adder }: { list: List; task: Task; adder: User },
+    { list: listId, name, task, adder }: {
+      list: List;
+      name: string;
+      task: Task;
+      adder: User;
+    },
   ): Promise<{ listItem: ListItem } | { error: string }> {
     const targetList = await this.lists.findOne({ _id: listId });
 
@@ -140,6 +147,7 @@ export default class ListCreationConcept {
     // Effects: new listItem is created and added, itemCount is incremented
     const newOrderNumber = targetList.itemCount + 1; // Assign order number to be last
     const newListItem: ListItem = {
+      name: name,
       task: task,
       orderNumber: newOrderNumber,
       taskStatus: "incomplete", // Default status as per effects
@@ -326,7 +334,7 @@ export default class ListCreationConcept {
    * @returns {Promise<ListDocument[]>} - An array of all ListDocuments.
    */
   async _getLists(): Promise<ListDocument[]> {
-    return this.lists.find({}).toArray();
+    return await this.lists.find({}).toArray();
   }
 
   /**
@@ -340,21 +348,56 @@ export default class ListCreationConcept {
   async _getListById(
     { listId }: { listId: List },
   ): Promise<ListDocument | null> {
-    return this.lists.findOne({ _id: listId });
+    return await this.lists.findOne({ _id: listId });
   }
 
+  // /**
+  //  * @query _getListsByOwner
+  //  * Returns all lists owned by a specific user.
+  //  *
+  //  * @param {object} params - The query arguments.
+  //  * @param {User} params.ownerId - The ID of the user whose lists to retrieve.
+  //  * @returns {Promise<ListDocument[]>} - An array of ListDocuments owned by the user.
+  //  */
+  // async _getListsByOwner(
+  //   { ownerId }: { ownerId: User },
+  // ): Promise<ListDocument[]> {
+  //   return await this.lists.find({ owner: ownerId }).toArray();
+  // }
+
   /**
-   * @query _getListsByOwner
-   * Returns all lists owned by a specific user.
+   * @query getListsByOwner
+   * Returns all lists owned by the provided user id. This mirrors `_getListsByOwner`
+   * but uses the `owner` param name which is convenient for frontend calls.
    *
    * @param {object} params - The query arguments.
-   * @param {User} params.ownerId - The ID of the user whose lists to retrieve.
-   * @returns {Promise<ListDocument[]>} - An array of ListDocuments owned by the user.
+   * @param {User} params.owner - The ID of the user whose lists to retrieve.
+   * @returns {{ lists: ListDocument[] } | { error: string }}
    */
-  async _getListsByOwner(
-    { ownerId }: { ownerId: User },
-  ): Promise<ListDocument[]> {
-    return this.lists.find({ owner: ownerId }).toArray();
+  async getListsByOwner(
+    { owner, username }: { owner?: User; username?: string },
+  ): Promise<{ lists: ListDocument[] } | { error: string }> {
+    try {
+      // Allow the frontend to pass either the user ID (`owner`) or a `username`.
+      let resolvedOwner: User | undefined = owner;
+      if (!resolvedOwner && username) {
+        const uid = await usernameToUserId(this.db, username);
+        if (!uid) {
+          return { error: `No user found with username '${username}'.` };
+        }
+        resolvedOwner = uid;
+      }
+      if (!resolvedOwner) {
+        return { error: "Missing required parameter: owner or username" };
+      }
+
+      const lists = await this.lists.find({ owner: resolvedOwner }).toArray();
+      return { lists };
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error("Error getting lists by owner:", e);
+      return { error: `Failed to get lists: ${msg}` };
+    }
   }
 
   /**
@@ -375,5 +418,38 @@ export default class ListCreationConcept {
     // Return the list items sorted by orderNumber.
     // A shallow copy is made before sorting to avoid modifying the original array if it were stored directly.
     return [...list.listItems].sort((a, b) => a.orderNumber - b.orderNumber);
+  }
+
+  /**
+   * @action deleteList
+   * Removes an entire list and its embedded items.
+   *
+   * @param {object} params - The action arguments.
+   * @param {List} params.listId - The ID of the list to delete.
+   * @param {User} params.deleter - The ID of the user attempting the deletion (must be owner).
+   * @returns {Empty | { error: string }} - Empty object on success, or error message.
+   *
+   * @requires the list exists and deleter = owner of the list
+   * @effects the list document is removed from the database, along with its embedded listItems
+   */
+  async deleteList(
+    { listId, deleter }: { listId: List; deleter: User },
+  ): Promise<Empty | { error: string }> {
+    const targetList = await this.lists.findOne({ _id: listId });
+
+    if (!targetList) {
+      return { error: `List with ID '${listId}' not found.` };
+    }
+
+    // Requires: deleter = owner of list
+    if (targetList.owner !== deleter) {
+      return {
+        error: `User '${deleter}' is not the owner of list '${listId}'.`,
+      };
+    }
+
+    // Effects: remove the entire list document
+    await this.lists.deleteOne({ _id: listId });
+    return {};
   }
 }
