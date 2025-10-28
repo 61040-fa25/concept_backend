@@ -1,6 +1,6 @@
-# Academica Backend Server
+# Academica Backend
 
-## Server Management
+
 
 ### Starting the Server
 ```powershell
