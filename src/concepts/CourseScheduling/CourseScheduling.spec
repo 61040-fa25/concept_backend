@@ -51,5 +51,24 @@ Actions
     requires user is the owner of the schedule
     effects deletes schedule
 
+  duplicateSchedule (u: user, sourceScheduleId: string, newName: string) : (s: schedule)
+    requires user is the owner of the source schedule
+    effects creates a new schedule with the same sections as the source schedule
+
+  getCourse (courseId: string) : (c: course)
+    effects returns the course with the specified ID
+
+  getSection (sectionId: string) : (s: section)
+    effects returns the section with the specified ID
+
+  getAllCourses () : (courses: course[])
+    effects returns all available courses
+
+  getAllSections () : (sections: section[])
+    effects returns all available sections
+
+  getAllSchedules () : (schedules: schedule[])
+    effects returns all schedules
+
 
 </concept_spec>

@@ -49,6 +49,7 @@ export interface Section {
   instructor: string; // e.g., "Dr. Ada Lovelace"
   capacity: number; // Maximum number of students
   timeSlots: TimeSlot[]; // An array of meeting times for this section
+  distribution?: string; // Distribution requirements, e.g., "HS, SBA"
 }
 
 /**
@@ -104,7 +105,7 @@ export interface CourseSchedulingState {
  * Backend class for the CourseScheduling concept.
  * Implements all actions for courses, sections, and student schedules.
  */
-export class CourseScheduling_actions {
+export class CourseSchedulingConcept {
   private coursesCollection = "courses";
   private sectionsCollection = "sections";
   private schedulesCollection = "schedules";
@@ -117,13 +118,18 @@ export class CourseScheduling_actions {
 
   /** Create a new course with a fixed ID */
   async createCourse( //TESTED
-    id: string,
-    title: string,
-    department: string,
-  ): Promise<Course> {
+    body: { id: string; title: string; department: string },
+  ): Promise<{ c: Course }> {
+    const { id, title, department } = body;
+
+    // Validation: check for empty strings
+    if (!id || !title || !department) {
+      throw new Error("All fields (id, title, department) are required");
+    }
+
     const course: Course = { id, title, department };
     await this.db.collection(this.coursesCollection).insertOne(course);
-    return course;
+    return { c: course };
   }
 
   // ------------------------
@@ -132,12 +138,31 @@ export class CourseScheduling_actions {
 
   /** Create a new section for a course */
   async createSection( //TESTED
-    courseId: string,
-    sectionNumber: string,
-    instructor: string,
-    capacity: number,
-    timeSlots: TimeSlot[],
-  ): Promise<Section> {
+    body: {
+      courseId: string;
+      sectionNumber: string;
+      instructor: string;
+      capacity: number;
+      timeSlots: TimeSlot[];
+      distribution?: string;
+    },
+  ): Promise<{ s: Section }> {
+    const {
+      courseId,
+      sectionNumber,
+      instructor,
+      capacity,
+      timeSlots,
+      distribution,
+    } = body;
+
+    // Validation: check for required fields
+    if (!courseId || !sectionNumber || !instructor || capacity < 0) {
+      throw new Error(
+        "All fields (courseId, sectionNumber, instructor, capacity) are required",
+      );
+    }
+
     const section: Section = {
       id: freshID(),
       courseId,
@@ -145,15 +170,19 @@ export class CourseScheduling_actions {
       instructor,
       capacity,
       timeSlots,
+      ...(distribution !== undefined && { distribution }),
     };
     await this.db.collection(this.sectionsCollection).insertOne(section);
-    return section;
+    return { s: section };
   }
 
   async editSection( //TESTED
-    sectionId: string,
-    updates: Partial<Omit<Section, "id" | "courseId">>,
-  ): Promise<Section | null> {
+    body: {
+      sectionId: string;
+      updates: Partial<Omit<Section, "id" | "courseId">>;
+    },
+  ): Promise<{ s: Section } | null> {
+    const { sectionId, updates } = body;
     const sectionsCol = this.db.collection<Section>(this.sectionsCollection);
 
     // Fetch the existing section
@@ -166,7 +195,7 @@ export class CourseScheduling_actions {
     // Update in DB
     await sectionsCol.updateOne({ id: sectionId }, { $set: updates });
 
-    return updatedSection;
+    return { s: updatedSection };
   }
 
   // ------------------------
@@ -174,7 +203,16 @@ export class CourseScheduling_actions {
   // ------------------------
 
   /** Create an empty schedule for a student */
-  async createSchedule(userId: string, name: string): Promise<Schedule> { //TESTED
+  async createSchedule(
+    body: { userId: string; name: string },
+  ): Promise<{ s: Schedule }> { //TESTED
+    const { userId, name } = body;
+
+    // Validation: check for required fields
+    if (!userId || !name) {
+      throw new Error("All fields (userId, name) are required");
+    }
+
     const schedule: Schedule = {
       id: freshID(),
       name,
@@ -182,11 +220,14 @@ export class CourseScheduling_actions {
       owner: userId,
     };
     await this.db.collection(this.schedulesCollection).insertOne(schedule);
-    return schedule;
+    return { s: schedule };
   }
 
   /** Delete a schedule (user must be owner) */
-  async deleteSchedule(userId: string, scheduleId: string): Promise<void> { //TESTED
+  async deleteSchedule(
+    body: { userId: string; scheduleId: string },
+  ): Promise<{}> { //TESTED
+    const { userId, scheduleId } = body;
     const schedule = await this.db.collection(this.schedulesCollection).findOne(
       { id: scheduleId },
     );
@@ -196,14 +237,14 @@ export class CourseScheduling_actions {
     await this.db.collection(this.schedulesCollection).deleteOne({
       id: scheduleId,
     });
+    return {};
   }
 
   /** Add a course section to a student's schedule (atomic) */
   async addSection( //TESTED
-    userId: string,
-    scheduleId: string,
-    sectionId: string,
-  ): Promise<void> {
+    body: { userId: string; scheduleId: string; sectionId: string },
+  ): Promise<{}> {
+    const { userId, scheduleId, sectionId } = body;
     const result = await this.db.collection(this.schedulesCollection).updateOne(
       { id: scheduleId, owner: userId },
       { $addToSet: { sectionIds: sectionId } }, // adds if not already present
@@ -212,14 +253,14 @@ export class CourseScheduling_actions {
     if (result.matchedCount === 0) {
       throw new Error("Schedule not found or unauthorized");
     }
+    return {};
   }
 
   /** Remove a course section from a student's schedule (atomic) */
   async removeSection( //TESTED
-    userId: string,
-    scheduleId: string,
-    sectionId: string,
-  ): Promise<void> {
+    body: { userId: string; scheduleId: string; sectionId: string },
+  ): Promise<{}> {
+    const { userId, scheduleId, sectionId } = body;
     const schedulesCol = this.db.collection<Schedule>(
       this.schedulesCollection,
     );
@@ -227,14 +268,14 @@ export class CourseScheduling_actions {
       { id: scheduleId, owner: userId },
       { $pull: { sectionIds: sectionId } }, // now TS knows sectionIds is string[]
     );
+    return {};
   }
 
   /** Duplicate an existing schedule for a student */
   async duplicateSchedule( //TESTED
-    userId: string,
-    sourceScheduleId: string,
-    newName: string,
-  ): Promise<Schedule> {
+    body: { userId: string; sourceScheduleId: string; newName: string },
+  ): Promise<{ s: Schedule }> {
+    const { userId, sourceScheduleId, newName } = body;
     // Find the original schedule
     const sourceSchedule = await this.db
       .collection<Schedule>(this.schedulesCollection)
@@ -260,37 +301,46 @@ export class CourseScheduling_actions {
     // Insert the new schedule into the database
     await this.db.collection(this.schedulesCollection).insertOne(newSchedule);
 
-    return newSchedule;
+    return { s: newSchedule };
   }
 
   // ------------------------
   // RETRIEVAL ACTIONS
   // ------------------------
 
-  async getCourse(courseId: string): Promise<Course | null> { //TESTED
-    return await this.db.collection<Course>(this.coursesCollection).findOne({
-      id: courseId,
-    });
+  async getCourse(body: { courseId: string }): Promise<Course[] | null> { //TESTED
+    const { courseId } = body;
+    const course = await this.db.collection<Course>(this.coursesCollection)
+      .findOne({
+        id: courseId,
+      });
+    return course ? [course] : null;
   }
 
-  async getSection(sectionId: string): Promise<Section | null> {
-    return await this.db.collection<Section>(this.sectionsCollection).findOne({
-      id: sectionId,
-    });
+  async getSection(body: { sectionId: string }): Promise<Section[] | null> {
+    const { sectionId } = body;
+    const section = await this.db.collection<Section>(this.sectionsCollection)
+      .findOne({
+        id: sectionId,
+      });
+    return section ? [section] : null;
   }
 
-  async getAllCourses(): Promise<Course[]> {
+  async getAllCourses(body: {} = {}): Promise<Course[]> {
     return await this.db.collection<Course>(this.coursesCollection).find()
       .toArray();
   }
 
-  async getAllSections(): Promise<Section[]> {
+  async getAllSections(body: {} = {}): Promise<Section[]> {
     return await this.db.collection<Section>(this.sectionsCollection).find()
       .toArray();
   }
 
-  async getAllSchedules(): Promise<Schedule[]> {
+  async getAllSchedules(body: {} = {}): Promise<Schedule[]> {
     return await this.db.collection<Schedule>(this.schedulesCollection)
       .find().toArray();
   }
 }
+
+// Default export for the server to load dynamically
+export default CourseSchedulingConcept;

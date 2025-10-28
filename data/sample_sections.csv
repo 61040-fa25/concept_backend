@@ -1,0 +1,13 @@
+course_code,section,title,professor,meeting_time,current_enrollment,seats_available,seats_total,distribution
+AFR 105,01,Introduction to the Black Experience,Kellie Cherie Carter Jackson,T - 12:45 PM - 3:25 PM,16,14,30,"HS, SBA"
+AFR 212,01,Black Women Writers,Fiona Maurissette,MR - 11:20 AM - 12:35 PM,22,3,25,"HS, SBA"
+CS 101,01,Introduction to Computer Science,Dr. John Smith,MWF - 10:00 AM - 10:50 AM,30,0,30,"SBA"
+CS 101,02,Introduction to Computer Science,Dr. Jane Doe,MWF - 2:00 PM - 2:50 PM,25,5,30,"SBA"
+MATH 201,01,Calculus I,Prof. Alice Johnson,MTWRF - 9:00 AM - 9:50 AM,28,2,30,"SBA"
+MATH 201,02,Calculus I,Prof. Bob Wilson,MTWRF - 11:00 AM - 11:50 AM,30,0,30,"SBA"
+ENG 101,01,Composition I,Dr. Sarah Brown,MW - 1:00 PM - 2:15 PM,20,10,30,"HS"
+ENG 101,02,Composition I,Dr. Michael Davis,TR - 1:00 PM - 2:15 PM,18,12,30,"HS"
+PHYS 101,01,Physics I,Dr. Emily Wilson,MWF - 11:00 AM - 11:50 AM,24,6,30,"SBA"
+PHYS 101,02,Physics I,Dr. Robert Taylor,MWF - 1:00 PM - 1:50 PM,26,4,30,"SBA"
+
+

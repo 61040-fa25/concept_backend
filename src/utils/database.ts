@@ -10,6 +10,8 @@ import {
   Section,
 } from "@concepts/CourseScheduling/courseSchedulingConcept.ts"; //import interfaces for mongdb collections
 
+import { ProfessorRating } from "@concepts/ProfessorRatings/professorRatingsConcept.ts";
+
 export function getCourseCollection(db: Db) {
   return db.collection<Course>("courses");
 }
@@ -20,6 +22,10 @@ export function getSectionCollection(db: Db) {
 
 export function getScheduleCollection(db: Db) {
   return db.collection<Schedule>("schedules");
+}
+
+export function getProfessorRatingsCollection(db: Db) {
+  return db.collection<ProfessorRating>("professorRatings");
 }
 
 async function initMongoClient() {
@@ -66,7 +72,7 @@ async function dropAllCollections(db: Db): Promise<void> {
  */
 export async function getDb() {
   const [client, DB_NAME] = await init();
-  return [client.db(DB_NAME), client];
+  return [client.db(DB_NAME), client] as [Db, MongoClient];
 }
 
 /**

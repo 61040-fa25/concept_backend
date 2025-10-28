@@ -80,7 +80,10 @@ async function testManualFilters() {
 // Test 3: AI suggestions
 // -----------------------------
 
-import config from "../../../.env";
+// Load environment variables using Deno's built-in env support
+const config = {
+  apiKey: Deno.env.get("GEMINI_API_KEY") || "",
+};
 
 async function testAISuggestions() {
   // Initialize Ai
@@ -126,6 +129,7 @@ async function main(): Promise<void> {
   await testAISuggestions();
 }
 
-if (require.main === module) {
+// Run the main function if this file is executed directly
+if (import.meta.main) {
   main();
 }

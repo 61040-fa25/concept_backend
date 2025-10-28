@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Professor Rating Display Example</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+
+        .section-card {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            cursor: pointer;
+            transition: box-shadow 0.3s;
+        }
+
+        .section-card:hover {
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+        }
+
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .course-code {
+            font-size: 18px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .section-number {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .instructor-name {
+            color: #555;
+            margin: 5px 0;
+        }
+
+        .professor-rating {
+            background: #f8f9fa;
+            border-left: 4px solid #4CAF50;
+            padding: 15px;
+            margin-top: 15px;
+            border-radius: 4px;
+        }
+
+        .professor-rating.no-rating {
+            border-left-color: #999;
+        }
+
+        .professor-rating h4 {
+            margin: 0 0 10px 0;
+            color: #333;
+        }
+
+        .rating-details {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            margin: 10px 0;
+        }
+
+        .rating-stat {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .rating-label {
+            font-weight: 500;
+            color: #666;
+        }
+
+        .rating-value {
+            font-size: 18px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .rating-bar {
+            height: 8px;
+            background: #e0e0e0;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 5px;
+        }
+
+        .rating-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #4CAF50, #8BC34A);
+            transition: width 0.3s;
+        }
+
+        .cache-info {
+            font-size: 12px;
+            color: #999;
+            margin-top: 10px;
+            font-style: italic;
+        }
+
+        .loading {
+            text-align: center;
+            color: #666;
+            padding: 20px;
+        }
+
+        .error {
+            background: #ffebee;
+            border-left: 4px solid #f44336;
+            padding: 15px;
+            margin-top: 15px;
+            border-radius: 4px;
+            color: #c62828;
+        }
+
+        .no-rating-message {
+            color: #666;
+            font-style: italic;
+        }
+
+        .emoji {
+            font-size: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Professor Rating Display Example</h1>
+    <p>Click on a section to see the professor's Rate My Professor rating</p>
+
+    <div id="sections-container">
+        <!-- Sections will be loaded here -->
+    </div>
+
+    <script>
+        const API_BASE_URL = 'http://localhost:8000/api';
+
+        // Sample section data (in production, this would come from your backend)
+        const sampleSections = [
+            {
+                id: '019a1dd4-e296-724c-a385-cb12bf8e0cd6',
+                courseId: 'AFR 105',
+                sectionNumber: '01',
+                instructor: 'Kellie Cherie Carter Jackson',
+                title: 'Introduction to the Black Experience'
+            }
+        ];
+
+        // Load sections on page load
+        async function loadSections() {
+            const container = document.getElementById('sections-container');
+            
+            try {
+                // In production, fetch real sections from your API
+                const response = await fetch(`${API_BASE_URL}/CourseScheduling/getAllSections`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({})
+                });
+
+                const sections = await response.json();
+                
+                // Display first 5 sections for demo
+                sections.slice(0, 5).forEach(section => {
+                    container.appendChild(createSectionCard(section));
+                });
+            } catch (error) {
+                console.error('Error loading sections:', error);
+                // Fallback to sample data
+                sampleSections.forEach(section => {
+                    container.appendChild(createSectionCard(section));
+                });
+            }
+        }
+
+        // Create a section card element
+        function createSectionCard(section) {
+            const card = document.createElement('div');
+            card.className = 'section-card';
+            card.innerHTML = `
+                <div class="section-header">
+                    <div>
+                        <span class="course-code">${section.courseId}</span>
+                        <span class="section-number">Section ${section.sectionNumber}</span>
+                    </div>
+                </div>
+                <div class="instructor-name">${section.instructor}</div>
+                <div id="rating-${section.id}" class="rating-placeholder"></div>
+            `;
+
+            // Add click handler to load rating
+            card.addEventListener('click', () => loadProfessorRating(section.id));
+
+            return card;
+        }
+
+        // Fetch and display professor rating
+        async function loadProfessorRating(sectionId) {
+            const ratingContainer = document.getElementById(`rating-${sectionId}`);
+            
+            // Show loading state
+            ratingContainer.innerHTML = '<div class="loading">Loading professor rating...</div>';
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/ProfessorRatings/getRatingForSection`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sectionId })
+                });
+
+                const result = await response.json();
+
+                if (result.success && result.data) {
+                    ratingContainer.innerHTML = formatProfessorRating(result.data);
+                } else {
+                    ratingContainer.innerHTML = `
+                        <div class="error">
+                            ${result.message || 'Unable to load professor rating'}
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                console.error('Error fetching professor rating:', error);
+                ratingContainer.innerHTML = `
+                    <div class="error">
+                        Failed to load professor rating. Please try again.
+                    </div>
+                `;
+            }
+        }
+
+        // Format professor rating for display
+        function formatProfessorRating(rating) {
+            if (rating.rating === null || rating.numRatings === 0) {
+                return `
+                    <div class="professor-rating no-rating">
+                        <h4>${rating.instructorName}</h4>
+                        <p class="no-rating-message">No ratings available on Rate My Professor</p>
+                        <p class="cache-info">This professor may be new or hasn't been rated yet.</p>
+                    </div>
+                `;
+            }
+
+            const ratingPercent = (rating.rating / 5.0) * 100;
+            const difficultyPercent = (rating.difficulty / 5.0) * 100;
+
+            return `
+                <div class="professor-rating">
+                    <h4>${rating.instructorName}</h4>
+                    <div class="rating-details">
+                        <div class="rating-stat">
+                            <span class="emoji">⭐</span>
+                            <div>
+                                <div class="rating-label">Rating</div>
+                                <div class="rating-value">${rating.rating.toFixed(1)}/5.0</div>
+                                <div class="rating-bar">
+                                    <div class="rating-bar-fill" style="width: ${ratingPercent}%"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="rating-stat">
+                            <span class="emoji">📊</span>
+                            <div>
+                                <div class="rating-label">Difficulty</div>
+                                <div class="rating-value">${rating.difficulty?.toFixed(1) || 'N/A'}/5.0</div>
+                                ${rating.difficulty ? `
+                                    <div class="rating-bar">
+                                        <div class="rating-bar-fill" style="width: ${difficultyPercent}%; background: linear-gradient(90deg, #FF9800, #FFC107)"></div>
+                                    </div>
+                                ` : ''}
+                            </div>
+                        </div>
+                        <div class="rating-stat">
+                            <span class="emoji">👥</span>
+                            <div>
+                                <div class="rating-label">Based on</div>
+                                <div class="rating-value">${rating.numRatings} reviews</div>
+                            </div>
+                        </div>
+                        ${rating.wouldTakeAgainPercent ? `
+                            <div class="rating-stat">
+                                <span class="emoji">✅</span>
+                                <div>
+                                    <div class="rating-label">Would take again</div>
+                                    <div class="rating-value">${rating.wouldTakeAgainPercent.toFixed(0)}%</div>
+                                </div>
+                            </div>
+                        ` : ''}
+                    </div>
+                    <p class="cache-info">
+                        Last updated: ${new Date(rating.lastUpdated).toLocaleString()}
+                    </p>
+                </div>
+            `;
+        }
+
+        // Initialize when page loads
+        loadSections();
+    </script>
+</body>
+</html>
+
+
