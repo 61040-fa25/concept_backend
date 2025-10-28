@@ -1,8 +1,8 @@
 # Academica Backend
 
 [Design Changes](design/Design_Changes.md)\
-[User Journey](design/UserJourney.md)
-[Design Study](design/DesignStudy)
+[User Journey](design/UserJourney.md)\
+[Design Study](design/DesignStudy)\
 [Screen Recordning](https://youtu.be/1FlhxO7HnOA?si=yCD9O86ecyt-06mn)
 
 
