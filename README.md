@@ -1,8 +1,7 @@
 # Academica Backend
 
-[Design Changes](C:\Users\marin\OneDrive\Desktop\61040-portfolio\Academica_backend\design\Design_Changes.md)
+[Design Changes](C:\Users\marin\OneDrive\Desktop\61040-portfolio\Academica_backend\design\Design_Changes.md)\
 [User Journey](C:\Users\marin\OneDrive\Desktop\61040-portfolio\Academica_backend\design\UserJourney.md)
-[Updated Screen Recording](C:\Users\marin\OneDrive\Desktop\61040-portfolio\Academica_backend\README.md)
 
 ### Starting the Server
 ```powershell
