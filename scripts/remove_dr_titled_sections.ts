@@ -13,12 +13,13 @@
  */
 
 import "jsr:@std/dotenv/load";
+import { Db, MongoClient } from "npm:mongodb";
 import { getDb } from "../src/utils/database.ts";
 
 async function main() {
   try {
     console.log("🔌 Connecting to MongoDB...");
-    const [db, client] = await getDb();
+    const [db, client]: [Db, MongoClient] = await getDb();
     console.log("✅ Connected to MongoDB");
 
     const sectionsCollection = db.collection("sections");
@@ -86,7 +87,7 @@ async function main() {
     await client.close();
     console.log("🔌 Database connection closed");
   } catch (error) {
-    console.error("❌ Fatal error:", error.message);
+    console.error("❌ Fatal error:", (error as Error).message);
     Deno.exit(1);
   }
 }

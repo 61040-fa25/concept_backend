@@ -9,6 +9,7 @@
  */
 
 import "jsr:@std/dotenv/load";
+import { Db, MongoClient } from "npm:mongodb";
 import { getDb } from "../src/utils/database.ts";
 import CSVImportConcept from "../src/concepts/CSVImport/CSVImportConcept.ts";
 
@@ -31,7 +32,17 @@ async function main() {
 
     const csvHeader =
       "course_code,section,title,professor,meeting_time,current_enrollment,seats_available,seats_total,distribution";
-    const csvRows = sections.map((section: any) => {
+    const csvRows = sections.map((section: {
+      course_code: string;
+      section: string;
+      title: string;
+      professor: string;
+      meeting_time: string;
+      current_enrollment: number;
+      seats_available: number;
+      seats_total: number;
+      distribution: string;
+    }) => {
       return [
         section.course_code,
         section.section,
@@ -53,7 +64,7 @@ async function main() {
 
     // Initialize database connection
     console.log("🔌 Connecting to MongoDB...");
-    const [db, client] = await getDb();
+    const [db, client]: [Db, MongoClient] = await getDb();
     console.log("✅ Connected to MongoDB");
 
     // Initialize CSV import concept
@@ -61,7 +72,7 @@ async function main() {
 
     // Clear any existing Fall 2025 sections first
     console.log(`🧹 Clearing existing ${semester} sections...`);
-    const clearResult = await csvImport.clearSectionsBySemester(semester);
+    const clearResult = await csvImport.clearSectionsBySemester({ semester });
     console.log(`   ${clearResult.message}`);
 
     // Import sections
@@ -92,7 +103,7 @@ async function main() {
     // Show some sample imported data
     if (result.success && result.importedCount > 0) {
       console.log("\n📋 SAMPLE IMPORTED SECTIONS:");
-      const sections = await csvImport.getSectionsBySemester(semester);
+      const sections = await csvImport.getSectionsBySemester({ semester });
       const sampleSections = sections.slice(0, 5);
 
       sampleSections.forEach((section, index) => {
@@ -138,7 +149,7 @@ async function main() {
     await Deno.remove(csvFilePath);
     console.log("🧹 Cleaned up temporary CSV file");
   } catch (error) {
-    console.error("❌ Fatal error:", error.message);
+    console.error("❌ Fatal error:", (error as Error).message);
     Deno.exit(1);
   }
 }

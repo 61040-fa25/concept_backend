@@ -216,7 +216,7 @@ async function main() {
     await client.close();
     console.log("🔌 Database connection closed");
   } catch (error) {
-    console.error("❌ Fatal error:", error.message);
+    console.error("❌ Fatal error:", (error as Error).message);
     Deno.exit(1);
   }
 }
