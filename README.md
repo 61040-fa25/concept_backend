@@ -3,7 +3,7 @@
 [Design Changes](design/Design_Changes.md)\
 [User Journey](design/UserJourney.md)\
 [Design Study](design/DesignStudy)\
-[Screen Recordning](https://youtu.be/1FlhxO7HnOA?si=yCD9O86ecyt-06mn)
+[Screen Recording](https://youtu.be/1FlhxO7HnOA?si=yCD9O86ecyt-06mn)
 
 
 ### Starting the Server
