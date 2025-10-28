@@ -1,4 +1,4 @@
-#Academica User Journey
+# Academica User Journey
 
 A Wellesley student is preparing for registration and feels overwhelmed by the large number of courses available. They open Academica and register. On the home page, they create a new schedule called "Fall 2025".
 
