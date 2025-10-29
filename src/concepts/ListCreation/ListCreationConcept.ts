@@ -311,6 +311,69 @@ export default class ListCreationConcept {
     // This is good practice but not strictly required by the effects if queries always sort.
     updatedListItems.sort((a, b) => a.orderNumber - b.orderNumber);
 
+    // --- Validation: enforce TaskBank dependencies server-side ---
+    // Build map taskId (stringified) -> new orderNumber for validation
+    const orderMap = new Map<string, number>();
+    for (const li of updatedListItems) {
+      orderMap.set(String(li.task), li.orderNumber);
+    }
+
+    try {
+      // Load TaskBank tasks for tasks present in this list
+      const taskIds = Array.from(orderMap.keys());
+      if (taskIds.length > 0) {
+        const taskCollection = this.db.collection("TaskBank.tasks");
+        // Cast filter to any to avoid driver type issues with branded ID types
+        const allBankTasks = await taskCollection.find({}).toArray();
+        const bankTasks = allBankTasks.filter((t) =>
+          orderMap.has(String(t._id))
+        );
+
+        // For each task, validate its dependencies that reference tasks within this list
+        for (const t of bankTasks) {
+          const aOrder = orderMap.get(String(t._id));
+          if (aOrder === undefined) continue;
+          for (const dep of (t.dependencies || [])) {
+            const bStr = String(dep.depTask);
+            if (!orderMap.has(bStr)) continue; // dependency to outside-list task: ignore here
+
+            const bOrder = orderMap.get(bStr)!;
+            const rel = String(dep.depRelation);
+
+            // Relations that require source to precede target
+            if (
+              rel === "BLOCKS" || rel === "PRECEDES" || rel === "REQUIRED_BY"
+            ) {
+              if (!(aOrder < bOrder)) {
+                return {
+                  error: `Dependency violation: task '${
+                    String(t._id)
+                  }' (${rel}) must come before '${bStr}'.`,
+                };
+              }
+            } else if (rel === "REQUIRES") {
+              // source requires target -> target must precede source
+              if (!(bOrder < aOrder)) {
+                return {
+                  error: `Dependency violation: task '${
+                    String(t._id)
+                  }' (REQUIRES) requires '${bStr}' to come before it.`,
+                };
+              }
+            }
+            // Other relations (BLOCKED_BY, FOLLOWS) are covered by inverse entries and need no separate check here
+          }
+        }
+      }
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error(
+        "Error validating TaskBank dependencies during assignOrder:",
+        e,
+      );
+      return { error: `Failed to validate dependencies: ${msg}` };
+    }
+
     await this.lists.updateOne(
       { _id: listId },
       {
