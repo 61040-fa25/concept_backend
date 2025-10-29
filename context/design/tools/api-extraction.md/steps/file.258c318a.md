@@ -1,3 +1,12 @@
+---
+timestamp: 'Tue Oct 28 2025 23:11:39 GMT-0400 (Eastern Daylight Time)'
+parent: '[[../20251028_231139.0af5a120.md]]'
+content_id: 258c318a9d503f7caeca19a20116796ba25bbca96b35f5ef219784c16ea1fa45
+---
+
+# file: src/concepts/SwipeSessions/SwipeSessionsConcept.ts
+
+```typescript
 import { Collection, Db } from "npm:mongodb";
 import { freshID } from "@utils/database.ts";
 import { ID } from "@utils/types.ts";
@@ -280,3 +289,8 @@ export default class SwipeSessionsConcept {
     return { decisionId: decision._id };
   }
 }
+```
+
+## PlaylistHealth
+
+Specification:

@@ -1,5 +1,5 @@
-import { assertEquals, assertExists, assertNotEquals } from "jsr:@std/assert";
-import { testDb } from "@utils/database.ts";
+import { assertEquals, assertExists } from "jsr:@std/assert";
+import { testDb, freshID } from "@utils/database.ts";
 import SwipeSessionsConcept, { User } from "./SwipeSessionsConcept.ts";
 import { ID } from "@utils/types.ts";
 
@@ -12,9 +12,9 @@ Deno.test("SwipeSessionsConcept", async (t) => {
 
   await t.step("start action", async (t) => {
     await t.step("should start a session successfully", async () => {
-        const result = await swipeSessions.start({ userId: testUser, queueTracks: testTracks });
-        assertEquals((result as any).error, undefined, "start should not return an error");
-        const { sessionId } = result as { sessionId: ID };
+      const result = await swipeSessions.start({ userId: testUser, queueTracks: testTracks });
+      assertEquals((result as { error?: string }).error, undefined, "start should not return an error");
+      const { sessionId } = result as { sessionId: ID };
       assertExists(sessionId);
 
       const sessionInDb = await swipeSessions.sessions.findOne({ _id: sessionId });
@@ -45,6 +45,28 @@ Deno.test("SwipeSessionsConcept", async (t) => {
       const size = 10;
       const result = await swipeSessions.start({ userId: testUser, queueTracks: testTracks, size });
       assertEquals((result as { error: string }).error, `queueTracks length (5) is less than the requested size (10)`);
+    });
+
+    await t.step("should fail if size is not a positive integer", async () => {
+      const result = await swipeSessions.start({ userId: testUser, queueTracks: testTracks, size: 0 });
+      assertEquals((result as { error: string }).error, "size must be a positive integer when provided");
+    });
+
+    await t.step("should trim identifiers and reject empty tracks", async () => {
+      const messyUser = "  user:messy  " as User;
+      const result = await swipeSessions.start({ userId: messyUser, queueTracks: ["  track:1  ", "", "track:2"] });
+      const { sessionId } = result as { sessionId: ID };
+      assertExists(sessionId);
+
+      const sessionInDb = await swipeSessions.sessions.findOne({ _id: sessionId });
+      assertExists(sessionInDb);
+      assertEquals(sessionInDb.userId, "user:messy" as User);
+      assertEquals(sessionInDb.queueTracks, ["track:1", "track:2"]);
+    });
+
+    await t.step("should fail when queueTracks sanitizes to empty", async () => {
+      const result = await swipeSessions.start({ userId: testUser, queueTracks: ["   ", "\n"] });
+      assertEquals((result as { error: string }).error, "queueTracks must include at least one track ID");
     });
   });
 
@@ -78,6 +100,23 @@ Deno.test("SwipeSessionsConcept", async (t) => {
     await t.step("should fail for a non-existent session", async () => {
       const result = await swipeSessions.next({ sessionId: "non-existent" as ID });
       assertEquals((result as { error: string }).error, "Session not found");
+    });
+
+    await t.step("should treat sessions with invalid queues as finished", async () => {
+      const orphanSessionId = freshID();
+      await swipeSessions.sessions.insertOne({
+        _id: orphanSessionId,
+        userId: testUser,
+        queueTracks: undefined as unknown as string[],
+        queueIndex: 0,
+        startedAt: Date.now(),
+      });
+
+      const result = await swipeSessions.next({ sessionId: orphanSessionId });
+      assertEquals((result as { trackId: string }).trackId, "-1");
+      const sessionInDb = await swipeSessions.sessions.findOne({ _id: orphanSessionId });
+      assertEquals(sessionInDb?.queueIndex, 0);
+      assertEquals(sessionInDb?.queueTracks, []);
     });
   });
 

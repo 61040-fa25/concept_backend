@@ -77,6 +77,15 @@ async function main() {
           try {
             const body = await c.req.json().catch(() => ({})); // Handle empty body
             const result = await instance[methodName](body);
+
+            if (result && typeof result === "object" && "error" in result) {
+              return c.json(result, 400);
+            }
+
+            if (result === undefined) {
+              return c.json({});
+            }
+
             return c.json(result);
           } catch (e) {
             console.error(`Error in ${conceptName}.${methodName}:`, e);
