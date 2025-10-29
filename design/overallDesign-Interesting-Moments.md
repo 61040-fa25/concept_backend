@@ -99,3 +99,9 @@ The two `TripCostEstimation` implementations demonstrate a significant evolution
 When testing "Test 3: Interesting Case - Zero-day Trip / Same fromDate and toDate Calculation", the test failed because the LLM failed to return a properly-formatted JSON, but the very next time I ran the test, it passed, exemplifying the probabilistic nature of LLMs and the need to have robust checks as part of the TripCostEstimationConcept parsing private function, which is present. An error should be displayed "nicely" to the user and the user should be able to manually enter the trip's total cost amount.
 
 
+# 7
+TripCostEstimation: In designing the frontend, I realized how redundant it would be to check that the cities listed as from and to locations exist
+in some set database when the concept uses an LLM which can check if these
+locations do indeed exist. This reduces error checking and gives more
+freedom to the user to choose from a large number of cities. 
+

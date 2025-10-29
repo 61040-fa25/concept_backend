@@ -13,8 +13,6 @@ Based on a user's choice of initial departure city and arrival city, and the use
 
 *   A set of `Users` with
     *   A set of `TravelPlans`
-*   A set of `Locations` with
-    *   A `city` String
 *   A set of `TravelPlans` with
     *   A `fromCity` Location
     *   A `toCity` Location
@@ -35,8 +33,8 @@ Based on a user's choice of initial departure city and arrival city, and the use
 ## Actions
 
 *   `createTravelPlan(user: User, fromCity: Location, toCity: Location, fromDate: Date, toDate: Date): (travelPlan: TravelPlan)`
-    *   **Requires:** `fromCity` and `toCity` exists and `toDate` >= `fromDate` and both are greater than the current date
-    *   **Effect:** Create and return a `travelPlan` with a `fromCity`, `toCity`, and from and to dates, and a default necessity (`accommodation` = true, `diningFlag` = true)
+    *   **Requires:** `toDate` >= `fromDate` and both are greater than the current date
+    *   **Effect:** Create and return a `travelPlan` with a `fromCity`, `toCity`, and from and to dates, and a default necessity (`accommodation` = true, `diningFlag` = true); If a `travelPlan` exists with the same values as the input parameters, then return that `travelPlan`
 
 *   `deleteTravelPlan(user: User, travelPlan: TravelPlan):  (travelPlan: TravelPlan)`
     *   **Requires:** `travelPlan` exists and belongs to user

@@ -1,14 +1,13 @@
-[@api-extraction-from-spec](api-extraction-from-spec.md)
+---
+timestamp: 'Tue Oct 21 2025 19:10:11 GMT-0400 (Eastern Daylight Time)'
+parent: '[[..\20251021_191011.97bdd6e4.md]]'
+content_id: 3b3d5164f3ea1cb8a1a712e08ae09d31aa0d5c80cb360c86e7d27afd692faf11
+---
 
-# Extracting from code
-
-The following is an explanation of how concepts are implemented, for the purposes of understanding how to extract an API.
-
-[@implementing-concepts](../background/implementing-concepts.md)
-
-# prompt: 
+# prompt:
 
 Now, analyze the following Concept Implementation and generate the API documentation based on these instructions.
+
 ```typescript
 import { Collection, Db } from "npm:mongodb";
 
@@ -300,116 +299,3 @@ export default class NotificationConcept {
 
 }
 ```
-
-# response:
-
-# API Specification: Notification Concept
-
-**Purpose:** remind users to save and celebrate milestones
-
-***
-
-## API Endpoints
-
-### POST /api/Notification/createNotification
-
-**Description:** Creates a new notification with the specified user, progress tracking, frequency, and message.
-
-**Requirements:**
-- None specified.
-
-**Effects:**
-- Create and return a notification with the above input details.
-
-**Request Body:**
-```json
-{
-  "user": "User",
-  "progress": "ProgressTracking",
-  "frequency": "Number",
-  "message": "String"
-}
-```
-
-**Success Response Body (Action):**
-```json
-{
-  "notification": "Notification"
-}
-```
-
-**Error Response Body:**
-```json
-{
-  "error": "string"
-}
-```
-***
-
-### POST /api/Notification/deleteNotification
-
-**Description:** Deletes a specific notification belonging to a user.
-
-**Requirements:**
-- notification exists and belongs to user
-
-**Effects:**
-- deletes the notification
-
-**Request Body:**
-```json
-{
-  "user": "User",
-  "notification": "Notification"
-}
-```
-
-**Success Response Body (Action):**
-```json
-{}
-```
-
-**Error Response Body:**
-```json
-{
-  "error": "string"
-}
-```
-***
-
-### POST /api/Notification/_getAllNotifications
-
-**Description:** Returns a list of all notification IDs belonging to the specified user, sorted by date.
-
-**Requirements:**
-- user exists
-
-**Effects:**
-- returns a list of all notification IDs belonging to the specified user sorted by the date
-
-**Request Body:**
-```json
-{
-  "user": "User"
-}
-```
-
-**Success Response Body (Query):**
-```json
-[
-  {
-    "notifications": [
-      "Notification",
-      "Notification"
-    ]
-  }
-]
-```
-
-**Error Response Body:**
-```json
-{
-  "error": "string"
-}
-```
-***
