@@ -18,13 +18,11 @@ type Task = ID; // The ID of a Task, e.g., from a TaskManagement concept, extern
  * @state a set of ListItems with
  *   a task of type Task
  *   an orderNumber of type Number
- *   a taskStatus of type String ("incomplete" or "complete")
  */
 interface ListItem {
   name: string;
   task: Task;
   orderNumber: number;
-  taskStatus: "incomplete" | "complete"; // Defaulted to "incomplete" on addition
 }
 
 /**
@@ -104,8 +102,7 @@ export default class ListCreationConcept {
   /**
    * @action addTask
    *
-   * Adds a task to a specified list. The task is initially marked as 'incomplete'
-   * and assigned an order number that places it at the end of the current list.
+   * Adds a task to a specified list and assigns an order number that places it at the end of the current list.
    *
    * @param {object} params - The action arguments.
    * @param {List} params.list - The ID of the list to add the task to.
@@ -114,7 +111,7 @@ export default class ListCreationConcept {
    * @returns {{listItem: ListItem} | {error: string}} - An object containing the newly created ListItem on success, or an error message.
    *
    * @requires listItem containing task is not already in list and adder = owner of list
-   * @effects a new listItem is created with task = task, taskStatus = incomplete, and orderNumber = itemCount+1.
+   * @effects a new listItem is created with task = task and orderNumber = itemCount+1.
    *          itemCount is incremented. The new listItem is returned and added to list's set of listItems.
    */
   async addTask(
@@ -150,7 +147,6 @@ export default class ListCreationConcept {
       name: name,
       task: task,
       orderNumber: newOrderNumber,
-      taskStatus: "incomplete", // Default status as per effects
     };
 
     await this.lists.updateOne(

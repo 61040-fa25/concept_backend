@@ -16,7 +16,7 @@
         * **effect** : new List with title = listName, itemCount = 0, and an empty set of ListItems is returned and added to set of Lists
     * `addTask (list : List, task : Task, adder : User) : ListItem`
         * **requires** : listItem containing task is not already in list and adder = owner of list
-        * **effect** : a new listItem is created with task = task, taskStatus = incomplete, and defaultOrder = itemCount+1. itemCount is incremented. the new listItem is returned and added to list's set of listItems.
+    * **effect** : a new listItem is created with task = task and defaultOrder = itemCount+1. itemCount is incremented. the new listItem is returned and added to list's set of listItems.
     * `deleteTask (list : List, task : Task, deleter : User)`
         * **requires** : a listIem containing task is in list's set of listItems and deleter = owner of list
         * **effect** : the listItem containing task is removed from list's set of listItems

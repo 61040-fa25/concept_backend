@@ -65,9 +65,8 @@ Deno.test("ListCreationConcept", async (t) => {
     // Add first task
     const addTask1Result = await concept.addTask({ list: aliceListId, task: taskA, adder: userAlice });
     assertExists((addTask1Result as { listItem: any }).listItem, "Should return a listItem on success");
-    assertEquals((addTask1Result as { listItem: any }).listItem.task, taskA);
-    assertEquals((addTask1Result as { listItem: any }).listItem.orderNumber, 1);
-    assertEquals((addTask1Result as { listItem: any }).listItem.taskStatus, "incomplete");
+  assertEquals((addTask1Result as { listItem: any }).listItem.task, taskA);
+  assertEquals((addTask1Result as { listItem: any }).listItem.orderNumber, 1);
 
     let updatedList = await concept._getListById({ listId: aliceListId });
     assertEquals(updatedList?.itemCount, 1);
@@ -236,9 +235,9 @@ Deno.test("ListCreationConcept", async (t) => {
     // Verification of internal state (optional, but good for understanding effect)
     const finalShoppingList = await concept._getListById({ listId: shoppingListId });
     assertArrayIncludes(finalShoppingList?.listItems || [], [
-      { task: "task:Eggs" as ID, orderNumber: 1, taskStatus: "incomplete" },
-      { task: "task:Milk" as ID, orderNumber: 2, taskStatus: "incomplete" },
-      { task: "task:Bread" as ID, orderNumber: 3, taskStatus: "incomplete" },
+  { task: "task:Eggs" as ID, orderNumber: 1 },
+  { task: "task:Milk" as ID, orderNumber: 2 },
+  { task: "task:Bread" as ID, orderNumber: 3 },
     ]);
   });
 

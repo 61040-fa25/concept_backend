@@ -1,4 +1,4 @@
-import { Collection, Db } from "npm:mongodb";
+import { ClientSession, Collection, Db, MongoClient } from "npm:mongodb";
 import { Empty, ID } from "../../utils/types.ts"; // Adjust path as necessary
 import { freshID } from "../../utils/database.ts"; // Adjust path as necessary
 
@@ -100,7 +100,10 @@ export default class TaskBankConcept {
   private banks: Collection<BankDoc>;
   private tasks: Collection<TaskDoc>;
 
-  constructor(private readonly db: Db) {
+  private client?: MongoClient;
+
+  constructor(private readonly db: Db, client?: MongoClient) {
+    this.client = client;
     this.banks = this.db.collection(PREFIX + "banks");
     this.tasks = this.db.collection(PREFIX + "tasks");
   }
@@ -112,12 +115,15 @@ export default class TaskBankConcept {
    * @param owner The user ID.
    * @returns The BankDoc associated with the owner.
    */
-  private async _getOrCreateBank(owner: User): Promise<BankDoc> {
-    let bank = await this.banks.findOne({ bankOwner: owner });
+  private async _getOrCreateBank(
+    owner: User,
+    session?: ClientSession,
+  ): Promise<BankDoc> {
+    let bank = await this.banks.findOne({ bankOwner: owner }, { session });
     if (!bank) {
       const newBankId = freshID();
       bank = { _id: newBankId, bankOwner: owner };
-      await this.banks.insertOne(bank);
+      await this.banks.insertOne(bank, { session });
     }
     return bank;
   }
@@ -222,20 +228,22 @@ export default class TaskBankConcept {
    * @effects : for task1's set of Dependencies, task2 and dependency are added. for task2's set of Dependencies, task1 and the inverse of dependency are added.
    */
   async addDependency(
-    { adder, task1, task2, dependency }: {
+    { adder, task1, task2, dependency, clientSession }: {
       adder: User;
       task1: Task;
       task2: Task;
       dependency: RelationType;
+      clientSession?: ClientSession;
     },
   ): Promise<DependencyResult> {
-    try {
-      const bank = await this._getOrCreateBank(adder);
+    // Internal implementation that performs the actual DB ops, respecting an optional session
+    const impl = async (session?: ClientSession): Promise<DependencyResult> => {
+      const bank = await this._getOrCreateBank(adder, session);
 
       // Precondition: task1 and task2 are in adder's bank
       const [t1, t2] = await Promise.all([
-        this.tasks.findOne({ _id: task1, bankId: bank._id }),
-        this.tasks.findOne({ _id: task2, bankId: bank._id }),
+        this.tasks.findOne({ _id: task1, bankId: bank._id }, { session }),
+        this.tasks.findOne({ _id: task2, bankId: bank._id }, { session }),
       ]);
 
       if (!t1) {
@@ -270,6 +278,7 @@ export default class TaskBankConcept {
       await this.tasks.updateOne(
         { _id: task1 },
         { $push: { dependencies: newDepEntry } },
+        { session },
       );
 
       // Add inverse dependency from task2 to task1
@@ -281,9 +290,49 @@ export default class TaskBankConcept {
             dependencies: { depTask: task1, depRelation: inverseDependency },
           },
         },
+        { session },
       );
 
-      return { dependency: newDepEntry };
+      return { dependency: newDepEntry } as DependencyResult;
+    };
+
+    try {
+      // If a clientSession was provided by the caller, use it.
+      if (clientSession) return await impl(clientSession);
+
+      // Otherwise, if we have a MongoClient available, run the operation inside a transaction
+      if (this.client) {
+        const session = this.client.startSession();
+        try {
+          let result: DependencyResult | null = null;
+          await session.withTransaction(async () => {
+            const r = await impl(session);
+            result = r as DependencyResult;
+            // If the impl returned an error, throw to abort the transaction and return after catching
+            if ((result as any).error) throw new Error("ClientError");
+          });
+          // If result contains error, return it; otherwise return success
+          return result ?? { error: "Unknown transaction result" };
+        } catch (e: any) {
+          // Distinguish client errors bubbled via throw
+          if (e && e.message === "ClientError") {
+            // Retrieve the impl result outside of transaction to provide the error message
+            const r = await impl();
+            return r as DependencyResult;
+          }
+          console.error("Error adding dependency (transaction):", e);
+          return { error: `Failed to add dependency: ${e.message}` };
+        } finally {
+          try {
+            await session.endSession();
+          } catch (_) {
+            // ignore
+          }
+        }
+      }
+
+      // Fallback: no client available, run without transaction
+      return await impl();
     } catch (e: any) {
       console.error("Error adding dependency:", e);
       return { error: `Failed to add dependency: ${e.message}` };
@@ -299,20 +348,21 @@ export default class TaskBankConcept {
    * to accurately identify the specific dependency to remove.
    */
   async deleteDependency(
-    { deleter, sourceTask, targetTask, relation }: {
+    { deleter, sourceTask, targetTask, relation, clientSession }: {
       deleter: User;
       sourceTask: Task;
       targetTask: Task;
       relation: RelationType;
+      clientSession?: ClientSession;
     },
   ): Promise<Empty | { error: string }> {
-    try {
-      const bank = await this._getOrCreateBank(deleter);
+    const impl = async (session?: ClientSession) => {
+      const bank = await this._getOrCreateBank(deleter, session);
 
       // Precondition: sourceTask and targetTask are in deleter's bank
       const [sourceTaskDoc, targetTaskDoc] = await Promise.all([
-        this.tasks.findOne({ _id: sourceTask, bankId: bank._id }),
-        this.tasks.findOne({ _id: targetTask, bankId: bank._id }),
+        this.tasks.findOne({ _id: sourceTask, bankId: bank._id }, { session }),
+        this.tasks.findOne({ _id: targetTask, bankId: bank._id }, { session }),
       ]);
 
       if (!sourceTaskDoc) {
@@ -345,6 +395,7 @@ export default class TaskBankConcept {
       await this.tasks.updateOne(
         { _id: sourceTask },
         { $pull: { dependencies: dependencyToRemove } },
+        { session },
       );
 
       // Remove inverse dependency from targetTask
@@ -364,6 +415,7 @@ export default class TaskBankConcept {
         await this.tasks.updateOne(
           { _id: targetTask },
           { $pull: { dependencies: inverseDependencyToRemove } },
+          { session },
         );
       } else {
         console.warn(
@@ -371,7 +423,44 @@ export default class TaskBankConcept {
         );
       }
 
-      return {};
+      return {} as Empty;
+    };
+
+    try {
+      if (clientSession) {
+        return (await impl(clientSession)) as Empty | { error: string };
+      }
+
+      if (this.client) {
+        const session = this.client.startSession();
+        try {
+          let result: Empty | { error: string } | null = null;
+          await session.withTransaction(async () => {
+            const r = await impl(session);
+            result = r as Empty | { error: string };
+            if ((result as any).error) throw new Error("ClientError");
+          });
+          return (result ?? { error: "Unknown transaction result" }) as
+            | Empty
+            | { error: string };
+        } catch (e: any) {
+          if (e && e.message === "ClientError") {
+            const r = await impl();
+            return r as Empty | { error: string };
+          }
+          console.error("Error deleting dependency (transaction):", e);
+          return { error: `Failed to delete dependency: ${e.message}` };
+        } finally {
+          try {
+            await session.endSession();
+          } catch (_) {
+            // ignore
+          }
+        }
+      }
+
+      // Fallback: no client available, run without transaction
+      return await impl();
     } catch (e: any) {
       console.error("Error deleting dependency:", e);
       return { error: `Failed to delete dependency: ${e.message}` };

@@ -32,12 +32,10 @@ type Task = ID; // The ID of a Task, e.g., from a TaskManagement concept, extern
  * @state a set of ListItems with
  *   a task of type Task
  *   an orderNumber of type Number
- *   a taskStatus of type String ("incomplete" or "complete")
  */
 interface ListItem {
   task: Task;
   orderNumber: number;
-  taskStatus: "incomplete" | "complete"; // Defaulted to "incomplete" on addition
 }
 
 /**
@@ -109,7 +107,7 @@ export default class ListCreationConcept {
   /**
    * @action addTask
    *
-   * Adds a task to a specified list. The task is initially marked as 'incomplete'
+  * Adds a task to a specified list.
    * and assigned an order number that places it at the end of the current list.
    *
    * @param {object} params - The action arguments.
@@ -118,9 +116,9 @@ export default class ListCreationConcept {
    * @param {User} params.adder - The ID of the user attempting to add the task (must be the owner).
    * @returns {{listItem: ListItem} | {error: string}} - An object containing the newly created ListItem on success, or an error message.
    *
-   * @requires listItem containing task is not already in list and adder = owner of list
-   * @effects a new listItem is created with task = task, taskStatus = incomplete, and orderNumber = itemCount+1.
-   *          itemCount is incremented. The new listItem is returned and added to list's set of listItems.
+  * @requires listItem containing task is not already in list and adder = owner of list
+  * @effects a new listItem is created with task = task and orderNumber = itemCount+1.
+  *          itemCount is incremented. The new listItem is returned and added to list's set of listItems.
    */
   async addTask({ list: listId, task, adder }: { list: List; task: Task; adder: User }): Promise<{ listItem: ListItem } | { error: string }> {
     const targetList = await this.lists.findOne({ _id: listId });
@@ -145,7 +143,6 @@ export default class ListCreationConcept {
     const newListItem: ListItem = {
       task: task,
       orderNumber: newOrderNumber,
-      taskStatus: "incomplete", // Default status as per effects
     };
 
     await this.lists.updateOne(

@@ -14,7 +14,7 @@ const userBob = "user:Bob" as ID;
 
 Deno.test("TaskBankConcept", async (t) => {
   const [db, client] = await testDb();
-  const taskBankConcept = new TaskBankConcept(db);
+  const taskBankConcept = new TaskBankConcept(db, client);
 
   await t.step("should successfully add a task", async () => {
     const result = await taskBankConcept.addTask({

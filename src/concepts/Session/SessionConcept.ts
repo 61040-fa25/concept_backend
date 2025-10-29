@@ -125,9 +125,9 @@ export default class SessionConcept {
       active: false,
     });
     if (existingInactiveSession) {
-      this.deleteSession({
-        session: existingInactiveSession._id.toString() as ID,
-      });
+      // Ensure the previous inactive session is fully removed before creating a new one.
+      // Await the deletion to avoid races when tests run concurrently.
+      await this.deleteSession({ session: existingInactiveSession._id });
     }
     // effects: creates new session
     const newSessionId = freshID();

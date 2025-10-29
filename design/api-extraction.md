@@ -84,13 +84,13 @@ Here is the API documentation extracted from the provided Concept Specifications
 
 ### POST /api/ListCreation/addTask
 
-**Description:** Adds a task to a specified list, initializing it as incomplete and assigning an order number.
+**Description:** Adds a task to a specified list and assigns an order number.
 
 **Requirements:**
 - listItem containing task is not already in list and adder = owner of list
 
 **Effects:**
-- a new listItem is created with task = task, taskStatus = incomplete, and orderNumber = itemCount+1.
+- a new listItem is created with task = task and orderNumber = itemCount+1.
 - itemCount is incremented.
 - The new listItem is returned and added to list's set of listItems.
 
@@ -110,8 +110,7 @@ Here is the API documentation extracted from the provided Concept Specifications
 {
   "listItem": {
     "task": "ID",
-    "orderNumber": "number",
-    "taskStatus": "string"
+    "orderNumber": "number"
   }
 }
 ```

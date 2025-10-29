@@ -102,18 +102,21 @@ Deno.test("ListCreationConcept", async (t) => {
         adder: userAlice,
       });
       assertExists(
-        (addTask1Result as { listItem: any }).listItem,
+        (addTask1Result as { listItem: { task: ID; orderNumber: number } })
+          .listItem,
         "Should return a listItem on success",
       );
-      assertEquals((addTask1Result as { listItem: any }).listItem.task, taskA);
       assertEquals(
-        (addTask1Result as { listItem: any }).listItem.orderNumber,
+        (addTask1Result as { listItem: { task: ID; orderNumber: number } })
+          .listItem.task,
+        taskA,
+      );
+      assertEquals(
+        (addTask1Result as { listItem: { task: ID; orderNumber: number } })
+          .listItem.orderNumber,
         1,
       );
-      assertEquals(
-        (addTask1Result as { listItem: any }).listItem.taskStatus,
-        "incomplete",
-      );
+      // taskStatus removed from ListItem; session handles task progress
 
       let updatedList = await concept._getListById({ listId: aliceListId });
       assertEquals(updatedList?.itemCount, 1);
@@ -128,10 +131,18 @@ Deno.test("ListCreationConcept", async (t) => {
         task: taskB,
         adder: userAlice,
       });
-      assertExists((addTask2Result as { listItem: any }).listItem);
-      assertEquals((addTask2Result as { listItem: any }).listItem.task, taskB);
+      assertExists(
+        (addTask2Result as { listItem: { task: ID; orderNumber: number } })
+          .listItem,
+      );
       assertEquals(
-        (addTask2Result as { listItem: any }).listItem.orderNumber,
+        (addTask2Result as { listItem: { task: ID; orderNumber: number } })
+          .listItem.task,
+        taskB,
+      );
+      assertEquals(
+        (addTask2Result as { listItem: { task: ID; orderNumber: number } })
+          .listItem.orderNumber,
         2,
       );
 
@@ -284,7 +295,7 @@ Deno.test("ListCreationConcept", async (t) => {
       task: taskD,
       adder: userAlice,
     });
-    let tasksBefore =
+    const tasksBefore =
       (await concept._getTasksInList({ listId: aliceListId })) || [];
     assertEquals(tasksBefore.map((t) => t.task), [taskA, taskC, taskD]);
     assertEquals(tasksBefore.map((t) => t.orderNumber), [1, 2, 3]);
@@ -298,7 +309,8 @@ Deno.test("ListCreationConcept", async (t) => {
     });
     assertEquals(assignResult, {}, "Should return empty object on success");
 
-    let tasksAfter = (await concept._getTasksInList({ listId: aliceListId })) ||
+    const tasksAfter =
+      (await concept._getTasksInList({ listId: aliceListId })) ||
       [];
     assertEquals(
       tasksAfter.map((t) => t.task),
@@ -323,7 +335,8 @@ Deno.test("ListCreationConcept", async (t) => {
     });
     assertEquals(assignResult, {}, "Should return empty object on success");
 
-    let tasksAfter = (await concept._getTasksInList({ listId: aliceListId })) ||
+    const tasksAfter =
+      (await concept._getTasksInList({ listId: aliceListId })) ||
       [];
     assertEquals(
       tasksAfter.map((t) => t.task),
@@ -503,24 +516,9 @@ Deno.test("ListCreationConcept", async (t) => {
         listId: shoppingListId,
       });
       assertArrayIncludes(finalShoppingList?.listItems || [], [
-        {
-          name: "Task Eggs",
-          task: "task:Eggs" as ID,
-          orderNumber: 1,
-          taskStatus: "incomplete",
-        },
-        {
-          name: "Task Milk",
-          task: "task:Milk" as ID,
-          orderNumber: 2,
-          taskStatus: "incomplete",
-        },
-        {
-          name: "Task Bread",
-          task: "task:Bread" as ID,
-          orderNumber: 3,
-          taskStatus: "incomplete",
-        },
+        { name: "Task Eggs", task: "task:Eggs" as ID, orderNumber: 1 },
+        { name: "Task Milk", task: "task:Milk" as ID, orderNumber: 2 },
+        { name: "Task Bread", task: "task:Bread" as ID, orderNumber: 3 },
       ]);
     },
   );
