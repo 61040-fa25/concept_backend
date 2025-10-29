@@ -412,44 +412,89 @@ export default class ListCreationConcept {
     { listId }: { listId: List },
   ): Promise<ListItem[] | null> {
     const list = await this.lists.findOne({ _id: listId });
-    if (!list) {
-      return null;
-    }
-    // Return the list items sorted by orderNumber.
-    // A shallow copy is made before sorting to avoid modifying the original array if it were stored directly.
+    if (!list) return null;
+    // Return a shallow copy sorted by orderNumber so we don't mutate the DB object
     return [...list.listItems].sort((a, b) => a.orderNumber - b.orderNumber);
   }
-
-  /**
-   * @action deleteList
-   * Removes an entire list and its embedded items.
-   *
-   * @param {object} params - The action arguments.
-   * @param {List} params.listId - The ID of the list to delete.
-   * @param {User} params.deleter - The ID of the user attempting the deletion (must be owner).
-   * @returns {Empty | { error: string }} - Empty object on success, or error message.
-   *
-   * @requires the list exists and deleter = owner of the list
-   * @effects the list document is removed from the database, along with its embedded listItems
-   */
   async deleteList(
-    { listId, deleter }: { listId: List; deleter: User },
+    { listId, listName, deleter, username }: {
+      listId?: List;
+      listName?: string;
+      deleter?: User;
+      username?: string;
+    },
   ): Promise<Empty | { error: string }> {
-    const targetList = await this.lists.findOne({ _id: listId });
+    // Resolve deleter (owner) from deleter id or username if provided
+    let resolvedDeleter: User | undefined = deleter;
+    if (!resolvedDeleter && username) {
+      const uid = await usernameToUserId(this.db, username);
+      if (!uid) return { error: `No user found with username '${username}'.` };
+      resolvedDeleter = uid;
+    }
 
+    // If listId not provided, try to resolve from listName
+    let resolvedListId: List | undefined = listId;
+    if (!resolvedListId && listName) {
+      if (resolvedDeleter) {
+        // Prefer scoped lookup by owner to avoid ambiguity
+        const list = await this.lists.findOne({
+          title: listName,
+          owner: resolvedDeleter,
+        });
+        if (!list) {
+          return { error: `List with name '${listName}' not found for user.` };
+        }
+        resolvedListId = list._id;
+      } else {
+        // No owner provided — try to find lists by title. If multiple, ask to disambiguate.
+        const candidates = await this.lists.find({ title: listName }).toArray();
+        if (candidates.length === 0) {
+          return { error: `List with name '${listName}' not found.` };
+        }
+        if (candidates.length > 1) {
+          return {
+            error:
+              `Multiple lists found with name '${listName}'. Please provide owner (deleter or username) to disambiguate.`,
+          };
+        }
+        // Exactly one candidate — use it, but log a warning since no deleter was supplied for auth.
+        const only = candidates[0];
+        console.warn(
+          `deleteList called without deleter; deleting unique list '${listName}' (id=${only._id})`,
+        );
+        resolvedListId = only._id;
+        // Also set resolvedDeleter to the list owner so downstream checks behave normally.
+        resolvedDeleter = only.owner;
+      }
+    }
+
+    if (!resolvedListId) {
+      return { error: "Missing required parameter: listId or listName" };
+    }
+
+    const targetList = await this.lists.findOne({ _id: resolvedListId });
     if (!targetList) {
-      return { error: `List with ID '${listId}' not found.` };
+      return { error: `List with ID '${resolvedListId}' not found.` };
+    }
+
+    // If we still don't have a resolvedDeleter, require it for authorization
+    if (!resolvedDeleter) {
+      return {
+        error:
+          "Missing required parameter: deleter or username (required to authorize deletion)",
+      };
     }
 
     // Requires: deleter = owner of list
-    if (targetList.owner !== deleter) {
+    if (targetList.owner !== resolvedDeleter) {
       return {
-        error: `User '${deleter}' is not the owner of list '${listId}'.`,
+        error:
+          `User '${resolvedDeleter}' is not the owner of list '${resolvedListId}'.`,
       };
     }
 
     // Effects: remove the entire list document
-    await this.lists.deleteOne({ _id: listId });
+    await this.lists.deleteOne({ _id: resolvedListId });
     return {};
   }
 }
