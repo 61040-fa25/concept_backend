@@ -1,3 +1,12 @@
+---
+timestamp: 'Wed Oct 29 2025 19:00:30 GMT-0400 (Eastern Daylight Time)'
+parent: '[[..\20251029_190030.dbb90da1.md]]'
+content_id: ed5a0d720167cc95a4035c172086e3bc4481ae912328592f6a1416d6319e089a
+---
+
+# file: deno.json
+
+```json
 {
     "imports": {
         "@concepts/": "./src/concepts/",
@@ -8,3 +17,4 @@
         "concepts": "deno run --allow-net --allow-read --allow-sys --allow-env src/concept_server.ts --port 8000 --baseUrl /api"
     }
 }
+```

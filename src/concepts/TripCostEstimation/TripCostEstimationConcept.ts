@@ -1,20 +1,4 @@
-// Avoid importing `npm:` specifiers in this file to keep the file self-contained.
-// Use lightweight local aliases for the MongoDB types so the file compiles without
-// requiring a specific remote/npm specifier here.
-type Collection<T> = {
-  findOne(filter: unknown, options?: unknown): Promise<T | null>;
-  find(filter: unknown, options?: unknown): { toArray(): Promise<Array<T>> };
-  insertOne(doc: T): Promise<void>;
-  updateOne(
-    filter: unknown,
-    update: unknown,
-    options?: unknown,
-  ): Promise<{ matchedCount: number }>;
-  deleteMany(filter: unknown): Promise<void>;
-  deleteOne(filter: unknown): Promise<void>;
-};
-
-type Db = { collection<T>(name: string): Collection<T> };
+import { Collection, Db } from "mongodb";
 import { ID } from "@utils/types.ts";
 import { freshID } from "@utils/database.ts";
 import { GeminiLLM } from "@utils/gemini-llm.ts";
@@ -67,7 +51,7 @@ interface TravelPlansDoc {
   fromDate: Date;
   toDate: Date;
   necessityID: Necessity; // Link to NecessitiesDoc
-  latestCostEstimateID?: CostEstimate; // NEW: Optional link to the latest cost estimate
+  latestCostEstimateID?: CostEstimate | null; // NEW: Optional link to the latest cost estimate
 }
 
 /**
@@ -110,12 +94,20 @@ export default class TripCostEstimationConcept {
   private travelPlans: Collection<TravelPlansDoc>;
   private necessities: Collection<NecessitiesDoc>;
   private costEstimates: Collection<CostEstimatesDoc>;
+  private readonly llm: GeminiLLM;
 
   constructor(private readonly db: Db) {
-    this.users = this.db.collection(PREFIX + "users");
-    this.travelPlans = this.db.collection(PREFIX + "travelPlans");
-    this.necessities = this.db.collection(PREFIX + "necessities");
-    this.costEstimates = this.db.collection(PREFIX + "costEstimates");
+    this.llm = new GeminiLLM();
+    this.users = this.db.collection<UsersDoc>(PREFIX + "users");
+    this.travelPlans = this.db.collection<TravelPlansDoc>(
+      PREFIX + "travelPlans",
+    );
+    this.necessities = this.db.collection<NecessitiesDoc>(
+      PREFIX + "necessities",
+    );
+    this.costEstimates = this.db.collection<CostEstimatesDoc>(
+      PREFIX + "costEstimates",
+    );
   }
 
   // --- Private Helper Methods ---
@@ -238,11 +230,13 @@ export default class TripCostEstimationConcept {
       return { error: "Arrival date must be on or after departure date." };
     }
 
-    // Requires: both dates are greater than the current date
+    // Requires: both dates are greater than the current date (strictly after today)
     const now = new Date();
     now.setHours(0, 0, 0, 0); // Normalize to start of day for comparison
-    if (fromDate < now || toDate < now) {
-      return { error: "Departure and arrival dates must be in the future." };
+    if (fromDate <= now || toDate <= now) {
+      return {
+        error: "Departure and arrival dates must be after the current date.",
+      };
     }
 
     // Ensure the user exists (or create a placeholder if not found, depending on domain logic)
@@ -407,15 +401,15 @@ export default class TripCostEstimationConcept {
   }
 
   /**
-   * generateAICostEstimate (user: User, travelPlan: TravelPlan, llm: GeminiLLM): (costEstimate: CostEstimate)
+   * generateAICostEstimate (user: User, travelPlan: TravelPlan): (costEstimate: CostEstimate)
    *
    * **requires** `travelPlan` exists and belongs to user
    *
-   * **effects** Retrieves trip details (dates, locations) and necessity preference (accommodation, dining) and uses the llm's specialized tool (e.g., Google Search/Flights/Hotels) to calculate and return the median cost estimates for flight, `rooms_per_night`, and `food_daily`; the resulting data is stored as a new `CostEstimate` associated with the `travelPlanID`. The `TravelPlan`'s `latestCostEstimateID` is updated to this new estimate.
+   * **effects** Retrieves trip details (dates, locations) and necessity preference (accommodation, dining) and uses the concept's internal LLM client to calculate and return the median cost estimates for flight, `rooms_per_night`, and `food_daily`; the resulting data is stored as a new `CostEstimate` associated with the `travelPlanID`. The `TravelPlan`'s `latestCostEstimateID` is updated to this new estimate.
    * **Note:** The LLM prompt will be specifically tailored to search for accommodation prices matching the `accommodation` Boolean (e.g., true for hotel/motel costs) and food costs based on the `diningFlag` (true for "restaurant costs," false for "no food costs"). If the LLM fails to provide an estimate for any reason or the costs are widely inaccurate (less than 50, more than 100000 for example) then the user can manually enter the total cost of the trip that they plan to save for.
    */
   async generateAICostEstimate(
-    { user, travelPlan, llm }: { user: ID; travelPlan: ID; llm: GeminiLLM },
+    { user, travelPlan }: { user: ID; travelPlan: ID },
   ): Promise<{ costEstimate: CostEstimate } | { error: string }> {
     const existingTravelPlan = await this.travelPlans.findOne({
       _id: travelPlan,
@@ -441,13 +435,10 @@ export default class TripCostEstimationConcept {
     const originCityStr = String(existingTravelPlan.fromCity);
     const destinationCityStr = String(existingTravelPlan.toCity);
 
-    const numNights = Math.ceil(
-      (existingTravelPlan.toDate.getTime() -
-        existingTravelPlan.fromDate.getTime()) /
-        (1000 * 60 * 60 * 24),
-    );
-    const fromDateStr = existingTravelPlan.fromDate.toISOString().split("T")[0];
-    const toDateStr = existingTravelPlan.toDate.toISOString().split("T")[0];
+    const fromDateStr =
+      new Date(existingTravelPlan.fromDate).toISOString().split("T")[0];
+    const toDateStr =
+      new Date(existingTravelPlan.toDate).toISOString().split("T")[0];
 
     const accommodationPreference = necessityDoc.accommodation
       ? "hotel/motel costs"
@@ -461,14 +452,13 @@ export default class TripCostEstimationConcept {
       `Estimate median round-trip flight, ${accommodationPreference}, and ${diningPreference} ` +
       `from ${originCityStr} to ${destinationCityStr} ` +
       `departing on ${fromDateStr} and returning on ${toDateStr} ` +
-      `for a trip lasting approximately ${numNights} nights. ` +
       `The JSON object should have the structure: ` +
       `{"flight": <number>, "roomsPerNight": <number>, "foodDaily": <number>}. ` +
       `Return only the JSON object.`;
 
     let llmRawResult: string;
     try {
-      llmRawResult = await llm.executeLLM(prompt);
+      llmRawResult = await this.llm.executeLLM(prompt);
     } catch (llmError) {
       return { error: `LLM API call failed: ${(llmError as Error).message}` };
     }
@@ -517,6 +507,147 @@ export default class TripCostEstimationConcept {
   }
 
   /**
+   * editEstimateCost (user: User, travelPlan: TravelPlan, flight: Number, roomsPerNight: Number, foodDaily: Number): (costEstimate: CostEstimate)
+   *
+   * requires travelPlan exists and belongs to user. flight, roomsPerNight, and foodDaily are non-negative numbers.
+   *
+   * effects Creates a new CostEstimate with the provided values (or updates by creating a new revision), sets lastUpdated to now,
+   * and updates the travel plan's latestCostEstimateID to this new estimate.
+   */
+  async editEstimateCost(
+    {
+      user,
+      travelPlan,
+      flight,
+      roomsPerNight,
+      foodDaily,
+    }: {
+      user: ID;
+      travelPlan: ID;
+      flight: number;
+      roomsPerNight: number;
+      foodDaily: number;
+    },
+  ): Promise<{ costEstimate: CostEstimate } | { error: string }> {
+    const existingTravelPlan = await this.travelPlans.findOne({
+      _id: travelPlan,
+      userID: user,
+    });
+    if (!existingTravelPlan) {
+      return { error: "Travel plan not found or does not belong to the user." };
+    }
+
+    if (flight < 0 || roomsPerNight < 0 || foodDaily < 0) {
+      return { error: "Cost values must be non-negative numbers." };
+    }
+
+    const newCostEstimateID = freshID();
+    const newCostEstimate: CostEstimatesDoc = {
+      _id: newCostEstimateID,
+      travelPlanID: travelPlan,
+      flight,
+      roomsPerNight,
+      foodDaily,
+      lastUpdated: new Date(),
+    };
+
+    await this.costEstimates.insertOne(newCostEstimate);
+    await this.travelPlans.updateOne(
+      { _id: travelPlan },
+      { $set: { latestCostEstimateID: newCostEstimateID } },
+    );
+
+    return { costEstimate: newCostEstimateID as CostEstimate };
+  }
+
+  /**
+   * deleteEstimateCost (user: User, costEstimate: CostEstimate): (costEstimate: CostEstimate)
+   *
+   * requires costEstimate exists and belongs to user
+   *
+   * effects Deletes the CostEstimate and updates the travel plan's latestCostEstimateID
+   * to the second most recently updated estimate (if any), or clears it if none remain.
+   */
+  async deleteEstimateCost(
+    { user, costEstimate }: { user: ID; costEstimate: ID },
+  ): Promise<{ costEstimate: CostEstimate } | { error: string }> {
+    const estimateDoc = await this.costEstimates.findOne({
+      _id: costEstimate as unknown as CostEstimate,
+    });
+    if (!estimateDoc) {
+      return { error: "Cost estimate not found." };
+    }
+
+    const owningPlan = await this.travelPlans.findOne({
+      _id: estimateDoc.travelPlanID,
+      userID: user,
+    });
+    if (!owningPlan) {
+      return { error: "Cost estimate does not belong to the user." };
+    }
+
+    // Delete the specified estimate
+    await this.costEstimates.deleteOne({ _id: estimateDoc._id });
+
+    // Determine the next latest estimate (if any) for this plan
+    const remaining = await this.costEstimates.find(
+      { travelPlanID: estimateDoc.travelPlanID },
+      { sort: { lastUpdated: -1 } },
+    ).toArray();
+    const nextLatest = remaining[0];
+
+    await this.travelPlans.updateOne(
+      { _id: estimateDoc.travelPlanID },
+      { $set: { latestCostEstimateID: nextLatest ? nextLatest._id : null } },
+    );
+
+    return { costEstimate: estimateDoc._id as CostEstimate };
+  }
+
+  /**
+   * getTravelCities (user: User, travelPlan: TravelPlan): (fromCity: Location, toCity: Location)
+   *
+   * requires travelPlan exists and belongs to the user
+   *
+   * effects Returns fromCity and toCity for the specified travelPlan
+   */
+  async getTravelCities(
+    { user, travelPlan }: { user: ID; travelPlan: ID },
+  ): Promise<{ fromCity: Location; toCity: Location } | { error: string }> {
+    const plan = await this.travelPlans.findOne({
+      _id: travelPlan,
+      userID: user,
+    });
+    if (!plan) {
+      return { error: "Travel plan not found or does not belong to the user." };
+    }
+    return {
+      fromCity: plan.fromCity as Location,
+      toCity: plan.toCity as Location,
+    };
+  }
+
+  /**
+   * getTravelDates (user: User, travelPlan: TravelPlan): (fromDate: Date, toDate: Date)
+   *
+   * requires travelPlan exists and belongs to the user
+   *
+   * effects Returns fromDate and toDate for the specified travelPlan
+   */
+  async getTravelDates(
+    { user, travelPlan }: { user: ID; travelPlan: ID },
+  ): Promise<{ fromDate: Date; toDate: Date } | { error: string }> {
+    const plan = await this.travelPlans.findOne({
+      _id: travelPlan,
+      userID: user,
+    });
+    if (!plan) {
+      return { error: "Travel plan not found or does not belong to the user." };
+    }
+    return { fromDate: plan.fromDate, toDate: plan.toDate };
+  }
+
+  /**
    * estimateCost (user: User, travelPlan: TravelPlan): (totalCost: Number)
    *
    * **requires** `travelPlan` exists and belongs to user and an associated `CostEstimate` exists
@@ -552,12 +683,14 @@ export default class TripCostEstimationConcept {
       return { error: "Referenced cost estimate not found." };
     }
 
+    const toDate: Date = new Date(existingTravelPlan.toDate);
+    const fromDate: Date = new Date(existingTravelPlan.fromDate);
     // Calculate number of days (inclusive of arrival day if departing on same day as arrival, min 1 day)
     const numDays = Math.max(
       1, // Ensure at least 1 day for calculation if fromDate and toDate are the same
       Math.ceil(
-        (existingTravelPlan.toDate.getTime() -
-          existingTravelPlan.fromDate.getTime()) /
+        (toDate.getTime() -
+          fromDate.getTime()) /
           (1000 * 60 * 60 * 24),
       ),
     );

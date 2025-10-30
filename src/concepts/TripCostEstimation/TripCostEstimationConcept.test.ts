@@ -18,6 +18,13 @@ type Location = ID;
 type TravelPlan = ID;
 // Note: Necessity and CostEstimate are internal IDs; their full document structure cannot be queried directly from tests.
 
+// Minimal internal types for safe introspection of concept's collections in tests
+type TravelPlansCollectionLite = {
+  findOne(
+    filter: Record<string, unknown>,
+  ): Promise<{ latestCostEstimateID?: ID | null } | null>;
+};
+
 // Helper function to setup the test environment (DB, concept, base data)
 async function setupTestEnvironment() {
   const [db, client] = await testDb();
@@ -98,11 +105,9 @@ Deno.test("TripCostEstimationConcept: Operational Principle Trace", async () => 
     console.log(`   -> Updated necessity for plan ${principleTravelPlanId}.`);
 
     console.log("3. Action: generateAICostEstimate (Live LLM Call)");
-    const llm = new GeminiLLM();
     const generateEstimateResult = await concept.generateAICostEstimate({
       user: userAlice,
       travelPlan: principleTravelPlanId,
-      llm: llm,
     });
     if ("error" in generateEstimateResult) {
       throw new Error(
@@ -303,11 +308,9 @@ Deno.test("TripCostEstimationConcept: Interesting Case - Sequential Estimates fo
 
     // Generate first estimate
     console.log("2. Action: Generate first AI cost estimate (Live LLM Call).");
-    const llm = new GeminiLLM();
     const generateEstimateResult1 = await concept.generateAICostEstimate({
       user: userAlice,
       travelPlan: travelPlanId,
-      llm: llm,
     });
     if ("error" in generateEstimateResult1) {
       throw new Error(`Test failed: ${generateEstimateResult1.error}`);
@@ -316,9 +319,10 @@ Deno.test("TripCostEstimationConcept: Interesting Case - Sequential Estimates fo
     console.log(`   -> Generated first cost estimate ID: ${costEstimateId1}.`);
 
     // Verify the travel plan now points to this estimate
-    let travelPlanDoc = await (concept as any)["travelPlans"].findOne({
-      _id: travelPlanId,
-    });
+    const travelPlansCol =
+      (concept as unknown as { travelPlans: TravelPlansCollectionLite })
+        .travelPlans;
+    let travelPlanDoc = await travelPlansCol.findOne({ _id: travelPlanId });
     assertEquals(
       travelPlanDoc?.latestCostEstimateID,
       costEstimateId1,
@@ -332,7 +336,6 @@ Deno.test("TripCostEstimationConcept: Interesting Case - Sequential Estimates fo
     const generateEstimateResult2 = await concept.generateAICostEstimate({
       user: userAlice,
       travelPlan: travelPlanId,
-      llm: llm,
     });
     if ("error" in generateEstimateResult2) {
       throw new Error(`Test failed: ${generateEstimateResult2.error}`);
@@ -348,9 +351,7 @@ Deno.test("TripCostEstimationConcept: Interesting Case - Sequential Estimates fo
     );
 
     // Verify the travel plan now points to the *second* estimate
-    travelPlanDoc = await (concept as any)["travelPlans"].findOne({
-      _id: travelPlanId,
-    });
+    travelPlanDoc = await travelPlansCol.findOne({ _id: travelPlanId });
     assertEquals(
       travelPlanDoc?.latestCostEstimateID,
       costEstimateId2,
@@ -430,6 +431,200 @@ Deno.test("TripCostEstimationConcept: Interesting Case - `_getAllTravelPlans` Qu
       error: `User with ID ${nonExistentUser} does not exist.`,
     }, "Requirement: Should return error for non-existent user.");
     console.log(`   -> Requirement Confirmed: ${result[0].error}`);
+  } finally {
+    await client.close();
+  }
+});
+
+// --- Test 6: New Actions - getTravelCities and getTravelDates ---
+Deno.test("TripCostEstimationConcept: New Actions - getTravelCities and getTravelDates", async () => {
+  console.log(
+    "\n--- Test: New Actions - getTravelCities and getTravelDates ---",
+  );
+  const { client, concept, userAlice, locationNYC, locationLA } =
+    await setupTestEnvironment();
+
+  try {
+    const fromDate = new Date();
+    fromDate.setDate(fromDate.getDate() + 5);
+    const toDate = new Date();
+    toDate.setDate(toDate.getDate() + 9);
+
+    const createResult = await concept.createTravelPlan({
+      user: userAlice,
+      fromCity: locationNYC,
+      toCity: locationLA,
+      fromDate,
+      toDate,
+    });
+    if ("error" in createResult) {
+      throw new Error(`Setup failed: ${createResult.error}`);
+    }
+    const travelPlanId = createResult.travelPlan;
+
+    const cities = await concept.getTravelCities({
+      user: userAlice,
+      travelPlan: travelPlanId,
+    });
+    if ("error" in cities) {
+      throw new Error(`getTravelCities failed: ${cities.error}`);
+    }
+    assertEquals(
+      cities.fromCity,
+      locationNYC,
+      "fromCity should match created plan",
+    );
+    assertEquals(cities.toCity, locationLA, "toCity should match created plan");
+
+    const dates = await concept.getTravelDates({
+      user: userAlice,
+      travelPlan: travelPlanId,
+    });
+    if ("error" in dates) {
+      throw new Error(`getTravelDates failed: ${dates.error}`);
+    }
+    assertEquals(
+      new Date(dates.fromDate).toISOString(),
+      fromDate.toISOString(),
+      "fromDate should match created plan",
+    );
+    assertEquals(
+      new Date(dates.toDate).toISOString(),
+      toDate.toISOString(),
+      "toDate should match created plan",
+    );
+  } finally {
+    await client.close();
+  }
+});
+
+// --- Test 7: New Actions - editEstimateCost and deleteEstimateCost with Latest pointer updates ---
+Deno.test("TripCostEstimationConcept: New Actions - edit/delete EstimateCost and Latest pointer", async () => {
+  console.log(
+    "\n--- Test: New Actions - edit/delete EstimateCost and Latest pointer ---",
+  );
+  const { client, concept, userAlice, locationNYC, locationLA } =
+    await setupTestEnvironment();
+
+  try {
+    const fromDate = new Date();
+    fromDate.setDate(fromDate.getDate() + 3);
+    const toDate = new Date();
+    toDate.setDate(toDate.getDate() + 8);
+    const createResult = await concept.createTravelPlan({
+      user: userAlice,
+      fromCity: locationNYC,
+      toCity: locationLA,
+      fromDate,
+      toDate,
+    });
+    if ("error" in createResult) {
+      throw new Error(`Setup failed: ${createResult.error}`);
+    }
+    const travelPlanId = createResult.travelPlan;
+
+    // First manual estimate
+    const edit1 = await concept.editEstimateCost({
+      user: userAlice,
+      travelPlan: travelPlanId,
+      flight: 400,
+      roomsPerNight: 120,
+      foodDaily: 50,
+    });
+    if ("error" in edit1) {
+      throw new Error(`editEstimateCost failed: ${edit1.error}`);
+    }
+    const costEstimateId1 = edit1.costEstimate;
+
+    let travelPlanDoc = await (concept as any)["travelPlans"].findOne({
+      _id: travelPlanId,
+    });
+    assertEquals(
+      travelPlanDoc?.latestCostEstimateID,
+      costEstimateId1,
+      "latest should point to first manual estimate",
+    );
+
+    // Verify estimateCost math
+    const millisPerDay = 1000 * 60 * 60 * 24;
+    const rawDays = Math.ceil(
+      (toDate.getTime() - fromDate.getTime()) / millisPerDay,
+    );
+    const numDays = Math.max(1, rawDays);
+    const expectedTotal1 = 400 + (120 * numDays) + (50 * numDays);
+    const total1 = await concept.estimateCost({
+      user: userAlice,
+      travelPlan: travelPlanId,
+    });
+    if ("error" in total1) {
+      throw new Error(`estimateCost failed: ${total1.error}`);
+    }
+    assertEquals(
+      total1.totalCost,
+      expectedTotal1,
+      "estimateCost should use latest estimate and correct duration math",
+    );
+
+    // Second manual estimate (different values)
+    const edit2 = await concept.editEstimateCost({
+      user: userAlice,
+      travelPlan: travelPlanId,
+      flight: 500,
+      roomsPerNight: 100,
+      foodDaily: 40,
+    });
+    if ("error" in edit2) {
+      throw new Error(`editEstimateCost (2) failed: ${edit2.error}`);
+    }
+    const costEstimateId2 = edit2.costEstimate;
+    assertNotEquals(
+      costEstimateId1,
+      costEstimateId2,
+      "new manual estimate should create a new ID",
+    );
+
+    travelPlanDoc = await (concept as any)["travelPlans"].findOne({
+      _id: travelPlanId,
+    });
+    assertEquals(
+      travelPlanDoc?.latestCostEstimateID,
+      costEstimateId2,
+      "latest should update to second manual estimate",
+    );
+
+    // Delete the latest estimate -> latest should fall back to previous one
+    const del2 = await concept.deleteEstimateCost({
+      user: userAlice,
+      costEstimate: costEstimateId2,
+    });
+    if ("error" in del2) {
+      throw new Error(`deleteEstimateCost failed: ${del2.error}`);
+    }
+    travelPlanDoc = await (concept as any)["travelPlans"].findOne({
+      _id: travelPlanId,
+    });
+    assertEquals(
+      travelPlanDoc?.latestCostEstimateID,
+      costEstimateId1,
+      "latest should fall back to first estimate after deleting second",
+    );
+
+    // Delete the last remaining estimate -> latest should be null
+    const del1 = await concept.deleteEstimateCost({
+      user: userAlice,
+      costEstimate: costEstimateId1,
+    });
+    if ("error" in del1) {
+      throw new Error(`deleteEstimateCost (2) failed: ${del1.error}`);
+    }
+    travelPlanDoc = await (concept as any)["travelPlans"].findOne({
+      _id: travelPlanId,
+    });
+    assertEquals(
+      travelPlanDoc?.latestCostEstimateID,
+      null,
+      "latest should be null when no estimates remain",
+    );
   } finally {
     await client.close();
   }
