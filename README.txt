@@ -15,3 +15,5 @@ What this patch has:
     - main.ts: your app entrypoint (can configure logging)
 - src/concepts/:
     -Requesting/: the Requesting concept (encapsulates HTTP server)
+- .gitignore: updated ignores for generated import files
+- Dockerfile: a dockerfile build for deploying your app
