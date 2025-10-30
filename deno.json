@@ -4,6 +4,7 @@
         "@utils/": "./src/utils/",
         "@hono/cors": "https://deno.land/x/hono/middleware/cors/index.ts"
     },
+    
     "tasks": {
         "concepts": "deno run --allow-net --allow-read --allow-sys --allow-env src/concept_server.ts --port 8000 --baseUrl /api"
     }

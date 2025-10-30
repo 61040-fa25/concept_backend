@@ -25,7 +25,9 @@ Deno.test("Session Concept Tests", async (t) => {
         list: LIST_GROCERIES,
         sessionOwner: USER_ALICE,
       });
-      assertEquals(result, {});
+      // changeSession now returns the created session id object for callers.
+      // The shape is { session: <id> } — ensure the session id was returned.
+      assertExists((result as { session?: ID }).session);
 
       const session = await sessionConcept._getSessionForOwner({
         owner: USER_ALICE,
@@ -67,9 +69,10 @@ Deno.test("Session Concept Tests", async (t) => {
         list: LIST_GROCERIES,
         sessionOwner: USER_ALICE,
       });
-      assertExists(result.error);
+      const err = (result as { error?: string }).error;
+      assertExists(err);
       assertEquals(
-        result.error,
+        err,
         "An active session already exists for this owner.",
       );
     },
@@ -93,11 +96,11 @@ Deno.test("Session Concept Tests", async (t) => {
       );
 
       // Create a fresh session for Alice for the upcoming tests
-      const createResult = await sessionConcept.changeSession({
+      const _createResult = await sessionConcept.changeSession({
         list: LIST_GROCERIES,
         sessionOwner: USER_ALICE,
       });
-      assertEquals(createResult, {});
+      assertExists((_createResult as { session?: ID }).session);
     },
   );
 
@@ -634,12 +637,12 @@ Deno.test("Session Concept Tests", async (t) => {
     "Principle Trace: a user will activate a list to start a session and be given an ordered list of tasks on the list to complete",
     async () => {
       // 1. User Alice creates a new Session for a list
-      const newSessionId = freshID();
+      const _newSessionId = freshID();
       const createResult = await sessionConcept.changeSession({
         list: LIST_WORK,
         sessionOwner: USER_ALICE,
       });
-      assertEquals(createResult, {});
+      assertExists((createResult as { session?: ID }).session);
       let aliceNewSession = await sessionConcept._getSessionForOwner({
         owner: USER_ALICE,
       });
@@ -650,7 +653,7 @@ Deno.test("Session Concept Tests", async (t) => {
         list: LIST_WORK,
         sessionOwner: USER_ALICE,
       });
-      assertEquals(secondCreateResult, {}); // Should succeed as previous was deactivated
+      assertExists((secondCreateResult as { session?: ID }).session); // Should succeed as previous was deactivated
       aliceNewSession = await sessionConcept._getSessionForOwner({
         owner: USER_ALICE,
       });

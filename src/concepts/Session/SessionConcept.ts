@@ -1,4 +1,4 @@
-import { Collection, Db } from "npm:mongodb";
+import { ClientSession, Collection, Db } from "npm:mongodb";
 import { Empty, ID } from "@utils/types.ts";
 import { freshID } from "@utils/database.ts";
 
@@ -109,49 +109,114 @@ export default class SessionConcept {
    * `ListItems` must be added separately, or via synchronization rules from another concept.
    */
   async changeSession(
-    { list, sessionOwner }: { list: List; sessionOwner: User },
-  ): Promise<Empty | { error: string }> {
+    { list, sessionOwner, ordering, format, clientSession }: {
+      list: List;
+      sessionOwner: User;
+      ordering?: OrderType;
+      format?: FormatType;
+      clientSession?: ClientSession;
+    },
+  ): Promise<Empty | { error: string } | { session: Session }> {
     // requires: there is not an active session for sessionOwner
     const existingActiveSession = await this.sessions.findOne({
       owner: sessionOwner,
       active: true,
-    });
+    }, { session: clientSession });
     if (existingActiveSession) {
       return { error: "An active session already exists for this owner." };
     }
-
     const existingInactiveSession = await this.sessions.findOne({
       owner: sessionOwner,
       active: false,
-    });
+    }, { session: clientSession });
     if (existingInactiveSession) {
-      // Ensure the previous inactive session is fully removed before creating a new one.
-      // Await the deletion to avoid races when tests run concurrently.
-      await this.deleteSession({ session: existingInactiveSession._id });
+      // Clean-slate approach: remove the previous inactive session and all
+      // its list items before creating a new one. Await the deletion to avoid
+      // races when tests or concurrent requests run.
+      await this.deleteSession({
+        session: existingInactiveSession._id,
+        clientSession,
+      });
     }
-    // effects: creates new session
+    // effects: creates new session and seed its ListItems from the provided List
+    // If the provided list exists in ListCreation, copy its title and items into
+    // the newly created session so the frontend has an ordered set of tasks.
+
+    // Load the originating List (ListCreation concept) to seed session items
+    const listCollection = this.db.collection("ListCreation.lists");
+    const sourceList = await listCollection.findOne({ _id: list });
+
+    // Build session using list metadata if available; otherwise create an empty session
     const newSessionId = freshID();
     const newSession: SessionDoc = {
       _id: newSessionId,
       owner: sessionOwner,
       listId: list,
-      title: "", // Placeholder; should ideally be provided or set by a sync
-      itemCount: 0, // Initial count, items added separately
+      title: sourceList?.title ?? "",
+      // itemCount will be set to the number of seeded items (clean-slate semantics)
+      itemCount: 0,
       active: false,
-      ordering: "Default",
-      format: "List", // As specified
+      ordering: ordering ?? "Default",
+      format: format ?? "List",
     };
 
-    await this.sessions.insertOne(newSession);
+    console.debug("Session.changeSession: inserting new session", {
+      newSessionId,
+      owner: sessionOwner,
+      list,
+    });
+    await this.sessions.insertOne(newSession, { session: clientSession });
+    console.debug("Session.changeSession: insertOne completed for session", {
+      newSessionId,
+    });
 
-    // The principle mentions "given an ordered list of tasks". This implies `ListItems`
-    // are populated here. However, due to strict concept independence and the provided
-    // action signature, the `Session` concept itself cannot fetch these from `list`.
-    // This part of the principle would need to be fulfilled by a separate action (e.g.,
-    // `addListItemToSession`) or a synchronization rule that populates `listItems`
-    // for this new session based on the `list` ID.
+    // If a source list exists, seed session ListItems from it.
+    if (
+      sourceList && Array.isArray(sourceList.listItems) &&
+      sourceList.listItems.length > 0
+    ) {
+      const seedItems = sourceList.listItems.map((li) => ({
+        _id: freshID(),
+        sessionId: newSessionId,
+        taskId: li.task,
+        defaultOrder: li.orderNumber,
+        randomOrder: li.orderNumber,
+        itemStatus: "Incomplete" as const,
+      }));
 
-    return {};
+      if (seedItems.length > 0) {
+        console.debug(
+          "Session.changeSession: inserting seed list items",
+          { sessionId: newSessionId, count: seedItems.length },
+        );
+        await this.listItems.insertMany(seedItems, { session: clientSession });
+        console.debug(
+          "Session.changeSession: insertMany completed for seed items",
+          { sessionId: newSessionId, count: seedItems.length },
+        );
+        // Reflect the actual seeded item count in the session document
+        newSession.itemCount = seedItems.length;
+      }
+    }
+
+    // Always return the created session id. This makes the API/caller able to
+    // immediately observe the created session even when changeSession is run
+    // inside a transaction. We keep the return shape compatible with other
+    // callers by returning the object `{ session: <id> }`.
+    // Update the session document's itemCount if it changed during seeding.
+    if (newSession.itemCount !== (sourceList?.itemCount ?? 0)) {
+      await this.sessions.updateOne({ _id: newSessionId }, {
+        $set: { itemCount: newSession.itemCount },
+      }, { session: clientSession });
+    }
+
+    console.debug("Session.changeSession: completed, returning session id", {
+      newSessionId,
+    });
+    return { session: newSessionId } as unknown as
+      | Empty
+      | { error: string }
+      | { session: Session };
   }
 
   /**
@@ -421,14 +486,30 @@ export default class SessionConcept {
    * @effects : session is deleted from the database
    */
   async deleteSession(
-    { session }: { session: Session },
+    { session, clientSession }: {
+      session: Session;
+      clientSession?: ClientSession;
+    },
   ): Promise<Empty | { error: string }> {
-    const sessionDoc = await this.sessions.findOne({ _id: session });
+    const sessionDoc = await this.sessions.findOne({ _id: session }, {
+      session: clientSession,
+    });
     if (!sessionDoc) {
       return { error: `Session with ID ${session} not found.` };
     }
+    // Remove all list items associated with this session as part of the
+    // clean-slate deletion. Ensure both deletes run in the same transaction
+    // when a clientSession is provided.
+    console.debug("Session.deleteSession: deleting listItems for session", {
+      session,
+    });
+    await this.listItems.deleteMany({ sessionId: session }, {
+      session: clientSession,
+    });
 
-    const result = await this.sessions.deleteOne({ _id: session });
+    const result = await this.sessions.deleteOne({ _id: session }, {
+      session: clientSession,
+    });
 
     if (result.deletedCount === 0) {
       return {
