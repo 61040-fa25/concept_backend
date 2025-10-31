@@ -1,271 +1,349 @@
-import { assert, assertEquals, assertExists } from "jsr:@std/assert";
+import { assertEquals, assertExists } from "jsr:@std/assert";
 import { testDb } from "@utils/database.ts";
 import { ID } from "@utils/types.ts";
 import ScheduleConcept from "./ScheduleConcept.ts";
 
-// Helper to log actions and results for clarity during test execution
-function logAction(name: string, params: unknown, result: unknown) {
-  console.log(`\nAction: ${name}`);
-  console.log("Params:", params);
-  console.log("Result:", result);
+// Helper function to check for error returns and fail the test if an error is not expected.
+function assertIsSuccess<T>(result: T | { error: string }): T {
+  if (result && typeof result === "object" && "error" in result) {
+    throw new Error(`Expected success but got error: ${result.error}`);
+  }
+  return result as T;
 }
 
-Deno.test("Operational Principle: Sync external calendar and add manual blocks", async () => {
+// Helper function to check for success returns and fail the test if success is not expected.
+function assertIsError<T>(result: T | { error: string }): { error: string } {
+  if (result && typeof result === "object" && !("error" in result)) {
+    throw new Error(
+      `Expected error but got success: ${JSON.stringify(result)}`,
+    );
+  }
+  return result as { error: string };
+}
+
+Deno.test("Operational Principle: Sync external calendar and manage manual blocks", async () => {
   const [db, client] = await testDb();
   try {
     const schedule = new ScheduleConcept(db);
     const userA = "user:Alice" as ID;
 
-    console.log("--- Testing Operational Principle ---");
+    console.log("\n--- Testing Operational Principle ---");
 
-    // 1. Initially, Alice has no busy slots.
-    let aliceSlots = await schedule._getSlots({ user: userA });
-    logAction("_getSlots", { user: userA }, aliceSlots);
-    assertEquals(aliceSlots.length, 0, "Alice should have no slots initially.");
-
-    // 2. Alice syncs her external calendar, which has two events.
+    // 1. Sync an external calendar for a user
     const externalEvents = [
       {
         startTime: new Date("2023-10-26T09:00:00Z"),
         endTime: new Date("2023-10-26T10:00:00Z"),
+        description: "Team Standup",
       },
       {
-        startTime: new Date("2023-10-26T14:00:00Z"),
-        endTime: new Date("2023-10-26T15:30:00Z"),
+        startTime: new Date("2023-10-26T11:00:00Z"),
+        endTime: new Date("2023-10-26T12:30:00Z"),
+        description: "Project Meeting",
       },
     ];
+    console.log(
+      `Action: syncCalendar for user ${userA} with ${externalEvents.length} events`,
+    );
     const syncResult = await schedule.syncCalendar({
       user: userA,
       externalEvents,
     });
-    logAction("syncCalendar", { user: userA, externalEvents }, syncResult);
-    assert(!("error" in syncResult), "Calendar sync should succeed.");
+    assertIsSuccess(syncResult);
+    console.log("Result: Success");
 
-    // 3. Verify the synced slots are now in her schedule.
-    aliceSlots = await schedule._getSlots({ user: userA });
-    logAction("_getSlots", { user: userA }, aliceSlots);
-    assertEquals(
-      aliceSlots.length,
-      2,
-      "Alice should have 2 slots after syncing.",
+    // 2. Verify the external slots are created correctly
+    let slots = await schedule._getSlots({ user: userA });
+    console.log(
+      `Query: _getSlots for user ${userA}. Found ${slots.length} slots.`,
     );
-    assertEquals(aliceSlots[0].startTime, externalEvents[0].startTime);
+    assertEquals(slots.length, 2);
+    assertEquals(slots[0].origin, "EXTERNAL");
+    assertEquals(slots[1].origin, "EXTERNAL");
 
-    // 4. Alice manually blocks time for lunch.
-    const lunchBlock = {
+    // 3. Add a manual time block for the same user
+    const manualBlock = {
       user: userA,
-      startTime: new Date("2023-10-26T12:00:00Z"),
-      endTime: new Date("2023-10-26T13:00:00Z"),
+      startTime: new Date("2023-10-26T14:00:00Z"),
+      endTime: new Date("2023-10-26T15:00:00Z"),
+      description: "Focus Time",
     };
-    const blockResult = await schedule.blockTime(lunchBlock);
-    logAction("blockTime", lunchBlock, blockResult);
-    assert("error" in blockResult === false, "Blocking time should succeed.");
-    assertExists((blockResult as { _id: ID })._id);
+    console.log(`Action: blockTime for user ${userA}:`, manualBlock);
+    const blockResult = assertIsSuccess(await schedule.blockTime(manualBlock));
+    assertExists(blockResult.slot);
+    const manualSlotId = blockResult.slot;
+    console.log(`Result: Success, created slot with ID: ${manualSlotId}`);
 
-    // 5. Verify she now has 3 slots: 2 from sync + 1 manual block.
-    aliceSlots = await schedule._getSlots({ user: userA });
-    logAction("_getSlots", { user: userA }, aliceSlots);
-    assertEquals(aliceSlots.length, 3, "Alice should have 3 slots in total.");
-    console.log("--- Principle Test Passed ---");
+    // 4. Verify both external and manual slots exist
+    slots = await schedule._getSlots({ user: userA });
+    console.log(
+      `Query: _getSlots for user ${userA}. Found ${slots.length} slots.`,
+    );
+    assertEquals(slots.length, 3);
+    assertEquals(slots.filter((s) => s.origin === "MANUAL").length, 1);
+    assertEquals(slots.filter((s) => s.origin === "EXTERNAL").length, 2);
+
+    // 5. Update the manual time block
+    const updatePayload = {
+      slotId: manualSlotId,
+      newStartTime: new Date("2023-10-26T14:30:00Z"),
+      newEndTime: new Date("2023-10-26T15:30:00Z"),
+      newDescription: "Updated Focus Time",
+    };
+    console.log(`Action: updateSlot for slot ${manualSlotId}:`, updatePayload);
+    const updateResult = await schedule.updateSlot(updatePayload);
+    assertIsSuccess(updateResult);
+    console.log("Result: Success");
+
+    // 6. Sync the external calendar again to ensure manual block is untouched
+    const updatedExternalEvents = [
+      {
+        startTime: new Date("2023-10-27T10:00:00Z"),
+        endTime: new Date("2023-10-27T11:00:00Z"),
+        description: "New Standup",
+      },
+    ];
+    console.log(
+      `Action: syncCalendar for user ${userA} with ${updatedExternalEvents.length} new event`,
+    );
+    const secondSyncResult = await schedule.syncCalendar({
+      user: userA,
+      externalEvents: updatedExternalEvents,
+    });
+    assertIsSuccess(secondSyncResult);
+    console.log("Result: Success");
+
+    // 7. Verify the final state is correct
+    slots = await schedule._getSlots({ user: userA });
+    console.log(
+      `Query: _getSlots for user ${userA}. Found ${slots.length} slots.`,
+    );
+    assertEquals(slots.length, 2);
+    const manualSlot = slots.find((s) => s.origin === "MANUAL");
+    const externalSlot = slots.find((s) => s.origin === "EXTERNAL");
+    assertExists(manualSlot);
+    assertExists(externalSlot);
+    assertEquals(manualSlot.description, "Updated Focus Time");
+    assertEquals(externalSlot.description, "New Standup");
+    console.log("--- Operational Principle Test Passed ---");
   } finally {
     await client.close();
   }
 });
 
-Deno.test("Interesting Scenario: Resyncing clears all previous slots", async () => {
+Deno.test("Interesting Scenario: Attempt to modify external slots", async () => {
   const [db, client] = await testDb();
   try {
     const schedule = new ScheduleConcept(db);
     const userB = "user:Bob" as ID;
-    console.log("\n--- Testing Scenario: Resyncing ---");
 
-    // 1. Bob manually blocks time.
-    const manualBlock = {
-      user: userB,
-      startTime: new Date("2023-11-01T18:00:00Z"),
-      endTime: new Date("2023-11-01T20:00:00Z"),
-    };
-    await schedule.blockTime(manualBlock);
+    console.log("\n--- Testing Scenario: Modify External Slots ---");
 
-    // 2. Bob syncs his calendar, which has one new event.
-    const newExternalEvents = [
-      {
-        startTime: new Date("2023-11-01T10:00:00Z"),
-        endTime: new Date("2023-11-01T11:00:00Z"),
-      },
-    ];
-    const syncResult = await schedule.syncCalendar({
-      user: userB,
-      externalEvents: newExternalEvents,
+    // Setup: Sync an external calendar
+    const externalEvents = [{
+      startTime: new Date("2023-11-01T10:00:00Z"),
+      endTime: new Date("2023-11-01T11:00:00Z"),
+      description: "Immutable Meeting",
+    }];
+    await schedule.syncCalendar({ user: userB, externalEvents });
+    const slots = await schedule._getSlots({ user: userB });
+    const externalSlotId = slots[0]._id;
+
+    // 1. Attempt to update an external slot with valid times to bypass the first check
+    console.log(`Action: updateSlot on external slot ${externalSlotId}`);
+    const updateResult = await schedule.updateSlot({
+      slotId: externalSlotId,
+      newStartTime: new Date("2024-01-01T10:00:00Z"),
+      newEndTime: new Date("2024-01-01T11:00:00Z"),
+      newDescription: "Trying to change",
     });
-    logAction("syncCalendar", {
-      user: userB,
-      externalEvents: newExternalEvents,
-    }, syncResult);
-    assert(!("error" in syncResult));
-
-    // 3. Verify that only the new synced event exists, and the manual block is gone.
-    const bobSlots = await schedule._getSlots({ user: userB });
-    logAction("_getSlots", { user: userB }, bobSlots);
+    const updateError = assertIsError(updateResult);
     assertEquals(
-      bobSlots.length,
-      1,
-      "Bob should only have 1 slot from the new sync.",
+      updateError.error,
+      "Cannot update a slot with an external origin.",
     );
-    assertEquals(bobSlots[0].startTime, newExternalEvents[0].startTime);
-    console.log("--- Resyncing Test Passed ---");
+    console.log(`Result: Correctly failed with error: "${updateError.error}"`);
+
+    // 2. Attempt to delete an external slot
+    console.log(`Action: deleteSlot on external slot ${externalSlotId}`);
+    const deleteResult = await schedule.deleteSlot({ slotId: externalSlotId });
+    const deleteError = assertIsError(deleteResult);
+    assertEquals(
+      deleteError.error,
+      "Cannot delete a slot with an external origin.",
+    );
+    console.log(`Result: Correctly failed with error: "${deleteError.error}"`);
+
+    // Verify the slot was not changed or deleted
+    const finalSlots = await schedule._getSlots({ user: userB });
+    assertEquals(finalSlots.length, 1);
+    console.log("--- Modify External Slots Test Passed ---");
   } finally {
     await client.close();
   }
 });
 
-Deno.test("Interesting Scenario: Empty and invalid syncs", async () => {
+Deno.test("Interesting Scenario: Handle invalid time inputs", async () => {
   const [db, client] = await testDb();
   try {
     const schedule = new ScheduleConcept(db);
     const userC = "user:Charlie" as ID;
-    console.log("\n--- Testing Scenario: Empty and Invalid Syncs ---");
+    console.log("\n--- Testing Scenario: Invalid Time Inputs ---");
 
-    // 1. Charlie adds a couple of manual blocks.
-    await schedule.blockTime({
+    // 1. Try to blockTime with start time after end time
+    console.log("Action: blockTime with startTime > endTime");
+    const result = await schedule.blockTime({
       user: userC,
-      startTime: new Date("2023-11-05T08:00:00Z"),
-      endTime: new Date("2023-11-05T09:00:00Z"),
+      startTime: new Date("2023-11-01T12:00:00Z"),
+      endTime: new Date("2023-11-01T11:00:00Z"),
+      description: "Invalid",
     });
-    await schedule.blockTime({
-      user: userC,
-      startTime: new Date("2023-11-05T10:00:00Z"),
-      endTime: new Date("2023-11-05T11:00:00Z"),
-    });
-    assertEquals((await schedule._getSlots({ user: userC })).length, 2);
+    let error = assertIsError(result);
+    assertEquals(error.error, "Start time must be before end time.");
+    console.log(`Result: Correctly failed with error: "${error.error}"`);
 
-    // 2. An empty sync should clear all of Charlie's slots.
-    const emptySyncResult = await schedule.syncCalendar({
+    // 2. Create a valid slot first
+    const createRes = await schedule.blockTime({
       user: userC,
-      externalEvents: [],
+      startTime: new Date("2023-11-01T10:00:00Z"),
+      endTime: new Date("2023-11-01T11:00:00Z"),
+      description: "Valid",
     });
-    logAction(
-      "syncCalendar (empty)",
-      { user: userC, externalEvents: [] },
-      emptySyncResult,
-    );
-    assert(!("error" in emptySyncResult));
-    const charlieSlots = await schedule._getSlots({ user: userC });
-    assertEquals(charlieSlots.length, 0, "Empty sync should delete all slots.");
+    const { slot: validSlotId } = assertIsSuccess(createRes);
 
-    // 3. An invalid sync should fail and not change the state.
-    const invalidEvents = [{
-      startTime: new Date("2023-11-05T14:00:00Z"),
-      endTime: new Date("2023-11-05T13:00:00Z"),
-    }];
-    const invalidSyncResult = await schedule.syncCalendar({
-      user: userC,
-      externalEvents: invalidEvents,
+    // 3. Try to updateSlot with start time equal to end time
+    console.log("Action: updateSlot with newStartTime === newEndTime");
+    const result1 = await schedule.updateSlot({
+      slotId: validSlotId,
+      newStartTime: new Date("2023-11-01T14:00:00Z"),
+      newEndTime: new Date("2023-11-01T14:00:00Z"),
+      newDescription: "Invalid Update",
     });
-    logAction("syncCalendar (invalid)", {
-      user: userC,
-      externalEvents: invalidEvents,
-    }, invalidSyncResult);
-    assert(
-      "error" in invalidSyncResult,
-      "Sync with invalid time range should return an error.",
-    );
-    const charlieSlotsAfterFailure = await schedule._getSlots({ user: userC });
-    assertEquals(
-      charlieSlotsAfterFailure.length,
-      0,
-      "State should not change after a failed action.",
-    );
-    console.log("--- Empty/Invalid Sync Test Passed ---");
+    error = assertIsError(result1);
+    assertEquals(error.error, "Start time must be before end time.");
+    console.log(`Result: Correctly failed with error: "${error.error}"`);
+    console.log("--- Invalid Time Inputs Test Passed ---");
   } finally {
     await client.close();
   }
 });
 
-Deno.test("Interesting Scenario: Explicitly delete all slots for a user", async () => {
+Deno.test("Interesting Scenario: Complete data removal for a single user", async () => {
   const [db, client] = await testDb();
   try {
     const schedule = new ScheduleConcept(db);
     const userD = "user:David" as ID;
-    console.log("\n--- Testing Scenario: Delete All Slots ---");
+    const userE = "user:Eve" as ID;
+    console.log("\n--- Testing Scenario: Data Removal ---");
 
-    // 1. David has a mix of synced and manual slots.
+    // Setup: Create slots for two different users
+    await schedule.blockTime({
+      user: userD,
+      startTime: new Date("2023-11-02T09:00:00Z"),
+      endTime: new Date("2023-11-02T10:00:00Z"),
+      description: "David's Slot",
+    });
     await schedule.syncCalendar({
       user: userD,
       externalEvents: [{
-        startTime: new Date(),
-        endTime: new Date(Date.now() + 3600000),
+        startTime: new Date("2023-11-02T11:00:00Z"),
+        endTime: new Date("2023-11-02T12:00:00Z"),
+        description: "David's External",
       }],
     });
     await schedule.blockTime({
-      user: userD,
-      startTime: new Date(Date.now() + 7200000),
-      endTime: new Date(Date.now() + 10800000),
+      user: userE,
+      startTime: new Date("2023-11-02T09:00:00Z"),
+      endTime: new Date("2023-11-02T10:00:00Z"),
+      description: "Eve's Slot",
     });
+
     assertEquals((await schedule._getSlots({ user: userD })).length, 2);
+    assertEquals((await schedule._getSlots({ user: userE })).length, 1);
+    console.log("Setup: Created 2 slots for David and 1 slot for Eve");
 
-    // 2. Delete all slots for David.
+    // 1. Delete all slots for userD
+    console.log(`Action: deleteAllForUser for user ${userD}`);
     const deleteResult = await schedule.deleteAllForUser({ user: userD });
-    logAction("deleteAllForUser", { user: userD }, deleteResult);
-    assert(!("error" in deleteResult));
+    assertIsSuccess(deleteResult);
+    console.log("Result: Success");
 
-    // 3. Verify David has no slots.
-    const davidSlots = await schedule._getSlots({ user: userD });
-    assertEquals(
-      davidSlots.length,
-      0,
-      "David should have no slots after deletion.",
+    // 2. Verify userD has no slots, but userE's slots remain
+    const slotsD = await schedule._getSlots({ user: userD });
+    const slotsE = await schedule._getSlots({ user: userE });
+    console.log(
+      `Query: _getSlots for user ${userD}. Found ${slotsD.length} slots.`,
     );
-
-    // 4. Deleting for a user with no slots should also succeed.
-    const userE = "user:Eve" as ID;
-    const deleteEmptyResult = await schedule.deleteAllForUser({ user: userE });
-    logAction("deleteAllForUser (empty)", { user: userE }, deleteEmptyResult);
-    assert(!("error" in deleteEmptyResult));
-    console.log("--- Delete All Slots Test Passed ---");
+    console.log(
+      `Query: _getSlots for user ${userE}. Found ${slotsE.length} slots.`,
+    );
+    assertEquals(slotsD.length, 0);
+    assertEquals(slotsE.length, 1);
+    console.log("--- Data Removal Test Passed ---");
   } finally {
     await client.close();
   }
 });
 
-Deno.test("Interesting Scenario: Invalid inputs for blockTime", async () => {
+Deno.test("Interesting Scenario: Syncing with an empty calendar and deleting a manual slot", async () => {
   const [db, client] = await testDb();
   try {
     const schedule = new ScheduleConcept(db);
     const userF = "user:Frank" as ID;
-    console.log("\n--- Testing Scenario: Invalid blockTime ---");
+    console.log("\n--- Testing Scenario: Empty Sync and Manual Delete ---");
 
-    // 1. Attempt to block time with start time after end time.
-    const invalidTimeRange = {
-      user: userF,
-      startTime: new Date("2023-12-01T10:00:00Z"),
-      endTime: new Date("2023-12-01T09:00:00Z"),
-    };
-    const result1 = await schedule.blockTime(invalidTimeRange);
-    logAction("blockTime (invalid range)", invalidTimeRange, result1);
-    assert("error" in result1, "Should return error for invalid time range.");
-
-    // 2. Attempt to block time with start time equal to end time.
-    const equalTimeRange = {
-      user: userF,
-      startTime: new Date("2023-12-01T10:00:00Z"),
-      endTime: new Date("2023-12-01T10:00:00Z"),
-    };
-    const result2 = await schedule.blockTime(equalTimeRange);
-    logAction("blockTime (equal times)", equalTimeRange, result2);
-    assert(
-      "error" in result2,
-      "Should return error for equal start/end times.",
+    // Setup: Create one manual and one external slot
+    const { slot: manualSlotId } = assertIsSuccess(
+      await schedule.blockTime({
+        user: userF,
+        startTime: new Date("2023-11-03T10:00:00Z"),
+        endTime: new Date("2023-11-03T11:00:00Z"),
+        description: "Manual Slot",
+      }),
     );
+    await schedule.syncCalendar({
+      user: userF,
+      externalEvents: [{
+        startTime: new Date("2023-11-03T13:00:00Z"),
+        endTime: new Date("2023-11-03T14:00:00Z"),
+        description: "External Slot",
+      }],
+    });
+    assertEquals((await schedule._getSlots({ user: userF })).length, 2);
+    console.log("Setup: Created one manual and one external slot for Frank.");
 
-    // 3. Verify no slots were created for Frank after the failed attempts.
-    const frankSlots = await schedule._getSlots({ user: userF });
-    assertEquals(
-      frankSlots.length,
-      0,
-      "No slots should be created after failed blockTime actions.",
+    // 1. Sync with an empty external calendar
+    console.log(
+      `Action: syncCalendar for user ${userF} with an empty event list`,
     );
-    console.log("--- Invalid blockTime Test Passed ---");
+    const syncResult = await schedule.syncCalendar({
+      user: userF,
+      externalEvents: [],
+    });
+    assertIsSuccess(syncResult);
+    console.log("Result: Success");
+
+    // 2. Verify external slot is gone, manual slot remains
+    let slots = await schedule._getSlots({ user: userF });
+    console.log(
+      `Query: _getSlots for user ${userF}. Found ${slots.length} slots.`,
+    );
+    assertEquals(slots.length, 1);
+    assertEquals(slots[0].origin, "MANUAL");
+
+    // 3. Delete the remaining manual slot
+    console.log(`Action: deleteSlot for manual slot ${manualSlotId}`);
+    const deleteResult = await schedule.deleteSlot({ slotId: manualSlotId });
+    assertIsSuccess(deleteResult);
+    console.log("Result: Success");
+
+    // 4. Verify user has no slots left
+    slots = await schedule._getSlots({ user: userF });
+    console.log(
+      `Query: _getSlots for user ${userF}. Found ${slots.length} slots.`,
+    );
+    assertEquals(slots.length, 0);
+    console.log("--- Empty Sync and Manual Delete Test Passed ---");
   } finally {
     await client.close();
   }

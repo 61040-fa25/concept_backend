@@ -46,11 +46,14 @@ const PREFIX = "Planner.";
  */
 export default class PlannerConcept {
   private readonly scheduledTasks: Collection<ScheduledTask>;
+  // Dependency for providing the current time. Makes the concept testable.
+  private readonly timeProvider: () => Date;
 
-  constructor(private readonly db: Db) {
+  constructor(db: Db, timeProvider: () => Date = () => new Date()) {
     this.scheduledTasks = db.collection<ScheduledTask>(
       PREFIX + "scheduledTasks",
     );
+    this.timeProvider = timeProvider;
   }
 
   /**
@@ -67,25 +70,31 @@ export default class PlannerConcept {
   ): Promise<{ firstTask?: Task } | { error: string }> {
     await this.clearDay({ user });
 
-    const now = new Date();
-    const startOfDay = new Date(
+    const now = this.timeProvider();
+    const startOfToday = new Date(
       now.getFullYear(),
       now.getMonth(),
       now.getDate(),
-      9,
       0,
       0,
-    ); // 9 AM
-    const endOfDay = new Date(
+      0,
+    );
+    const endOfToday = new Date(
       now.getFullYear(),
       now.getMonth(),
       now.getDate(),
-      17,
-      0,
-      0,
-    ); // 5 PM
+      23,
+      59,
+      59,
+    );
 
-    return this._scheduleTasks(user, tasks, busySlots, startOfDay, endOfDay);
+    const planFrom = now > startOfToday ? now : startOfToday;
+
+    if (planFrom >= endOfToday) {
+      return {};
+    }
+
+    return this._scheduleTasks(user, tasks, busySlots, planFrom, endOfToday);
   }
 
   /**
@@ -99,8 +108,7 @@ export default class PlannerConcept {
       busySlots: BusySlot[];
     },
   ): Promise<{ firstTask?: Task } | { error: string }> {
-    const now = new Date();
-    // Delete all future tasks for the user
+    const now = this.timeProvider();
     await this.scheduledTasks.deleteMany({
       owner: user,
       plannedStart: { $gte: now },
@@ -110,12 +118,11 @@ export default class PlannerConcept {
       now.getFullYear(),
       now.getMonth(),
       now.getDate(),
-      17,
-      0,
-      0,
-    ); // 5 PM
+      23,
+      59,
+      59,
+    );
 
-    // If it's already past the end of the working day, we can't plan anything.
     if (now >= endOfDay) {
       return {};
     }
@@ -128,7 +135,7 @@ export default class PlannerConcept {
    * effect: removes all ScheduledTasks for the given user for the current day.
    */
   async clearDay({ user }: { user: User }): Promise<Empty> {
-    const now = new Date();
+    const now = this.timeProvider();
     const startOfDay = new Date(
       now.getFullYear(),
       now.getMonth(),
@@ -216,7 +223,6 @@ export default class PlannerConcept {
         const slotDurationMillis = slot.end.getTime() - slot.start.getTime();
 
         if (slotDurationMillis >= taskDurationMillis) {
-          // Found a slot, schedule the task here
           const plannedStart = slot.start;
           const plannedEnd = new Date(
             plannedStart.getTime() + taskDurationMillis,
@@ -230,10 +236,7 @@ export default class PlannerConcept {
             plannedEnd,
           });
 
-          // Update the slot for the next task
           slot.start = plannedEnd;
-
-          // Break from the slot loop and move to the next task
           break;
         }
       }
@@ -261,21 +264,17 @@ export default class PlannerConcept {
     const availableSlots: BusySlot[] = [];
     let cursor = start;
 
-    // Sort busy slots to process them chronologically
     const sortedBusy = busySlots.sort((a, b) =>
       a.start.getTime() - b.start.getTime()
     );
 
     for (const busy of sortedBusy) {
-      // If there's a gap before the next busy slot, add it as available
       if (busy.start > cursor) {
         availableSlots.push({ start: cursor, end: busy.start });
       }
-      // Move the cursor to the end of the busy slot
       cursor = new Date(Math.max(cursor.getTime(), busy.end.getTime()));
     }
 
-    // If there's time left after the last busy slot, add it
     if (cursor < end) {
       availableSlots.push({ start: cursor, end: end });
     }

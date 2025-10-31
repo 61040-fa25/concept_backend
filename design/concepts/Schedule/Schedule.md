@@ -1,19 +1,29 @@
 `
 concept Schedule [User]
-  purpose to represent a user's non-negotiable, externally-scheduled commitments
-  principle the schedule is a read-only reflection of a user's external calendar
+  purpose to represent a user's availability by combining non-negotiable, externally-scheduled commitments with manual time blocks
+  principle The schedule shows a read-only reflection of a user's external calendar, and gives options to add and edit manual time blocks.
+
   state
     a set of BusySlots with
       an owner User
       a startTime DateTime
       a endTime DateTime
+      a description String
+      an origin: (EXTERNAL, MANUAL)
+      
   actions
+    blockTime (user: User, startTime: DateTime, endTime: DateTime, description: String)
+      effect creates a new BusySlot for the user with the given details and sets origin to MANUAL
+    updateSlot (slot: BusySlot, newStartTime: DateTime, newEndTime: DateTime, newDescription: String)
+      requires slot.origin is MANUAL
+      effect modifies the properties of a manually created BusySlot
+    deleteSlot (slot: BusySlot)
+      requires slot.origin is MANUAL
+      effect removes a manually created BusySlot
     syncCalendar (user: User, externalEvents: set of Events)
-      effect replaces the user's busy slots with a new set based on their external calendar
+      effect updates the user's schedule to match their external calendar without affecting MANUAL blocks.
     deleteAllForUser (user: User)
-      effect removes all busy slots for the user
-    blockTime (user: User, startTime: DateTime, endTime: DateTime)
-      effect creates a new BusySlot for the user to represent non-working hours or a manual block
+      effect removes all busy slots (both MANUAL and EXTERNAL) for the user.
     getSlots (user: User): (slots: set of BusySlots)
-      effect returns all busy slots for the user
+      effect returns all busy slots for the user, regardless of origin
 `

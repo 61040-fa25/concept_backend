@@ -1,0 +1,1 @@
+The UserAccount concept was straightforward, and I implemented it exactly as originally designed, without any modifications. I initially had some trouble importing _bcrypt_, but thanks to Piazza, I was able to figure it out! :)

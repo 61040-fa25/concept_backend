@@ -2,12 +2,14 @@
 concept Planner [User, Task]
   purpose having a realistic, time-based plan for a user's tasks
   principle it intelligently fits a user's prioritized tasks into the open slots in their schedule
+  
   state
     a set of ScheduledTasks with
       an owner User
       a task Task
       a plannedStart DateTime
       a plannedEnd DateTime
+      
   actions
     planDay (user: User, tasks: seq of Task, busySlots: set of BusySlots): (firstTask: optional Task)
       effect creates a new, full-day schedule by assigning tasks to available time slots; returns the first task, if any
