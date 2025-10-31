@@ -216,6 +216,41 @@ concept PasswordAuthentication [User]
 
 ---
 
+### POST /api/PasswordAuthentication/_getUserUsername
+
+**Description:** Retrieves the username associated with a specific user ID.
+
+**Requirements:**
+- user exists
+
+**Effects:**
+- Returns the username associated with the specified `user`.
+
+**Request Body:**
+```json
+{
+  "user": "User"
+}
+```
+
+**Success Response Body (Query):**
+```json
+[
+  {
+    "username": "String"
+  }
+]
+```
+
+**Error Response Body:**
+```json
+{
+  "error": "string"
+}
+```
+
+---
+
 # prompt: Now for the following concept spec, for getAllNotifications should return list of Notifications which are IDs not composite objects
 ### concept Notification \[User, ProgressTracking]
 
@@ -343,6 +378,41 @@ concept PasswordAuthentication [User]
     "notification": "Notification"
   }
 ]
+```
+
+**Error Response Body:**
+```json
+{
+  "error": "string"
+}
+```
+
+---
+
+### POST /api/Notification/getNotificationMessageAndFreq
+
+**Description:** Retrieves the message and frequency for a notification belonging to the specified user.
+
+**Requirements:**
+- notification exists and belongs to user
+
+**Effects:**
+- returns the message and frequency of the specified notification
+
+**Request Body:**
+```json
+{
+  "user": "User",
+  "notification": "Notification"
+}
+```
+
+**Success Response Body (Query):**
+```json
+{
+  "message": "String",
+  "frequency": "Number"
+}
 ```
 
 **Error Response Body:**

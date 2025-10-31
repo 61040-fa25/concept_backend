@@ -2,6 +2,7 @@
     "imports": {
         "@concepts/": "./src/concepts/",
         "@utils/": "./src/utils/",
+        "@std/assert": "jsr:@std/assert@1.0.15",
         "mongodb": "npm:mongodb@6"
     },
     "tasks": {

@@ -1,5 +1,5 @@
 import { Collection, Db } from "npm:mongodb";
-import { ID, Empty } from "@utils/types.ts";
+import { Empty, ID } from "@utils/types.ts";
 import { freshID } from "@utils/database.ts";
 
 // Declare collection prefix, use concept name
@@ -88,12 +88,17 @@ export default class NotificationConcept {
     { user, notification }: { user: User; notification: Notification }, // Parameter uses Notification (the ID type)
   ): Promise<Empty | { error: string }> {
     try {
-      const result = await this.notifications.deleteOne({ _id: notification, user: user });
+      const result = await this.notifications.deleteOne({
+        _id: notification,
+        user: user,
+      });
 
       if (result.deletedCount === 0) {
         // To provide a more specific error message, check why it failed.
         // It could be that the notification didn't exist, or it existed but didn't belong to the user.
-        const existingNotification = await this.notifications.findOne({ _id: notification });
+        const existingNotification = await this.notifications.findOne({
+          _id: notification,
+        });
         if (!existingNotification) {
           return { error: `Notification with ID '${notification}' not found.` };
         } else {
@@ -140,6 +145,35 @@ export default class NotificationConcept {
       console.error("Error getting all notification IDs for user:", e);
       // On error, return an empty array of the specified return type.
       return [{ notifications: [] }];
+    }
+  }
+
+  /**
+   * getNotificationMessageAndFreq (user: User, notification: Notification): (message: String, frequency: Number)
+   *
+   * **requires** notification exists and belongs to user
+   *
+   * **effects** returns the message and frequency of the specified notification
+   */
+  async getNotificationMessageAndFreq(
+    { user, notification }: { user: User; notification: Notification },
+  ): Promise<{ message: string; frequency: number } | { error: string }> {
+    try {
+      const doc = await this.notifications.findOne({ _id: notification });
+      if (!doc) {
+        return { error: `Notification with ID '${notification}' not found.` };
+      }
+      if (doc.user !== user) {
+        return {
+          error:
+            `Notification with ID '${notification}' does not belong to user '${user}'.`,
+        };
+      }
+
+      return { message: doc.message, frequency: doc.frequency };
+    } catch (e) {
+      console.error("Error getting notification message and frequency:", e);
+      return { error: "Failed to get notification message and frequency." };
     }
   }
 }

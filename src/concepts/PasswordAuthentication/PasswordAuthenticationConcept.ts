@@ -141,10 +141,38 @@ export default class PasswordAuthenticationConcept {
       }).toArray();
 
       // Transform the users into the desired output format, each _id wrapped in a 'user' key
-      return users.map(user => ({ user: user._id }));
+      return users.map((user) => ({ user: user._id }));
     } catch (e) {
       console.error("Error retrieving all users:", e);
       return [{ error: "Failed to retrieve users due to a database error." }];
+    }
+  }
+
+  /**
+   * _getUserUsername (user: User): (username: String)
+   *
+   * **requires** user exists
+   *
+   * **effects** Returns the username associated with the specified `user`.
+   */
+  async _getUserUsername(
+    { user }: { user: UserID },
+  ): Promise<Array<{ username: string } | { error: string }>> {
+    try {
+      const foundUser = await this.users.findOne({ _id: user }, {
+        projection: { username: 1 },
+      });
+
+      if (!foundUser) {
+        return [{ error: `User with ID '${user}' does not exist.` }];
+      }
+
+      return [{ username: foundUser.username }];
+    } catch (e) {
+      console.error("Error retrieving username for user:", e);
+      return [{
+        error: "Failed to retrieve username due to a database error.",
+      }];
     }
   }
 }

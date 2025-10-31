@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "design/tools/api-extraction-from-code.md",
+                "file": "design/concepts/Notification/NotificationSpec.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "api-extraction-from-code"
+              "title": "NotificationSpec"
             }
           }
         ]
@@ -171,6 +171,14 @@
   },
   "active": "72b263cfa3df1cde",
   "lastOpenFiles": [
+    "deno.22db866a.tmp",
+    "context/design/concepts/Notification/NotificationSpec.md/20251030_124737.7da696c4.md",
+    "context/design/concepts/Notification/NotificationSpec.md/steps/response.96adb866.md",
+    "context/design/concepts/Notification/NotificationSpec.md/20251030_124729.305db3af.md",
+    "context/design/concepts/Notification/NotificationSpec.md/steps/prompt.c1b8da12.md",
+    "context/design/concepts/Notification/NotificationSpec.md/steps/response.b112c8a2.md",
+    "context/design/concepts/Notification/NotificationSpec.md/steps/_.a6edd866.md",
+    "design/tools/api-extraction-from-code.md",
     "context/design/tools/api-extraction-from-code.md/20251029_190108.2d2a3c16.md",
     "context/design/tools/api-extraction-from-code.md/steps/API Specification.e537fe63.md",
     "context/design/tools/api-extraction-from-code.md/20251029_190030.dbb90da1.md",
@@ -190,14 +198,6 @@
     "context/design/concepts/TripCostEstimation/TripCostEstimationSpec.md/steps/prompt.47f84726.md",
     "context/design/concepts/TripCostEstimation/TripCostEstimationSpec.md/steps/_.baabcbd0.md",
     "context/design/concepts/TripCostEstimation/TripCostEstimationSpec.md/20251029_181641.c503f53a.md",
-    "context/design/concepts/TripCostEstimation/TripCostEstimationSpec.md/steps/_.d47bd59a.md",
-    "context/design/concepts/TripCostEstimation/TripCostEstimationSpec.md/20251029_181621.c1a9530a.md",
-    "context/design/concepts/TripCostEstimation/TripCostEstimationSpec.md/steps/prompt.393b7ba3.md",
-    "design/tools/api-extraction-from-spec.md",
-    "design/concepts/Notification/NotificationSpec.md",
-    "design/tools/api-extraction-from-code.md",
-    "context/design/tools/api-extraction-from-code.md/20251021_191035.1f97fd72.md",
-    "context/design/tools/api-extraction-from-code.md/steps/API Specification.bb989e29.md",
     "ctx.exe",
     "ctx.exe.tmp-aeb79e91b7f9ae9d",
     "context/design/concepts/TripCostEstimation/testing-output.md/steps",

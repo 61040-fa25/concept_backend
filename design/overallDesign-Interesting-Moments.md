@@ -105,3 +105,12 @@ in some set database when the concept uses an LLM which can check if these
 locations do indeed exist. This reduces error checking and gives more
 freedom to the user to choose from a large number of cities. 
 
+
+# 8
+Notification&TripCostEstimation:
+In designing the frontend using the above concepts, I found myself adding
+more query actions to the concepts, so
+that data other than the IDs returned
+by most of the actions of the concepts
+doesn't have to be stored solely in local storage or Pinia.
+
