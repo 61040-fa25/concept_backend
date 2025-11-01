@@ -324,6 +324,17 @@ async function main() {
               // Log resolved caller so frontend/auth mismatch is obvious
               console.debug("[server] resolved caller:", callerId);
 
+              // If the client sent a sessionOwner value, warn if it doesn't match
+              // the authenticated caller and always prefer the authenticated id.
+              if (
+                body && body.sessionOwner &&
+                String(body.sessionOwner) !== String(callerId)
+              ) {
+                console.warn(
+                  `[server] Ignoring client-supplied sessionOwner=${body.sessionOwner}; using authenticated caller=${callerId}`,
+                );
+              }
+
               if (!callerId) {
                 return c.json({
                   error: "Caller not authenticated or specified.",

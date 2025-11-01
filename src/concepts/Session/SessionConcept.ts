@@ -545,21 +545,50 @@ export default class SessionConcept {
     return listItem ? listItem.itemStatus : null;
   }
 
+  // /**
+  //  * @query _getSessionListItems
+  //  * @effects : return all list items for a given session, ordered by default or random order
+  //  */
+  // async _getSessionListItems(
+  //   { session }: { session: Session },
+  // ): Promise<ListItemDoc[]> {
+  //   // console.log("Looking for session: ", session.toString());
+  //   // const sessionDoc = await this.sessions.findOne({ _id: session });
+
+  //   let sessionDoc: SessionDoc | null = null;
+  //   let retries = 0;
+
+  //   while (retries < 20) {
+  //     // console.log("Retry: ", retries);
+  //     sessionDoc = await this.sessions.findOne({ _id: session });
+  //     if (sessionDoc) break;
+  //     await new Promise((r) => setTimeout(r, 10));
+  //     retries++;
+  //   }
+
+  //   if (!sessionDoc) {
+  //     return [];
+  //   }
+
+  //   const sortField = sessionDoc.ordering === "Random"
+  //     ? "randomOrder"
+  //     : "defaultOrder";
+  //   return await this.listItems.find({ sessionId: session }).sort({
+  //     [sortField]: 1,
+  //   }).toArray();
+  // }
+  // ...existing code...
   /**
    * @query _getSessionListItems
    * @effects : return all list items for a given session, ordered by default or random order
    */
   async _getSessionListItems(
     { session }: { session: Session },
-  ): Promise<ListItemDoc[]> {
-    // console.log("Looking for session: ", session.toString());
-    // const sessionDoc = await this.sessions.findOne({ _id: session });
-
+  ): Promise<(ListItemDoc & { taskName?: string })[]> {
     let sessionDoc: SessionDoc | null = null;
     let retries = 0;
 
     while (retries < 20) {
-      // console.log("Retry: ", retries);
       sessionDoc = await this.sessions.findOne({ _id: session });
       if (sessionDoc) break;
       await new Promise((r) => setTimeout(r, 10));
@@ -573,10 +602,58 @@ export default class SessionConcept {
     const sortField = sessionDoc.ordering === "Random"
       ? "randomOrder"
       : "defaultOrder";
-    return await this.listItems.find({ sessionId: session }).sort({
+    const items = await this.listItems.find({ sessionId: session }).sort({
       [sortField]: 1,
     }).toArray();
+
+    // --- Enrich items with taskName from TaskBank.tasks collection ---
+    try {
+      // TaskBank prefix used in your TaskBank concept: "TaskBank.tasks"
+      const taskColl = this.db.collection("TaskBank.tasks");
+      // collect unique taskIds
+      const ids = Array.from(
+        new Set(items.map((it) => it.taskId).filter(Boolean)),
+      );
+      if (ids.length === 0) return items;
+
+      let tasks: unknown[] = [];
+      try {
+        // Defensive query: if task lookup fails for any reason, fall back to
+        // returning items without enrichment rather than throwing.
+        // Cast `ids` to unknown[] so the mongodb driver type-check is satisfied
+        // regardless of whether _id is stored as ObjectId or string in the
+        // TaskBank collection. This is a pragmatic runtime-safe cast; if the
+        // types differ, the query will still run and either return matches or
+        // an empty array.
+        tasks = await taskColl.find({ _id: { $in: ids as unknown as any[] } })
+          .toArray();
+      } catch (err) {
+        console.debug(
+          "Session._getSessionListItems: failed to query TaskBank.tasks:",
+          err,
+        );
+        // Return items without enrichment on failure
+        return items;
+      }
+
+      const nameById = new Map(
+        (tasks as any[]).map((t: any) => [t._id, t.taskName ?? t.name]),
+      );
+
+      return items.map((it) => ({
+        ...it,
+        taskName: nameById.get(it.taskId) ?? undefined,
+      }));
+    } catch (err) {
+      // on any failure, return items without enrichment
+      console.debug(
+        "Session._getSessionListItems: failed to enrich with taskName",
+        err,
+      );
+      return items;
+    }
   }
+  // ...existing code...
 
   /**
    * @query _getSessionForOwner
