@@ -20,6 +20,7 @@ A set of **PointData** with:
 - `extractPoses(videoID: String): (poseIDs: Set of String)`  
   - Requires: video exists  
   - Effect: processes each frame of the video, creates PoseData for each, and stores/returns their IDs  
+  - Note: this is being done in the frontend because mediapipe requires documents to run the pose extractor
 
 - `getPoseData(poseID: String): (PoseData)`  
   - Requires: pose exists  

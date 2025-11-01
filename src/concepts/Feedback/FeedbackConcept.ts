@@ -1,24 +1,57 @@
 import { Collection, Db } from "npm:mongodb";
 import { ID } from "@utils/types.ts";
 import { freshID } from "@utils/database.ts";
+import { PartEnum, PoseData } from "../PoseBreakdown/PoseBreakdownConcept.ts";
 import type { Video } from "../manageVideo/ManageVideoConcept.ts";
 
 // Collection prefix to ensure namespace separation
 const PREFIX = "Feedback" + ".";
 
-// Placeholder for PoseData structure.
-// This type represents the output of a pose estimation process,
-// used as input for the analysis but not stored directly in FeedbackDoc.
-// In a real system, this would be a detailed type for pose estimation output,
-// e.g., containing keypoints and their coordinates/scores.
-type PoseData = {
-  [key: string]: Array<{ x: number; y: number; z?: number; score: number }>;
-}; // Example: { "left_shoulder": [{x,y,z,score}], "right_hip": [{x,y,z,score}], ... }
+const KEY_LANDMARKS = {
+  NOSE: 0,
+  LEFT_SHOULDER: 11,
+  RIGHT_SHOULDER: 12,
+  LEFT_ELBOW: 13,
+  RIGHT_ELBOW: 14,
+  LEFT_WRIST: 15,
+  RIGHT_WRIST: 16,
+  LEFT_HIP: 23,
+  RIGHT_HIP: 24,
+  LEFT_KNEE: 25,
+  RIGHT_KNEE: 26,
+  LEFT_ANKLE: 27,
+  RIGHT_ANKLE: 28,
+};
+
+const KEYPOINT_WEIGHTS = {
+  [KEY_LANDMARKS.NOSE]: 1.0,
+  [KEY_LANDMARKS.LEFT_SHOULDER]: 1.0,
+  [KEY_LANDMARKS.RIGHT_SHOULDER]: 1.0,
+  [KEY_LANDMARKS.LEFT_ELBOW]: 1.0,
+  [KEY_LANDMARKS.RIGHT_ELBOW]: 1.0,
+  [KEY_LANDMARKS.LEFT_WRIST]: 1.2,
+  [KEY_LANDMARKS.RIGHT_WRIST]: 1.2,
+  [KEY_LANDMARKS.LEFT_HIP]: 1.0,
+  [KEY_LANDMARKS.RIGHT_HIP]: 1.0,
+  [KEY_LANDMARKS.LEFT_KNEE]: 1.0,
+  [KEY_LANDMARKS.RIGHT_KNEE]: 1.0,
+  [KEY_LANDMARKS.LEFT_ANKLE]: 1.2,
+  [KEY_LANDMARKS.RIGHT_ANKLE]: 1.2,
+};
 
 /**
  * Internal entity type, represented as an ID
  */
 export type Feedback = ID;
+
+// TODO: fix this
+interface NumericPoseData {
+  [key: string]: {
+    x: number;
+    y: number;
+    z: number;
+  };
+}
 
 /**
  * State: A set of Feedback records.
@@ -26,11 +59,12 @@ export type Feedback = ID;
  */
 interface FeedbackDoc {
   _id: Feedback;
-  referenceVideo: Video; // ID of the reference video from which pose data was derived
-  practiceVideo: Video; // ID of the practice video from which pose data was derived
+  referenceVideo: string; // ID of the reference video from which pose data was derived
+  practiceVideo: string; // ID of the practice video from which pose data was derived
   feedbackText: string; // The generated textual feedback
   accuracyValue: number; // A numerical score indicating similarity/accuracy (e.g., 0-100)
-  createdAt: Date; // Timestamp when the feedback record was created
+  frameScores: number[]; // Optional: per-frame accuracy scores
+  worstFrames: number[]; // Optional: indices of frames with the lowest scores
 }
 
 /**
@@ -51,102 +85,189 @@ export default class FeedbackConcept {
    * @effects A new feedback record is created and its ID is returned.
    * @returns The ID of the newly created feedback record, or an error if validation fails.
    */
+
+  // First, add interface for the incoming pose format
   async analyze(
-    { referenceVideo, practiceVideo, referencePoseData, practicePoseData }: {
-      referenceVideo: Video;
-      practiceVideo: Video;
-      referencePoseData: PoseData;
-      practicePoseData: PoseData;
-    },
+    { referenceVideoId, practiceVideoId, referencePoseData, practicePoseData }:
+      {
+        referenceVideoId: string;
+        practiceVideoId: string;
+        referencePoseData: NumericPoseData[][];
+        practicePoseData: NumericPoseData[][];
+      },
   ): Promise<{ feedback: Feedback; feedbackText: string } | { error: string }> {
-    console.log("in FeedbackConcept.analyze:");
-    console.log("referenceVideo:", referenceVideo);
-    console.log("practiceVideo:", practiceVideo);
-    console.log("referencePoseData keys:", referencePoseData);
-    console.log("practicePoseData keys:", Object.keys(practicePoseData));
+    // Parse JSON if needed
+    try {
+      if (typeof referencePoseData === "string") {
+        referencePoseData = JSON.parse(referencePoseData);
+      }
+      if (typeof practicePoseData === "string") {
+        practicePoseData = JSON.parse(practicePoseData);
+      }
+    } catch (e) {
+      return { error: `Failed to parse pose data: ${e}` };
+    }
 
-    // referencePoseDataTest = JSON.parse(referencePoseData);
-    // practicePoseDataTest = JSON.parse(practicePoseData);
+    // Validate array format
+    if (!Array.isArray(referencePoseData) || !Array.isArray(practicePoseData)) {
+      return { error: "Pose data must be arrays after parsing" };
+    }
 
-    // Basic validation for pose data presence (mocking an actual analysis requirement)
-    if (
-      !referencePoseData || Object.keys(referencePoseData).length === 0 ||
-      !practicePoseData || Object.keys(practicePoseData).length === 0
-    ) {
-      // In a real scenario, pose data might be legitimately empty for very short videos
-      // or if pose estimation failed. For this mock, we'll treat it as a condition
-      // for generating specific feedback.
-      const feedbackId = freshID() as Feedback;
-      await this.feedback.insertOne({
-        _id: feedbackId,
-        referenceVideo,
-        practiceVideo,
-        feedbackText: "Cannot analyze. One or both pose datasets are empty.",
-        accuracyValue: 0, // Indicate no meaningful analysis
-        createdAt: new Date(),
+    // Compare poses frame by frame
+    const n = Math.min(referencePoseData.length, practicePoseData.length);
+    const frameScores: number[] = [];
+    const frameIntervalMs = 100; // 10 frames per second
+
+    for (let i = 0; i < n; i++) {
+      const refPose = referencePoseData[i];
+      const pracPose = practicePoseData[i];
+
+      if (!refPose || !pracPose) {
+        frameScores.push(0);
+        continue;
+      }
+
+      let totalDist = 0;
+      let totalWeight = 0;
+
+      // First create mapping from numeric indices to landmark names
+      const LANDMARK_INDICES: Record<number, keyof typeof KEY_LANDMARKS> = {};
+      Object.entries(KEY_LANDMARKS).forEach(([name, index]) => {
+        LANDMARK_INDICES[index] = name as keyof typeof KEY_LANDMARKS;
       });
-      return {
-        feedback: feedbackId,
-        feedbackText: "No pose data available for analysis.",
-      };
+
+      // Then in the frame comparison loop
+      Object.entries(KEYPOINT_WEIGHTS).forEach(([landmarkIndex, weight]) => {
+        const idx = landmarkIndex; // Already a string number from KEYPOINT_WEIGHTS
+        const landmarkName = LANDMARK_INDICES[idx];
+
+        const refPoint = refPose[idx];
+        const pracPoint = pracPose[idx];
+
+        if (!refPoint || !pracPoint) {
+          console.log(
+            `Missing point data for landmark ${landmarkName} (${idx})`,
+          );
+          return;
+        }
+
+        // Compute 3D distance
+        const dx = refPoint.x - pracPoint.x;
+        const dy = refPoint.y - pracPoint.y;
+        const dz = refPoint.z - pracPoint.z;
+        const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+
+        totalDist += dist * weight;
+        totalWeight += weight;
+      });
+      if (totalWeight === 0) {
+        frameScores.push(0);
+        continue;
+      }
+
+      // Normalize distance by weights
+      const avgDist = totalDist / totalWeight;
+
+      // Convert distance to score (0-100)
+      const maxGoodDist = 0.4;
+      const score = Math.max(
+        0,
+        Math.min(
+          100,
+          Math.round((1 - Math.min(avgDist / maxGoodDist, 1)) * 100),
+        ),
+      );
+      frameScores.push(score);
     }
 
-    // --- Simulate actual pose analysis logic here ---
-    // In a production system, this would involve complex algorithms:
-    // 1. Aligning the two pose sequences (e.g., dynamic time warping).
-    // 2. Comparing keypoint positions, angles, velocities frame-by-frame.
-    // 3. Identifying specific discrepancies (e.g., "left arm too low," "right leg movement too slow").
-    // 4. Calculating an overall accuracy score.
+    // Calculate overall accuracy
+    const accuracyValue = Math.round(
+      frameScores.reduce((sum, score) => sum + score, 0) / frameScores.length,
+    );
 
-    // For this concept, we'll generate mock feedback and accuracy values.
-    const accuracyValue = Math.floor(Math.random() * (95 - 60 + 1)) + 60; // Random accuracy between 60-95%
-    let feedbackText =
-      `Analysis complete. Overall accuracy: ${accuracyValue}%.`;
+    // Find worst frames
+    const worstFrames = frameScores
+      .map((score, idx) => ({ score, frameIdx: idx }))
+      .sort((a, b) => a.score - b.score)
+      .slice(0, 3)
+      .map((item) => item.frameIdx);
 
-    // Example of mock detailed feedback:
-    if (accuracyValue < 70) {
-      feedbackText +=
-        " Focus on coordinating your arm and leg movements. Your left arm seems slightly out of sync.";
-    } else if (accuracyValue < 85) {
-      feedbackText +=
-        " Good effort! Pay attention to the subtle nuances in your torso rotation and hip alignment.";
-    } else {
-      feedbackText +=
-        " Excellent work! Your form is very close to the reference. Perhaps refine the timing of your transitions.";
-    }
-    // --- End simulation ---
+    // Generate feedback text
+    const feedbackText = accuracyValue >= 80
+      ? `Great job! Overall accuracy: ${accuracyValue}%`
+      : `Overall accuracy: ${accuracyValue}%. Focus on improving at seconds: ${
+        worstFrames
+          .map((frameIdx) => {
+            const seconds = ((frameIdx + 1) * frameIntervalMs) / 1000;
+            const score = frameScores[frameIdx];
+            return `${seconds.toFixed(1)}s (${score}%)`;
+          })
+          .join(", ")
+      }`;
 
-    console.log("Generated feedback:", feedbackText);
+    // Store feedback
     const feedbackId = freshID() as Feedback;
     await this.feedback.insertOne({
       _id: feedbackId,
-      referenceVideo,
-      practiceVideo,
+      referenceVideo: referenceVideoId,
+      practiceVideo: practiceVideoId,
       feedbackText,
       accuracyValue,
-      createdAt: new Date(),
+      frameScores,
+      worstFrames,
     });
+
     return { feedback: feedbackId, feedbackText };
   }
-
   /**
    * Query: Retrieves the feedback text and accuracy value for a specific feedback record.
    * @requires The feedback record with the given ID must exist.
    * @returns An object containing the feedback text and accuracy value, or an error if not found.
    */
   async getFeedback(
-    { feedback }: { feedback: Feedback },
+    { feedback: feedbackId }: { feedback: Feedback },
   ): Promise<
     | { feedbackText: string; accuracyValue: number }
     | { error: string }
   > {
-    const feedbackDoc = await this.feedback.findOne({ _id: feedback });
+    const feedbackDoc = await this.feedback.findOne({ _id: feedbackId });
     if (!feedbackDoc) {
-      return { error: `Feedback with ID ${feedback} not found.` };
+      return { error: `Feedback with ID ${feedbackId} not found.` };
     }
     return {
       feedbackText: feedbackDoc.feedbackText,
       accuracyValue: feedbackDoc.accuracyValue,
     };
+  }
+
+  /**
+   * Query: Find feedback by referenceVideo and practiceVideo
+   * @param referenceVideo - The reference video ID
+   * @param practiceVideo - The practice video ID
+   * @returns The feedback document or an error if not found
+   */
+  async findFeedback(
+    referenceVideo: string,
+    practiceVideo: string,
+  ): Promise<
+    | { feedbackDoc: FeedbackDoc }
+    | { error: string }
+  > {
+    try {
+      const feedbackDoc = await this.feedback.findOne({
+        referenceVideo,
+        practiceVideo,
+      });
+
+      if (!feedbackDoc) {
+        return { error: `Feedback not found for given videos.` };
+      }
+
+      return {
+        feedbackDoc,
+      };
+    } catch (err) {
+      return { error: `Database query failed: ${err}` };
+    }
   }
 }

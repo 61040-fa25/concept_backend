@@ -12,6 +12,12 @@ const PREFIX = "ManageVideo" + ".";
 // Internal entity types, represented as IDs
 export type Video = ID;
 
+export type MatchingFrames = {
+  referenceStartFrame: number;
+  referenceEndFrame: number;
+  practiceStartFrame: number;
+  practiceEndFrame: number;
+};
 /**
  * State: A set of Videos with an owner, type, a Google Cloud Storage URL,
  * and the original GCS file name for deletion purposes.
@@ -20,10 +26,13 @@ interface VideoDoc {
   _id: Video;
   owner: User;
   videoType: "practice" | "reference";
+  videoName: string;
+  referenceVideoId?: string;
   gcsUrl: string; // The public URL of the video in Google Cloud Storage
   gcsFileName: string; // The object name in GCS, needed for deletion
-  feedback: Feedback[]; // Array of Feedback IDs, assuming Feedback is managed separately
+  feedback: Feedback; // Feedback ID associated with this video
   poseData: PoseData[]; // Array of PoseData associated with this video
+  matchingFrames?: MatchingFrames; // Optional matching frames to sync practice and reference
 }
 
 const PROJECT_ID = Deno.env.get("PROJECT_ID");
@@ -71,10 +80,12 @@ export default class ManageVideoConcept {
    */
 
   async upload(
-    { owner, videoType, file }: {
+    { owner, videoType, file, videoName, referenceVideoId }: {
       owner: User;
       videoType: "practice" | "reference";
       file: File;
+      videoName?: string;
+      referenceVideoId?: string;
     },
   ): Promise<{ video: Video } | { error: string }> {
     if (!this.bucketName) {
@@ -116,9 +127,11 @@ export default class ManageVideoConcept {
         _id: videoId,
         owner,
         videoType,
+        videoName: videoName ? videoName : "untitled",
+        referenceVideoId: referenceVideoId ? referenceVideoId : "",
         gcsUrl,
         gcsFileName,
-        feedback: [],
+        feedback: null,
         poseData: [],
       });
 
@@ -143,79 +156,65 @@ export default class ManageVideoConcept {
   /**
    * Action: Adds pose data and optional frame range to a video.
    * @param video The video ID to update.
-   * @param poseData An array of PoseData to be added.
+   * @param poseData An array of PoseData to be added (or JSON string).
    * @param caller The user attempting to update the video.
-   * @param startFrame (optional) The start frame of the pose data range.
-   * @param endFrame (optional) The end frame of the pose data range.
-   * @requires The video and all posesData in poseData must exist.
-   * @requires The caller must be the owner of the video.
-   * @effects Updates the video with pose data and optional frame range.
-   * @returns The updated video details or an error message.
+   * @param matchingFrames (optional) The start and end frames of the pose data range.
+   * @throws Throws an Error if validation or update fails.
    */
   async addPosesToVideo(
-    { video: videoId, poseData, caller, startFrame, endFrame }: {
+    { video: videoId, poseData, caller, matchingFrames }: {
       video: Video;
       poseData: PoseData[] | string;
       caller: User;
-      startFrame?: number;
-      endFrame?: number;
+      matchingFrames?: MatchingFrames;
     },
-  ): Promise<
-    | {
-      videoType: "practice" | "reference";
-      gcsUrl: string;
-      poseData: PoseData[];
-      startFrame?: number;
-      endFrame?: number;
-    }
-    | { error: string }
-  > {
+  ) {
     // Parse poseData if it's a JSON string
     if (typeof poseData === "string") {
       try {
         poseData = JSON.parse(poseData);
-      } catch {
-        console.warn("Pose data could not be parsed; leaving as string.");
+      } catch (e) {
+        throw new Error("Pose data JSON could not be parsed: " + String(e));
       }
     }
 
-    const videoDoc = await this.videos.findOne({ _id: videoId });
+    // Ensure poseData is an array
+    if (!Array.isArray(poseData)) {
+      throw new Error("poseData must be an array of PoseData.");
+    }
 
+    const videoDoc = await this.videos.findOne({ _id: videoId });
     if (!videoDoc) {
-      return { error: `Video with ID ${videoId} not found.` };
+      throw new Error(`Video with ID ${videoId} not found.`);
     }
 
     // Ensure the caller is the owner
     if (videoDoc.owner.toString() !== caller.toString()) {
-      return { error: "Caller is not the owner of this video." };
+      throw new Error("Caller is not the owner of this video.");
     }
 
     // Prepare update payload
-    const updatePayload: Record<string, any> = { poseData };
+    const updatePayload: Partial<VideoDoc> = {
+      poseData: poseData as PoseData[],
+    };
 
-    if (typeof startFrame === "number") updatePayload.startFrame = startFrame;
-    if (typeof endFrame === "number") updatePayload.endFrame = endFrame;
+    if (matchingFrames) {
+      updatePayload.matchingFrames = matchingFrames;
+    }
 
-    // Update the video document with new data
     const updateResult = await this.videos.updateOne(
       { _id: videoId },
       { $set: updatePayload },
     );
 
-    console.log("Updated poseData type:", typeof poseData);
-
-    if (updateResult.matchedCount === 0) {
-      return { error: "Failed to update pose data." };
-    }
-
-    // Return updated video info
-    return {
-      videoType: videoDoc.videoType,
-      gcsUrl: videoDoc.gcsUrl,
-      poseData: poseData as PoseData[],
-      startFrame,
-      endFrame,
-    };
+    console.log("AddPosesToVideo result:", updateResult);
+    // if (
+    //   !updateResult ||
+    //   (updateResult.matchedCount !== undefined &&
+    //     updateResult.matchedCount === 0)
+    // ) {
+    //   throw new Error("Failed to update pose data: no matching document.");
+    // }
   }
 
   /**
@@ -231,10 +230,14 @@ export default class ManageVideoConcept {
     { video: videoId, caller }: { video: Video; caller: User },
   ): Promise<
     | {
+      videoId: Video;
       videoType: "practice" | "reference";
       gcsUrl: string;
-      feedback: Feedback[];
+      videoName: string;
+      referenceVideoId: string;
+      feedback: Feedback;
       poseData: PoseData[];
+      matchingFrames?: MatchingFrames;
     }
     | { error: string }
   > {
@@ -251,13 +254,19 @@ export default class ManageVideoConcept {
       return { error: "Caller is not the owner of this video." };
     }
 
+    console.log("feedback retrieved:", videoDoc.feedback);
     return {
+      videoId: videoDoc._id,
       videoType: videoDoc.videoType,
       gcsUrl: videoDoc.gcsUrl,
+      videoName: videoDoc.videoName,
+      referenceVideoId: videoDoc.referenceVideoId,
       feedback: videoDoc.feedback,
       poseData: videoDoc.poseData,
+      matchingFrames: videoDoc.matchingFrames,
     };
   }
+
   /**
    * Action: Streams the actual video file from Google Cloud Storage.
    * @param video The ID of the video to stream.
@@ -294,7 +303,6 @@ export default class ManageVideoConcept {
 
       // Fetch metadata for headers
       const [metadata] = await file.getMetadata();
-      console.log("Video metadata:", metadata);
 
       // Create readable stream
       const [fileStream] = await file.download();
@@ -359,14 +367,139 @@ export default class ManageVideoConcept {
     }
   }
 
-  // --- Query functions (can be expanded based on needs) ---
+  // --- Mutation functions ---
+  /**
+   * Action: Set the matchingFrames of a video.
+   * @param video The ID of the video to update.
+   * @param caller The ID of the user attempting to update the video.
+   * @param referenceStartFrame The start frame of the reference video.
+   * @param referenceEndFrame The end frame of the reference video.
+   * @param practiceStartFrame The start frame of the practice video.
+   * @param practiceEndFrame The end frame of the practice video.
+   */
+  async setMatchingFrames({
+    video,
+    caller,
+    referenceStartFrame,
+    referenceEndFrame,
+    practiceStartFrame,
+    practiceEndFrame,
+  }: {
+    video: Video;
+    caller: User;
+    referenceStartFrame: number;
+    referenceEndFrame: number;
+    practiceStartFrame: number;
+    practiceEndFrame: number;
+  }) {
+    console.log(
+      "Setting matchingFrames for video:",
+      video,
+      "for caller:",
+      caller,
+    );
+
+    const videoDoc = await this.videos.findOne({ _id: video });
+    if (!videoDoc) {
+      return { error: `Video with ID ${video} not found.` };
+    }
+
+    // Ensure ownership
+    if (videoDoc.owner.toString() !== caller.toString()) {
+      return { error: "Caller is not the owner of this video." };
+    }
+
+    const matchingFrames = {
+      referenceStartFrame,
+      referenceEndFrame,
+      practiceStartFrame,
+      practiceEndFrame,
+    };
+
+    // Update matchingFrames
+    console.log("Updating matchingFrames:", matchingFrames);
+    videoDoc.matchingFrames = matchingFrames;
+    await this.videos.replaceOne({ _id: video }, videoDoc);
+  }
+
+  // TODO: likely don't need this in the future, can just use getFeedback(ref, prac)
+  async storeFeedback({
+    video,
+    feedbackId,
+    caller,
+  }: {
+    video: Video;
+    feedbackId: Feedback;
+    caller: User;
+  }): Promise<Empty | { error: string }> {
+    console.log(
+      "Storing feedback for video:",
+      video,
+      "feedback:",
+      feedbackId,
+      "by caller:",
+      caller,
+    );
+
+    const videoDoc = await this.videos.findOne({ _id: video });
+    if (!videoDoc) {
+      return { error: `Video with ID ${video} not found.` };
+    }
+    if (videoDoc.owner.toString() !== caller.toString()) {
+      return { error: "Caller is not the owner of this video." };
+    }
+
+    // Use updateOne with $set instead of replaceOne
+    const result = await this.videos.updateOne(
+      { _id: video },
+      { $set: { feedback: feedbackId } },
+    );
+
+    if (result.matchedCount === 0) {
+      return { error: "Failed to update feedback" };
+    }
+
+    if (result.modifiedCount === 0) {
+      return { error: "No changes made to feedback" };
+    }
+
+    console.log("Feedback stored successfully:", result);
+    return {};
+  }
+
+  // --- Query functions ---
 
   /**
    * Query: Retrieves all video documents owned by a specific user.
    * @param owner The ID of the user whose videos are to be retrieved.
    * @returns An array of VideoDoc objects.
    */
-  async _getOwnedVideos({ owner }: { owner: User }): Promise<VideoDoc[]> {
+  async getOwnedVideos({ owner }: { owner: User }): Promise<VideoDoc[]> {
     return await this.videos.find({ owner }).toArray();
+  }
+
+  async getPracticeVideos({
+    referenceVideoId,
+  }: {
+    referenceVideoId: string;
+  }): Promise<VideoDoc[]> {
+    console.log(
+      "Retrieving practice videos for reference video:",
+      referenceVideoId,
+    );
+
+    console.log(
+      "found",
+      await this.videos.find({ videoType: "practice" }).toArray(),
+    );
+    // Find all videos that are of type 'practice' and have the given referenceVideoId
+    return await this.videos
+      .find({ videoType: "practice", referenceVideoId })
+      .toArray();
+  }
+
+  async getAllReferenceVideos({ caller }): Promise<VideoDoc[]> {
+    return await this.videos.find({ videoType: "reference", owner: caller })
+      .toArray();
   }
 }

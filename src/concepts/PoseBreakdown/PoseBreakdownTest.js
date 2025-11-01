@@ -4,7 +4,7 @@ import {
   DrawingUtils,
 } from "https://cdn.skypack.dev/@mediapipe/tasks-vision@0.10.0";
 
-import PoseBreakdownConcept from "./PoseBreakdownConcept.js";
+// import PoseBreakdownConcept from "./PoseBreakdownConcept.js";
 
 // const poseBreakdownConcept = new PoseBreakdownConcept();
 
@@ -99,7 +99,7 @@ async function createPoseLandmarker() {
   );
   poseLandmarker = await PoseLandmarker.createFromOptions(vision, {
     baseOptions: {
-      modelAssetPath: "../models/pose_landmarker_lite.task",
+      modelAssetPath: "../../models/pose_landmarker_lite.task",
       delegate: "GPU", // Use GPU for better performance if available
     },
     numPoses: 2, // Detect up to 2 poses in an image
