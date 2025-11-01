@@ -6,7 +6,6 @@ ctx.exe
 node_modules
 
 .obsidian/workspace.json
-
-updated screen recording.mp4
-
-updated screen recording.mp4
+src/concepts/concepts.ts
+src/concepts/test_concepts.ts
+src/syncs/syncs.ts
