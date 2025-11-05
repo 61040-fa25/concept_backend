@@ -1,3 +1,12 @@
+---
+timestamp: 'Tue Nov 04 2025 18:52:31 GMT-0500 (Eastern Standard Time)'
+parent: '[[..\20251104_185231.4861dbb4.md]]'
+content_id: 037af569a54204598be55d6a27e1297ea2a6ec36e69a4f42449344d66584a3ee
+---
+
+# file: src\concepts\ManageVideo\ManageVideoConcept.ts
+
+```typescript
 import { Collection, Db } from "npm:mongodb";
 import { Empty, ID } from "@utils/types.ts"; // Assuming ID is `string` and Empty is `{}`
 import { freshID } from "@utils/database.ts"; // Assuming freshID() generates a unique string ID
@@ -503,3 +512,5 @@ export default class ManageVideoConcept {
       .toArray();
   }
 }
+
+```

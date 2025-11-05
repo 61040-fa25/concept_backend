@@ -1,3 +1,12 @@
+---
+timestamp: 'Tue Nov 04 2025 19:00:24 GMT-0500 (Eastern Standard Time)'
+parent: '[[..\20251104_190024.94a448ba.md]]'
+content_id: a94207574d8122cd83e85c8f08e9a39f1851cad41dec540f91f0d23caa90525b
+---
+
+# file: src\concepts\User\UserConcept.ts
+
+```typescript
 import { Collection, Db } from "npm:mongodb";
 import { ID } from "@utils/types.ts";
 import { freshID } from "@utils/database.ts";
@@ -83,3 +92,5 @@ export default class UserConcept {
     return { userID: user._id };
   }
 }
+
+```

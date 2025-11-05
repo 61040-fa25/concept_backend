@@ -138,11 +138,41 @@ async function main() {
   const manageVideoInstance = new ManageVideoConcept(db);
   console.log("Registering video streaming endpoint...");
 
-  app.get("/api/ManageVideo/:videoId", async (c) => {
-    const videoId = c.req.param("videoId") as Video;
-    const caller = "testOwner" as User; // Replace with real authenticated user later
-    console.log(`Streaming video with ID: ${videoId} for caller: ${caller}`);
+  // app.post("/api/ManageVideo/:videoId", async (c) => {
+  //   const videoId = c.req.param("videoId") as Video;
+  //   const form = await c.req.formData();
+  //   const caller = form.get("caller");
 
+  //   if (!caller) {
+  //     return c.json({ error: "Unauthorized - No caller provided" }, 401);
+  //   }
+
+  //   console.log(
+  //     `Processing video request with ID: ${videoId} for caller: ${caller}`,
+  //   );
+
+  //   try {
+  //     const result = await manageVideoInstance.streamVideo({
+  //       video: videoId,
+  //       caller: caller as User,
+  //       c,
+  //     });
+
+  //     if (!result) {
+  //       return c.json({ error: "Video not found" }, 404);
+  //     }
+
+  //     return c.json(result);
+  //   } catch (error) {
+  //     console.error("Error processing video request:", error);
+  //     return c.json({ error: "Failed to process video request" }, 500);
+  //   }
+  // });
+
+  app.get("/api/ManageVideo/:videoId/:callerId", async (c) => {
+    console.log("Received video streaming request", c.req);
+    const videoId = c.req.param("videoId") as Video;
+    const caller = c.req.param("callerId") as User;
     const result = await manageVideoInstance.streamVideo({
       video: videoId,
       caller,
@@ -151,7 +181,6 @@ async function main() {
     return result;
   });
 
-  console.log(`\nServer listening on http://localhost:${PORT}`);
   Deno.serve({ port: PORT }, app.fetch);
 }
 
