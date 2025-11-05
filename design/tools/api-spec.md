@@ -1,657 +1,534 @@
-Based on the provided concept specifications and TypeScript implementations, here is the extracted API for the application.
+This document outlines the HTTP surface area exposed by the ConceptServer when it boots with `--port 8000 --baseUrl /api` and scans `./src/concepts`. The ConceptServer mounts each concept at `/api/<ConceptName>` and exposes every public method as a `POST` endpoint whose path matches the method name (without parentheses).
 
-The API is organized by concept. Each endpoint corresponds to an action or query defined in the concept. Following the specification:
-*   **Actions** are represented by `POST` requests.
-*   **Queries** (methods prefixed with `_`) are represented by `GET` requests, with parameters passed in the query string.
+# API Specification
 
----
-
-## 1. PlatformLink API
-
-Provides authenticated access to streaming platforms, managing links and tokens for users.
-
-### `POST /api/platformlink/link`
-
-Creates a new link to a streaming platform for a given user.
-
-**Request Body:**
-```json
-{
-  "userId": "string",
-  "platform": "string"
-}
-```
-
-**Success Response (200):**
-```json
-{
-  "linkId": "string"
-}
-```
-
-**Error Response (4xx):**
-```json
-{
-  "error": "string"
-}
-```
-
-### `POST /api/platformlink/refresh`
-
-Refreshes the access token and expiration time for an existing link.
-
-**Request Body:**
-```json
-{
-  "linkId": "string"
-}
-```
-
-**Success Response (200):**
-```json
-{
-  "newExpiration": "number"
-}
-```
-
-**Error Response (4xx):**
-```json
-{
-  "error": "string"
-}
-```
-
-### `POST /api/platformlink/revoke`
-
-Revokes a user's link to a platform, deleting the link and all associated capabilities.
-
-**Request Body:**
-```json
-{
-  "linkId": "string"
-}
-```
-
-**Success Response (200):**
-```json
-{
-  "removed": "boolean"
-}
-```
-
-**Error Response (4xx):**
-```json
-{
-  "error": "string"
-}
-```
-
-### `POST /api/platformlink/can`
-
-Checks if a link is active (token not expired) and possesses a specific capability.
-
-**Request Body:**
-```json
-{
-  "linkId": "string",
-  "capability": "string"
-}
-```
-
-**Response (200):**
-```json
-{
-  "ok": "boolean"
-}
-```
+- **Base URL:** `http://localhost:8000/api`
+- **Content-Type:** All endpoints expect and return JSON unless otherwise noted.
+- **HTTP Method:** `POST` for all concept operations listed below (ConceptServer does not expose `GET`, `PUT`, or `DELETE` routes by default).
+- **Error Envelope:** Errors are returned as `{ "error": string }` with an appropriate `4xx/5xx` HTTP status.
 
 ---
 
-## 2. LibraryCache API
+## PlatformLink (`/api/PlatformLink`)
 
-Maintains a local snapshot of a user’s liked tracks, plays, and playlists.
+PlatformLink coordinates OAuth account linking, token refresh, and downstream data sync.
 
-### `POST /api/librarycache/sync`
+### `POST /api/PlatformLink/link`
+Creates a dummy link for non-OAuth testing flows.
 
-Performs a full replacement sync for a user's library data. It populates or updates track metadata and replaces the user's likes, plays, and playlists with the provided data.
-
-**Request Body:**
 ```json
 {
-  "userId": "string",
+  "userId": "user:123",
+  "platform": "spotify"
+}
+```
+
+**Response**
+```json
+{
+  "linkId": "link:abc123"
+}
+```
+
+### `POST /api/PlatformLink/refresh`
+Refreshes an existing Spotify link using its stored refresh token.
+
+```json
+{
+  "linkId": "link:abc123"
+}
+```
+
+**Response**
+### `POST /api/PlatformLink/syncLibraryFromSpotify`
+Fetches the user's Spotify library using the stored OAuth token and writes it into LibraryCache.
+
+```json
+{
+  "userId": "user:123"
+}
+```
+
+**Response**
+```json
+{
+  "synced": true,
+  "counts": { "tracks": 420, "likes": 200, "plays": 50, "playlists": 10 }
+}
+```
+
+{
+  "newExpiration": 1672539000000
+}
+```
+
+### `POST /api/PlatformLink/revoke`
+Deletes a link and any capabilities attached to it.
+
+```json
+{
+  "linkId": "link:abc123"
+}
+```
+
+**Response**
+```json
+{
+  "removed": true
+}
+```
+
+### `POST /api/PlatformLink/can`
+Checks whether a link is valid and has a named capability.
+
+```json
+{
+  "linkId": "link:abc123",
+  "capability": "librarySync"
+}
+```
+
+**Response**
+```json
+{
+  "ok": true
+}
+```
+
+### `POST /api/PlatformLink/startAuth`
+Begins the Spotify OAuth PKCE flow.
+
+```json
+{
+  "userId": "user:123",
+  "platform": "spotify",
+  "scopes": ["user-library-read"],
+  "redirectUri": "https://app.example.com/callback"
+}
+```
+
+**Response**
+```json
+{
+  "authorizeUrl": "https://accounts.spotify.com/authorize?...",
+  "state": "state-string",
+  "expiresAt": 1672531800000
+}
+```
+
+### `POST /api/PlatformLink/completeAuth`
+Completes OAuth after Spotify redirects back with a code.
+
+```json
+{
+  "state": "state-string",
+  "code": "auth-code"
+}
+```
+
+**Response**
+```json
+{
+  "linkId": "link:abc123",
+  "platform": "spotify",
+  "tokenExpiration": 1672535400000,
+  "scopes": ["user-library-read"]
+}
+```
+
+### `POST /api/PlatformLink/listLinks`
+Lists links known for a user. The ConceptServer always returns an object with a `links` array.
+
+```json
+{
+  "userId": "user:123"
+}
+```
+
+**Response**
+```json
+{
+  "links": [
+    {
+      "linkId": "link:abc123",
+      "platform": "spotify",
+      "tokenExpiration": 1672535400000,
+      "scopes": ["user-library-read"],
+      "lastAuthorizedAt": 1672528200000
+    }
+  ]
+}
+```
+
+### `POST /api/PlatformLink/syncLibrary`
+Passes Spotify library snapshots into LibraryCache.
+
+```json
+{
+  "linkId": "link:abc123",
+  "payload": {
+    "userId": "user:123",
+    "tracks": [{ "trackId": "spotify:track:1", "title": "Song", "artist": "Artist", "available": true }],
+    "likes": [{ "trackId": "spotify:track:1", "addedAt": 1672531200000 }],
+    "plays": [{ "trackId": "spotify:track:1", "lastPlayedAt": 1672617600000 }],
+    "playlists": [{
+      "playlistId": "spotify:playlist:abc",
+      "entries": [{ "idx": 0, "trackId": "spotify:track:1" }],
+      "updatedAt": 1672617600000
+    }]
+  }
+}
+```
+
+**Response**
+```json
+{
+  "synced": true
+}
+```
+
+### `POST /api/PlatformLink/bootstrapTrackScoring`
+Convenience bridge that triggers TrackScoring ingest/preview.
+
+```json
+{
+  "userId": "user:123",
+  "size": 50
+}
+```
+
+**Response**
+```json
+{
+  "ingested": 250,
+  "ensuredWeights": true,
+  "previewCount": 50,
+  "source": "bootstrap"
+}
+```
+
+---
+
+## LibraryCache (`/api/LibraryCache`)
+
+LibraryCache stores tracks, likes, plays, and playlist snapshots.
+
+### `POST /api/LibraryCache/ingest`
+Legacy ingest endpoint (alias for `sync`).
+
+```json
+{
+  "userId": "user:123",
+  "tracks": [
+    { "trackId": "spotify:track:1", "title": "Song", "artist": "Artist", "available": true }
+  ],
+  "likes": [],
+  "plays": [],
+  "playlists": []
+}
+```
+
+**Response**
+```json
+{}
+```
+
+### `POST /api/LibraryCache/sync`
+Authoritative bulk replacement of a user's library.
+
+Payload matches `ingest`. Response mirrors `{}` on success.
+
+### `POST /api/LibraryCache/getLiked`
+Fetches liked track IDs ordered by recency.
+
+```json
+{
+  "userId": "user:123"
+}
+```
+
+**Response**
+```json
+{
+  "trackIds": ["spotify:track:42", "spotify:track:1"]
+}
+```
+
+### `POST /api/LibraryCache/_getLiked`
+Internal variant used by other concepts; request/response identical to `getLiked`.
+
+### `POST /api/LibraryCache/_getPlaylist`
+Internal helper returning playlist entries.
+
+```json
+{
+  "playlistId": "spotify:playlist:abc"
+}
+```
+
+**Response**
+```json
+{
+  "entries": ["spotify:track:1", "spotify:track:2"]
+}
+```
+
+### `POST /api/LibraryCache/getTracks`
+Fetches full metadata for requested track IDs (title, artist, tempo, energy, valence).
+
+```json
+{
+  "trackIds": ["spotify:track:1", "spotify:track:42"]
+}
+```
+
+**Response**
+```json
+{
   "tracks": [
     {
-      "trackId": "string",
-      "title": "string",
-      "artist": "string",
-      "available": "boolean",
-      "tempo": "number",
-      "energy": "number",
-      "valence": "number"
-    }
-  ],
-  "likes": [
+      "trackId": "spotify:track:1",
+      "title": "Song Title",
+      "artist": "Artist Name",
+      "available": true,
+      "tempo": 120.5,
+      "energy": 0.85,
+      "valence": 0.72
+    },
     {
-      "trackId": "string",
-      "addedAt": "number"
-    }
-  ],
-  "plays": [
-    {
-      "trackId": "string",
-      "lastPlayedAt": "number"
-    }
-  ],
-  "playlists": [
-    {
-      "playlistId": "string",
-      "entries": [
-        {
-          "idx": "number",
-          "trackId": "string"
-        }
-      ],
-      "updatedAt": "number"
+      "trackId": "spotify:track:42",
+      "title": "Another Song",
+      "artist": "Another Artist",
+      "available": true,
+      "tempo": 95.0,
+      "energy": 0.45,
+      "valence": 0.38
     }
   ]
 }
 ```
 
-**Success Response (200):**
+---
+
+## TrackScoring (`/api/TrackScoring`)
+
+TrackScoring maintains resurfacing stats and scores.
+
+### `POST /api/TrackScoring/updateWeights`
+```json
+{
+  "userId": "user:123",
+  "lastPlayedW": 0.6,
+  "likedWhenW": 0.3,
+  "timesSkippedW": 15
+}
+```
+
+**Response**
 ```json
 {}
 ```
 
-**Error Response (5xx):**
+### `POST /api/TrackScoring/updateStats`
+Low-level stats update (rarely used directly).
+
+### `POST /api/TrackScoring/score`
+Computes a score for one track (internal helper).
+
+### `POST /api/TrackScoring/preview`
+Returns sorted preview data.
+
 ```json
 {
-  "error": "string"
+  "userId": "user:123",
+  "size": 50
 }
 ```
-*Note: `ingest` is an alias for `sync` and would have an identical endpoint at `POST /api/librarycache/ingest`.*
 
-### `GET /api/librarycache/getLiked`
-
-Returns a list of track IDs for a user's liked tracks, sorted by most recently added.
-
-**Query Parameters:**
-*   `userId` (string): The ID of the user.
-
-**Success Response (200):**
+**Response**
 ```json
-[
-  {
-    "trackIds": ["string", "string", ...]
-  }
-]
+{
+  "tracks": [
+    {
+      "trackId": "spotify:track:old",
+      "score": 95,
+      "lastPlayedAt": 1577836800000
+    }
+  ],
+  "trackIds": ["spotify:track:old"],
+  "source": "bootstrap"
+}
 ```
 
-**Error Response (5xx):**
+### `POST /api/TrackScoring/keep`
 ```json
-[
-  {
-    "error": "string"
-  }
-]
+{
+  "userId": "user:123",
+  "trackId": "spotify:track:old"
+}
 ```
 
-### `GET /api/librarycache/getPlaylist`
-
-Returns an ordered list of track IDs for a given playlist.
-
-**Query Parameters:**
-*   `playlistId` (string): The ID of the playlist.
-
-**Success Response (200):**
+**Response**
 ```json
-[
-  {
-    "entries": ["string", "string", ...]
-  }
-]
+{}
 ```
 
-**Error Response (5xx):**
+### `POST /api/TrackScoring/snooze`
 ```json
-[
-  {
-    "error": "string"
-  }
-]
+{
+  "userId": "user:123",
+  "trackId": "spotify:track:old",
+  "until": 86400000
+}
 ```
+
+**Response**
+```json
+{}
+```
+
+### Additional helper routes
+`normaliseSize`, `calculateScore`, `fetchPreviewFromScores`, `bootstrapScores`, and `ingestFromLibraryCache` all accept JSON payloads matching their method signatures in code and return concept-specific objects. Frontend callers typically rely on `preview`, `keep`, `snooze`, and `ingestFromLibraryCache`.
 
 ---
 
-## 3. TrackScoring API
+## SwipeSessions (`/api/SwipeSessions`)
 
-Computes a "staleness" score for tracks and manages user preferences (boosts/snoozes).
+SwipeSessions powers short decision-making sessions.
 
-### `POST /api/trackscoring/updateWeights`
-
-Updates the scoring weights for a given user.
-
-**Request Body:**
+### `POST /api/SwipeSessions/start`
 ```json
 {
-  "userId": "string",
-  "lastPlayedW": "number",
-  "likedWhenW": "number",
-  "timesSkippedW": "number"
+  "userId": "user:123",
+  "queueTracks": ["spotify:track:a", "spotify:track:b"],
+  "size": 2
 }
 ```
 
-**Success Response (200):**
-```json
-{}
-```
-
-**Error Response (4xx):**
+**Response**
 ```json
 {
-  "error": "string"
+  "sessionId": "session:abcdef"
 }
 ```
 
-### `POST /api/trackscoring/updateStats`
-
-Updates the playback statistics for a user-track pair.
-
-**Request Body:**
+### `POST /api/SwipeSessions/next`
 ```json
 {
-  "userId": "string",
-  "trackId": "string",
-  "lastPlayedAt": "number",
-  "likedAt": "number",
-  "timesSkipped": "number"
+  "sessionId": "session:abcdef"
 }
 ```
 
-**Success Response (200):**
-```json
-{}
-```
-
-**Error Response (4xx):**
+**Response**
 ```json
 {
-  "error": "string"
+  "trackId": "spotify:track:a"
 }
 ```
 
-### `POST /api/trackscoring/score`
+### Decision endpoints
+- `POST /api/SwipeSessions/decideKeep`
+- `POST /api/SwipeSessions/decideSnooze`
+- `POST /api/SwipeSessions/decideAddToPlaylist`
+- `POST /api/SwipeSessions/decideCreatePlaylist`
 
-Computes, stores, and returns a staleness score for a given track.
+Each decision endpoint expects the appropriate session and track payload, for example:
 
-**Request Body:**
 ```json
 {
-  "userId": "string",
-  "trackId": "string"
+  "sessionId": "session:abcdef",
+  "trackId": "spotify:track:a"
 }
 ```
 
-**Success Response (200):**
+**Response**
 ```json
 {
-  "score": "number"
+  "decisionId": "decision:12345"
 }
 ```
 
-**Error Response (4xx):**
+### `POST /api/SwipeSessions/end`
 ```json
 {
-  "error": "string"
+  "sessionId": "session:abcdef"
 }
 ```
 
-### `POST /api/trackscoring/preview`
-
-Returns a list of track IDs for a user, sorted by their staleness score in descending order.
-
-**Request Body:**
+**Response**
 ```json
 {
-  "userId": "string",
-  "size": "number"
+  "ended": true
 }
 ```
 
-**Success Response (200):**
-```json
-{
-  "trackIds": ["string", "string", ...]
-}
-```
-
-**Error Response (4xx):**
-```json
-{
-  "error": "string"
-}
-```
-
-### `POST /api/trackscoring/keep`
-
-Increases the boost for a track, making it more likely to be resurfaced.
-
-**Request Body:**
-```json
-{
-  "userId": "string",
-  "trackId": "string"
-}
-```
-
-**Success Response (200):**
-```json
-{}
-```
-
-**Error Response (4xx):**
-```json
-{
-  "error": "string"
-}
-```
-
-### `POST /api/trackscoring/snooze`
-
-Snoozes a track for a user, preventing it from being resurfaced for a period of time.
-
-**Request Body:**
-```json
-{
-  "userId": "string",
-  "trackId": "string",
-  "until": "number"
-}
-```
-
-**Success Response (200):**
-```json
-{}
-```
-
-**Error Response (4xx):**
-```json
-{
-  "error": "string"
-}
-```
+### `POST /api/SwipeSessions/_makeDecision`
+Internal helper combining the decision endpoints above.
 
 ---
 
-## 4. SwipeSessions API
+## PlaylistHealth (`/api/PlaylistHealth`)
 
-Runs swipe sessions over a queue of tracks and records user decisions.
+PlaylistHealth analyses playlist quality.
 
-### `POST /api/swipesessions/start`
-
-Starts a new swipe session for a user with a given queue of tracks.
-
-**Request Body:**
+### `POST /api/PlaylistHealth/snapshot`
 ```json
 {
-  "userId": "string",
-  "queueTracks": ["string", "string", ...],
-  "size": "number"
+  "playlistId": "spotify:playlist:xyz",
+  "userId": "user:123",
+  "trackIds": ["spotify:track:a", "spotify:track:b"]
 }
 ```
 
-**Success Response (200):**
+**Response**
 ```json
 {
-  "sessionId": "string"
+  "snapshotId": "snap:abc"
 }
 ```
 
-**Error Response (4xx):**
+### `POST /api/PlaylistHealth/analyze`
 ```json
 {
-  "error": "string"
+  "playlistId": "spotify:playlist:xyz",
+  "snapshotId": "snap:abc"
 }
 ```
 
-### `POST /api/swipesessions/next`
-
-Retrieves the next track in the session's queue and advances the cursor.
-
-**Request Body:**
+**Response**
 ```json
 {
-  "sessionId": "string"
+  "reportId": "report:def"
 }
 ```
 
-**Success Response (200):**
-*Returns a track ID, or "-1" if the session queue is complete.*
+### `POST /api/PlaylistHealth/getReport`
 ```json
 {
-  "trackId": "string"
+  "reportId": "report:def"
 }
 ```
 
-**Error Response (4xx):**
+**Response**
 ```json
 {
-  "error": "string"
-}
-```
-
-### `POST /api/swipesessions/decideKeep`
-
-Records a 'keep' decision for the current track in a session.
-
-**Request Body:**
-```json
-{
-  "sessionId": "string",
-  "trackId": "string"
-}
-```
-
-**Success Response (200):**
-```json
-{
-  "decisionId": "string"
-}
-```
-
-**Error Response (4xx):**
-```json
-{
-  "error": "string"
-}
-```
-
-### `POST /api/swipesessions/decideSnooze`
-
-Records a 'snooze' decision for the current track in a session.
-
-**Request Body:**
-```json
-{
-  "sessionId": "string",
-  "trackId": "string",
-  "untilAt": "number"
-}
-```
-
-**Success Response (200):**
-```json
-{
-  "decisionId": "string"
-}
-```
-
-**Error Response (4xx):**
-```json
-{
-  "error": "string"
-}
-```
-
-### `POST /api/swipesessions/decideAddToPlaylist`
-
-Records a decision to add the current track to an existing playlist.
-
-**Request Body:**
-```json
-{
-  "sessionId": "string",
-  "trackId": "string",
-  "playlistId": "string"
-}
-```
-
-**Success Response (200):**
-```json
-{
-  "decisionId": "string"
-}
-```
-
-**Error Response (4xx):**
-```json
-{
-  "error": "string"
-}
-```
-
-### `POST /api/swipesessions/decideCreatePlaylist`
-
-Records a decision to create a new playlist with the current track.
-
-**Request Body:**
-```json
-{
-  "sessionId": "string",
-  "trackId": "string",
-  "playlistTitle": "string"
-}
-```
-
-**Success Response (200):**
-```json
-{
-  "decisionId": "string"
-}
-```
-
-**Error Response (4xx):**
-```json
-{
-  "error": "string"
-}
-```
-
-### `POST /api/swipesessions/end`
-
-Ends a session, deleting its record from the database.
-
-**Request Body:**
-```json
-{
-  "sessionId": "string"
-}
-```
-
-**Response (200):**
-```json
-{
-  "ended": "boolean"
-}
-```
-
----
-
-## 5. PlaylistHealth API
-
-Analyzes playlist snapshots to detect duplicates, unavailable tracks, and outliers.
-
-### `POST /api/playlisthealth/snapshot`
-
-Creates and stores a snapshot of a playlist's current tracks.
-
-**Request Body:**
-```json
-{
-  "playlistId": "string",
-  "userId": "string",
-  "trackIds": ["string", "string", ...]
-}
-```
-
-**Success Response (200):**
-```json
-{
-  "snapshotId": "string"
-}
-```
-
-**Error Response (4xx):**
-```json
-{
-  "error": "string"
-}
-```
-
-### `POST /api/playlisthealth/analyze`
-
-Analyzes a given snapshot to find issues and generates a health report.
-
-**Request Body:**
-```json
-{
-  "playlistId": "string",
-  "snapshotId": "string"
-}
-```
-
-**Success Response (200):**
-```json
-{
-  "reportId": "string"
-}
-```
-
-**Error Response (4xx):**
-```json
-{
-  "error": "string"
-}
-```
-
-### `POST /api/playlisthealth/getReport`
-
-Retrieves the results of a previously generated playlist health report.
-
-**Request Body:**
-```json
-{
-  "reportId": "string"
-}
-```
-
-**Success Response (200):**
-```json
-{
-  "playlistId": "string",
-  "snapshotId": "string",
+  "playlistId": "spotify:playlist:xyz",
+  "snapshotId": "snap:abc",
   "findings": [
     {
-      "idx": "number",
-      "trackId": "string",
-      "kind": "string"
+      "idx": 2,
+      "trackId": "spotify:track:a",
+      "kind": "Duplicate"
     }
   ]
 }
 ```
 
-**Error Response (4xx):**
-```json
-{
-  "error": "string"
-}
-```
+---
+
+## Notes For Frontend Consumers
+
+1. Every call is `POST` with a JSON body; adjust fetch helpers to send bodies even when the previous REST spec used query strings or route params.
+2. ConceptServer does not pluralise or lowercase paths. Use the exact casing shown above (e.g., `/api/PlatformLink/startAuth`).
+3. Some endpoints (`_getLiked`, `_makeDecision`) are intended for internal use but remain available; prefer the public variants unless a concept requires the internal helper.
+4. When building typed clients, reference the DTO shapes above or import the TypeScript types defined under `src/concepts/**` in the backend.

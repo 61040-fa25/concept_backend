@@ -1,3 +1,12 @@
+---
+timestamp: 'Mon Nov 03 2025 18:09:10 GMT-0500 (Eastern Standard Time)'
+parent: '[[../20251103_180910.391a2b47.md]]'
+content_id: aa7de884de484bc3c3c7638b6087afd19271bb8a2fc13640823e50275ddcb0ba
+---
+
+# file: src/concepts/TrackScoring/TrackScoringConcept.ts
+
+```typescript
 import { Collection, Db } from "npm:mongodb";
 import { Empty, ID } from "@utils/types.ts";
 
@@ -312,11 +321,8 @@ export default class TrackScoringConcept {
       return 0;
     }
 
-    const likedReference = stats.likedAt ?? stats.lastPlayedAt ?? Date.now();
-    const lastPlayedReference = Math.max(stats.lastPlayedAt ?? 0, likedReference);
-
-    const lastPlayedDays = (Date.now() - lastPlayedReference) / (1000 * 60 * 60 * 24);
-    const likedDays = (Date.now() - likedReference) / (1000 * 60 * 60 * 24);
+    const lastPlayedDays = (Date.now() - stats.lastPlayedAt) / (1000 * 60 * 60 * 24);
+    const likedDays = (Date.now() - stats.likedAt) / (1000 * 60 * 60 * 24);
 
     const rawScore = weights.lastPlayedW * lastPlayedDays + weights.likedWhenW * likedDays - weights.timesSkippedW * stats.timesSkipped;
     const boostEffect = (boostAmount ?? 0) * 10;
@@ -427,26 +433,7 @@ export default class TrackScoringConcept {
     ]);
 
     if (likes.length === 0 && plays.length === 0) {
-      // Attempt to pull fresh data from Spotify via PlatformLink, then retry once.
-      try {
-        const PlatformLinkConcept = (await import("../PlatformLink/PlatformLinkConcept.ts")).default;
-        const pl = new PlatformLinkConcept(this.db);
-        const syncResult = await pl.syncLibraryFromSpotify({ userId });
-        if (syncResult && typeof syncResult === "object" && "error" in syncResult) {
-          return { error: `No LibraryCache data found for user ${userId}` };
-        }
-        const [likes2, plays2] = await Promise.all([
-          likesCol.find({ userId }).toArray(),
-          playsCol.find({ userId }).toArray(),
-        ]);
-        if (likes2.length === 0 && plays2.length === 0) {
-          return { error: `No LibraryCache data found for user ${userId}` };
-        }
-        // Continue with reloaded data
-        return await this.ingestFromLibraryCache({ userId });
-      } catch (_e) {
-        return { error: `No LibraryCache data found for user ${userId}` };
-      }
+      return { error: `No LibraryCache data found for user ${userId}` };
     }
 
     const toMs = (ts: number | undefined | null): number | undefined => {
@@ -454,35 +441,23 @@ export default class TrackScoringConcept {
       return ts > 1_000_000_000_000 ? ts : ts * 1000;
     };
 
-    const playMap = new Map<Track, number>();
-    for (const play of plays) {
-      const ms = toMs(play.lastPlayedAt);
-      if (ms == null) continue;
-      const prev = playMap.get(play.trackId);
-      playMap.set(play.trackId, prev == null ? ms : Math.max(prev, ms));
-    }
+    const playMap = new Map<Track, number>(plays.map((p) => [p.trackId, toMs(p.lastPlayedAt) ?? 0]));
 
-    const operations = likes.map((like) => {
-      const likedAt = toMs(like.addedAt) ?? Date.now();
-      const playedAt = playMap.get(like.trackId);
-      const lastPlayedAt = playedAt != null ? Math.max(playedAt, likedAt) : likedAt;
-
-      return {
-        updateOne: {
-          filter: { userId, trackId: like.trackId },
-          update: {
-            $set: {
-              userId,
-              trackId: like.trackId,
-              likedAt,
-              lastPlayedAt,
-              timesSkipped: 0,
-            },
+    const operations = likes.map((l) => ({
+      updateOne: {
+        filter: { userId, trackId: l.trackId },
+        update: {
+          $set: {
+            userId,
+            trackId: l.trackId,
+            likedAt: toMs(l.addedAt) ?? Date.now(),
+            lastPlayedAt: playMap.get(l.trackId) ?? toMs(l.addedAt) ?? Date.now(),
+            timesSkipped: 0,
           },
-          upsert: true,
         },
-      };
-    });
+        upsert: true,
+      },
+    }));
 
     if (operations.length) {
       await this.stats.bulkWrite(operations, { ordered: false });
@@ -512,3 +487,9 @@ export default class TrackScoringConcept {
   }
 
 }
+
+```
+
+## SwipeSessions
+
+Specification:

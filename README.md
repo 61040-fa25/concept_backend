@@ -7,6 +7,11 @@ Still here? Thanks for not getting bored :-D. Below is the table of contents for
 
 ## Table of Contents
 
+### 4B Submission
+We have updated the backend here a LOT which you can see the changes here in:
+[NEW CHANGES FROM 4b](new_changes.md)
+
+### 4A Submission
 1. [Main repo that is outside of this repo!](https://github.com/notyahir/61040-portfolio)
 
 2. [Code Implementation, src](src/concepts)

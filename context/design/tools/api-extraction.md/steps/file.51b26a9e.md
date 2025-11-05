@@ -1,3 +1,12 @@
+---
+timestamp: 'Mon Nov 03 2025 21:01:00 GMT-0500 (Eastern Standard Time)'
+parent: '[[../20251103_210100.a6a0b744.md]]'
+content_id: 51b26a9e026622cb996f9f8d7d408b36091d052db6145d0aa2ec5fb73d20c389
+---
+
+# file: src/concepts/LibraryCache/LibraryCacheConcept.ts
+
+```typescript
 import { Collection, Db } from "npm:mongodb";
 import { Empty, ID } from "@utils/types.ts";
 import { freshID } from "@utils/database.ts";
@@ -148,38 +157,10 @@ export default class LibraryCacheConcept {
    */
   async sync({ userId, tracks, likes, plays, playlists }: SyncArgs): Promise<Empty | { error: string }> {
     try {
-      // Normalise and de-duplicate incoming payloads to satisfy unique indexes
-      // and avoid duplicate key errors when clients send repeated items.
-
-      // De-duplicate tracks by trackId (last write wins)
-      const trackMap = new Map<string, TrackData>();
-      for (const t of tracks) {
-        if (t && t.trackId) trackMap.set(t.trackId, t);
-      }
-      const uniqueTracks = Array.from(trackMap.values());
-
-      // De-duplicate likes by trackId, keep the most recent addedAt
-      const likeMap = new Map<string, number>();
-      for (const l of likes) {
-        if (!l || !l.trackId) continue;
-        const prev = likeMap.get(l.trackId);
-        likeMap.set(l.trackId, prev == null ? l.addedAt : Math.max(prev, l.addedAt));
-      }
-      const uniqueLikes: LikeData[] = Array.from(likeMap.entries()).map(([trackId, addedAt]) => ({ trackId, addedAt }));
-
-      // De-duplicate plays by trackId, keep the most recent lastPlayedAt
-      const playMap = new Map<string, number>();
-      for (const p of plays) {
-        if (!p || !p.trackId) continue;
-        const prev = playMap.get(p.trackId);
-        playMap.set(p.trackId, prev == null ? p.lastPlayedAt : Math.max(prev, p.lastPlayedAt));
-      }
-      const uniquePlays: PlayData[] = Array.from(playMap.entries()).map(([trackId, lastPlayedAt]) => ({ trackId, lastPlayedAt }));
-
       // 1. Upsert all track metadata. Tracks are global entities, not user-specific,
       // so we use `upsert` to add new tracks or update existing ones.
-      if (uniqueTracks.length > 0) {
-        const trackOps = uniqueTracks.map((t) => ({
+      if (tracks.length > 0) {
+        const trackOps = tracks.map((t) => ({
           updateOne: {
             filter: { _id: t.trackId },
             update: {
@@ -200,8 +181,8 @@ export default class LibraryCacheConcept {
 
       // 2. Replace the user's liked tracks.
       await this.likes.deleteMany({ userId });
-      if (uniqueLikes.length > 0) {
-        const newLikes: Omit<Like, "_id">[] = uniqueLikes.map((l) => ({
+      if (likes.length > 0) {
+        const newLikes: Omit<Like, "_id">[] = likes.map((l) => ({
           userId,
           trackId: l.trackId,
           addedAt: l.addedAt,
@@ -211,8 +192,8 @@ export default class LibraryCacheConcept {
 
       // 3. Replace the user's play history.
       await this.plays.deleteMany({ userId });
-      if (uniquePlays.length > 0) {
-        const newPlays: Omit<Play, "_id">[] = uniquePlays.map((p) => ({
+      if (plays.length > 0) {
+        const newPlays: Omit<Play, "_id">[] = plays.map((p) => ({
           userId,
           trackId: p.trackId,
           lastPlayedAt: p.lastPlayedAt,
@@ -278,32 +259,10 @@ export default class LibraryCacheConcept {
       return { error: e instanceof Error ? e.message : "An unknown error occurred" };
     }
   }
-
-  /**
-   * query: getTracks
-   * effects: returns full metadata for the requested track IDs (title, artist, tempo, energy, valence).
-   */
-  async getTracks({ trackIds }: { trackIds: string[] }): Promise<{ tracks: TrackData[] } | { error: string }> {
-    try {
-      if (!trackIds || trackIds.length === 0) {
-        return { tracks: [] };
-      }
-
-      const tracks = await this.tracks.find({ _id: { $in: trackIds } }).toArray();
-      
-      const trackData: TrackData[] = tracks.map((t) => ({
-        trackId: t._id,
-        title: t.title,
-        artist: t.artist,
-        available: t.available,
-        tempo: t.tempo,
-        energy: t.energy,
-        valence: t.valence,
-      }));
-
-      return { tracks: trackData };
-    } catch (e) {
-      return { error: e instanceof Error ? e.message : "An unknown error occurred" };
-    }
-  }
 }
+
+```
+
+## TrackScoring
+
+Specification:
