@@ -27,7 +27,7 @@
 **Success Response Body (Action):**
 ```json
 {
-  "userID": "string"
+  "userID": "ID"
 }
 ```
 
@@ -60,7 +60,7 @@
 **Success Response Body (Action):**
 ```json
 {
-  "userID": "string"
+  "userID": "ID"
 }
 ```
 
@@ -70,3 +70,4 @@
   "error": "string"
 }
 ```
+---

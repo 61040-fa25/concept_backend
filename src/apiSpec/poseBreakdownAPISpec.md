@@ -1,3 +1,5 @@
+```markdown
+# NOTE: not using PoseBreakdown API since PoseLandmarker setup does connect with the frontend if it's initialized in the backend. Move all poseBreakdown methods to mirror-motion-vue-app\src\services\poseBreakdownService.js in the frontend app
 
 # API Specification: PoseBreakdown Concept
 
@@ -9,16 +11,16 @@
 
 ### POST /api/PoseBreakdown/extractPoses
 
-**Description:** Processes a video source to detect and extract human poses frame by frame, storing the detected pose data. Note: The `videoSource` argument is expected to be a video URL string when interacting with the API.
+**Description:** Processes a video source to extract poses from each frame, stores the resulting pose data, and returns the generated IDs for the extracted poses.
 
 **Requirements:**
 - The video exists and can be processed.
 
 **Effects:**
 - Processes each frame.
-- Runs pose detection on each frame.
-- Stores `PoseData` for each detected pose.
-- Returns the generated `poseIDs` for all stored poses.
+- Runs pose detection.
+- Stores PoseData for each frame.
+- Returns their generated IDs.
 
 **Request Body:**
 ```json
@@ -30,9 +32,7 @@
 **Success Response Body (Action):**
 ```json
 {
-  "poseIDs": [
-    "string"
-  ]
+  "poseIDs": ["string"]
 }
 ```
 
@@ -42,49 +42,5 @@
   "error": "string"
 }
 ```
-
 ---
-
-### POST /api/PoseBreakdown/_getPoseData
-
-**Description:** Retrieves the detailed pose data (including parts and their point coordinates) for a specific pose identifier.
-
-**Requirements:**
-- The `poseID` must correspond to a previously extracted and stored pose.
-
-**Effects:**
-- If the `poseID` exists, returns an array containing the `PoseData` object associated with it.
-- If the `poseID` does not exist, returns an empty array.
-
-**Request Body:**
-```json
-{
-  "poseID": "string"
-}
-```
-
-**Success Response Body (Query):**
-```json
-[
-  {
-    "poseID": "string",
-    "partData": [
-      {
-        "part": "string",
-        "pointData": {
-          "x": "number",
-          "y": "number",
-          "z": "number"
-        }
-      }
-    ]
-  }
-]
-```
-
-**Error Response Body:**
-```json
-{
-  "error": "string"
-}
 ```
