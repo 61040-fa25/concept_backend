@@ -4,6 +4,7 @@ import { Collection, Db } from "npm:mongodb";
 import { freshID } from "@utils/database.ts";
 import { ID } from "@utils/types.ts";
 import { exclusions, inclusions } from "./passthrough.ts";
+import { addClient, broadcast } from "@utils/broadcast.ts";
 import "jsr:@std/dotenv/load";
 
 /**
@@ -23,8 +24,11 @@ const REQUESTING_TIMEOUT = parseInt(
 );
 
 // TODO: make sure you configure this environment variable for proper CORS configuration
+// Default to the frontend dev origin so browsers using credentials won't fail
+// a preflight check. You can override this with the REQUESTING_ALLOWED_DOMAIN
+// environment variable (or a .env file) in production/deployment.
 const REQUESTING_ALLOWED_DOMAIN = Deno.env.get("REQUESTING_ALLOWED_DOMAIN") ??
-  "*";
+  "http://localhost:5173";
 
 // Choose whether or not to persist responses
 const REQUESTING_SAVE_RESPONSES = Deno.env.get("REQUESTING_SAVE_RESPONSES") ??
@@ -129,6 +133,41 @@ export default class RequestingConcept {
       await this.requests.updateOne({ _id: request }, { $set: { response } });
     }
 
+    // Broadcast the response to any SSE clients so frontends can react to
+    // completed requests (e.g., reload or update UI). Include the original
+    // request path when available.
+    try {
+      const doc = await this.requests.findOne({ _id: request });
+      // deno-lint-ignore no-explicit-any
+      const path = (doc?.input && (doc.input as any).path) ?? null;
+      // Generic broadcast for any Requesting.respond
+      await broadcast({
+        type: "request.responded",
+        payload: { request: String(request), path, response },
+      });
+
+      // Targeted broadcasts for common mutation types to make client updates
+      // easier. For example, when a list item is deleted, include the list
+      // and task ids in a specific event so the frontend can remove the DOM
+      // element without a full reload.
+      if (path === "/ListCreation/deleteTask") {
+        // deno-lint-ignore no-explicit-any
+        const listId = (doc?.input as any).list ?? null;
+        // deno-lint-ignore no-explicit-any
+        const taskId = (doc?.input as any).task ?? null;
+        await broadcast({
+          type: "list.item.deleted",
+          payload: {
+            listId: String(listId ?? ""),
+            taskId: String(taskId ?? ""),
+            response,
+          },
+        });
+      }
+    } catch (_err) {
+      // best-effort broadcast; ignore errors
+    }
+
     return { request };
   }
 
@@ -194,10 +233,29 @@ export function startRequestingServer(
   const app = new Hono();
   app.use(
     "/*",
+    // Enable credentials so browser requests with `credentials: 'include'`
+    // succeed. Use a specific origin rather than '*' when credentials are true.
     cors({
       origin: REQUESTING_ALLOWED_DOMAIN,
+      credentials: true,
     }),
   );
+
+  // Debugging middleware: log every incoming request method/path and a few headers.
+  app.use("/*", async (c, next) => {
+    try {
+      const hdrs = {
+        origin: c.req.header("origin") ?? "",
+        host: c.req.header("host") ?? "",
+        cookie: c.req.header("cookie") ?? "",
+        referer: c.req.header("referer") ?? "",
+      } as Record<string, string>;
+      console.log("[Incoming]", c.req.method, c.req.path, hdrs);
+    } catch {
+      // ignore
+    }
+    return await next();
+  });
 
   /**
    * PASSTHROUGH ROUTES
@@ -229,6 +287,19 @@ export function startRequestingServer(
       app.post(route, async (c) => {
         try {
           const body = await c.req.json().catch(() => ({})); // Handle empty body
+          try {
+            // Log incoming passthrough request body and a subset of headers for debugging
+            const hdrs = {
+              origin: c.req.header("origin") ?? "",
+              host: c.req.header("host") ?? "",
+              "content-type": c.req.header("content-type") ?? "",
+              cookie: c.req.header("cookie") ?? "",
+              referer: c.req.header("referer") ?? "",
+            } as Record<string, string>;
+            console.log(`[Passthrough] ${route} body:`, body, "headers:", hdrs);
+          } catch {
+            // ignore logging errors
+          }
           const result = await concept[method](body);
           return c.json(result);
         } catch (e) {
@@ -273,6 +344,18 @@ export function startRequestingServer(
       };
 
       console.log(`[Requesting] Received request for path: ${inputs.path}`);
+      try {
+        const hdrs = {
+          origin: c.req.header("origin") ?? "",
+          host: c.req.header("host") ?? "",
+          "content-type": c.req.header("content-type") ?? "",
+          cookie: c.req.header("cookie") ?? "",
+          referer: c.req.header("referer") ?? "",
+        } as Record<string, string>;
+        console.log(`[Requesting] Headers:`, hdrs, `[Requesting] Body:`, body);
+      } catch {
+        // ignore
+      }
 
       // 1. Trigger the 'request' action.
       const { request } = await Requesting.request(inputs);
@@ -295,6 +378,51 @@ export function startRequestingServer(
         return c.json({ error: "unknown error occurred." }, 418);
       }
     }
+  });
+
+  app.get("/events", (_c) => {
+    const stream = new ReadableStream({
+      start(controller) {
+        // Send a comment to establish connection
+        controller.enqueue(":\n\n");
+
+        // Create a WritableStream and register its writer with the broadcaster.
+        const ws = new WritableStream<string>({
+          write(chunk) {
+            controller.enqueue(chunk);
+          },
+          close() {
+            controller.close();
+          },
+        });
+
+        const w = ws.getWriter();
+        const remove = addClient(w);
+
+        // Return an object with a cancel handler so the runtime will call it
+        // when the consumer disconnects; this ensures we clean up the writer
+        // and remove it from the broadcaster's client set.
+        return {
+          cancel() {
+            try {
+              w.close();
+            } catch (_e) {
+              // ignore close errors
+            }
+            remove();
+          },
+        };
+      },
+    });
+
+    return new Response(stream, {
+      status: 200,
+      headers: {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache, no-transform",
+        Connection: "keep-alive",
+      },
+    });
   });
 
   console.log(

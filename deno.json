@@ -3,6 +3,7 @@
         "@concepts/": "./src/concepts/",
         "@hono/cors": "https://deno.land/x/hono/middleware/cors/index.ts"
         "@concepts": "./src/concepts/concepts.ts",
+        "@concepts/": "./src/concepts/",
         "@test-concepts": "./src/concepts/test_concepts.ts",
         "@utils/": "./src/utils/",
         "@engine": "./src/engine/mod.ts",
