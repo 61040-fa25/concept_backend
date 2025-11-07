@@ -392,10 +392,89 @@ export function startRequestingServer(
       const actionPath = c.req.path.substring(REQUESTING_BASE_URL.length);
 
       // Combine the path from the URL with the JSON body to form the action's input.
-      const inputs = {
-        ...body,
-        path: actionPath,
-      };
+      // Also attempt to include common auth header values so downstream syncs/actions
+      // can resolve the calling user without requiring the client to put their id
+      // into the JSON body explicitly. This supports `x-auth-userid` and
+      // `x-auth-username` headers sent by authenticated clients.
+      const headerUserId = c.req.header("x-auth-userid");
+      const headerUsername = c.req.header("x-auth-username");
+      const authHeader = c.req.header("authorization");
+      const cookieHeader = c.req.header("cookie");
+
+      // Use a mutable copy so we can augment with header-derived caller fields.
+      const inputs: Record<string, unknown> = { ...body, path: actionPath };
+
+      // If the client didn't provide an explicit deleter/adder/caller field,
+      // prefer the header user id when available. Also set a generic `caller`
+      // field for convenience.
+      if (headerUserId) {
+        if (!("deleter" in inputs) && !("adder" in inputs)) {
+          inputs.deleter = headerUserId;
+        }
+        if (!("caller" in inputs)) inputs.caller = headerUserId;
+      }
+      // If Authorization: Bearer <token> is present, and no caller is set,
+      // expose the token as `caller` (useful in simple dev setups where the
+      // frontend stores the user id as a bearer token). We only do this when
+      // `caller` is not already provided.
+      if (authHeader && !("caller" in inputs)) {
+        const m = String(authHeader).match(/^Bearer\s+(\S+)$/i);
+        if (m) inputs.caller = m[1];
+      }
+
+      // Parse cookies for common keys that may carry the authenticated user id.
+      // Accept cookie keys: auth_userid, x-auth-userid, userId, userid
+      if (
+        cookieHeader && !("caller" in inputs) && !("deleter" in inputs) &&
+        !("adder" in inputs)
+      ) {
+        try {
+          const cookies = String(cookieHeader).split(";").map((c) => c.trim());
+          const cookieMap: Record<string, string> = {};
+          for (const ck of cookies) {
+            const eq = ck.indexOf("=");
+            if (eq > 0) {
+              const k = ck.slice(0, eq).trim();
+              const v = ck.slice(eq + 1).trim();
+              cookieMap[k] = decodeURIComponent(v);
+            }
+          }
+          const possible = cookieMap["auth_userid"] ??
+            cookieMap["x-auth-userid"] ?? cookieMap["userId"] ??
+            cookieMap["userid"] ?? cookieMap["user_id"];
+          if (possible) {
+            // Favor structured fields when present: set deleter/adder/caller as appropriate
+            if (!("deleter" in inputs) && !("adder" in inputs)) {
+              inputs.deleter = possible;
+            }
+            if (!("caller" in inputs)) inputs.caller = possible;
+          }
+        } catch (_e) {
+          // ignore cookie parsing errors
+        }
+      }
+
+      if (headerUsername && !("caller" in inputs)) {
+        inputs.caller = headerUsername;
+      }
+
+      // If we have a generic `caller` value (from Authorization header or
+      // username header) but the client didn't provide an explicit `deleter`
+      // or `adder`, prefer to use the `caller` as the acting identity. This
+      // makes the Requesting layer tolerant when clients authenticate via
+      // bearer token or cookies but omit the explicit actor fields in JSON.
+      if (
+        ("caller" in inputs) && !("deleter" in inputs) && !("adder" in inputs)
+      ) {
+        // use the `caller` value for both deleter/adder as a pragmatic default
+        // when only a single authenticated identity is present.
+        const typedInputs = inputs as Record<string, unknown>;
+        const callerVal = typedInputs["caller"];
+        if (callerVal) {
+          typedInputs["deleter"] = callerVal;
+          typedInputs["adder"] = callerVal;
+        }
+      }
 
       console.log(`[Requesting] Received request for path: ${inputs.path}`);
       try {
@@ -412,7 +491,10 @@ export function startRequestingServer(
       }
 
       // 1. Trigger the 'request' action.
-      const { request } = await Requesting.request(inputs);
+      // `Requesting.request` expects a `{ path: string; [key: string]: unknown }`-like object.
+      // Narrow the `inputs` type to satisfy the linter without using `any`.
+      const typedInputs = inputs as { path: string; [key: string]: unknown };
+      const { request } = await Requesting.request(typedInputs);
 
       // 2. Await the response via the query. This is where the server waits for
       //    synchronizations to trigger the 'respond' action.

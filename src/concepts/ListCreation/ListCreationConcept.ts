@@ -142,22 +142,156 @@ export default class ListCreationConcept {
     }
 
     // Effects: new listItem is created and added, itemCount is incremented
-    const newOrderNumber = targetList.itemCount + 1; // Assign order number to be last
-    const newListItem: ListItem = {
-      name: name,
-      task: task,
-      orderNumber: newOrderNumber,
-    };
+    // Insert the new task into the list at a position that respects TaskBank dependencies
+    // Load TaskBank task document for the new task and for tasks already in the list
+    try {
+      const taskCollection = this.db.collection("TaskBank.tasks");
 
-    await this.lists.updateOne(
-      { _id: listId },
-      {
-        $push: { listItems: newListItem }, // Add the new item to the embedded array
-        $inc: { itemCount: 1 }, // Increment the count of items in the list
-      },
-    );
+      // Minimal TaskBank task shape used locally for dependency inspection
+      type TaskBankTask = {
+        _id: ID;
+        dependencies?: { depTask: ID; depRelation: string }[];
+      };
 
-    return { listItem: newListItem };
+      // Existing items sorted
+      const existingItems = [...targetList.listItems].sort(
+        (a, b) => a.orderNumber - b.orderNumber,
+      );
+
+      // Build order map for existing items (stringified ids -> orderNumber)
+      const existingOrderMap = new Map<string, number>();
+      for (const it of existingItems) {
+        existingOrderMap.set(String(it.task), it.orderNumber);
+      }
+
+      // Fetch all bank tasks once and inspect relevant dependency edges
+      const allBankTasks = await taskCollection.find({}).toArray();
+      // newTaskDoc (if present) and bankTasks for existing items
+      const newTaskDoc =
+        (allBankTasks as { _id: unknown; dependencies?: unknown[] }[])
+          .find((t) => String((t as { _id: unknown })._id) === String(task));
+
+      // Collect constraints
+      const tasksBefore = new Set<string>(); // tasks that must come before new task
+      const tasksAfter = new Set<string>(); // tasks that must come after new task
+
+      // If new task declares dependencies referencing tasks in this list
+      if (
+        newTaskDoc &&
+        Array.isArray((newTaskDoc as { dependencies?: unknown[] }).dependencies)
+      ) {
+        for (
+          const dep
+            of (newTaskDoc as {
+              dependencies?: { depTask?: unknown; depRelation?: unknown }[];
+            }).dependencies || []
+        ) {
+          const depId = String((dep as { depTask?: unknown }).depTask);
+          const rel = String((dep as { depRelation?: unknown }).depRelation);
+          // Interpret dependency entries as: dep.depTask depRelation sourceTask
+          // i.e. the relation describes depTask relative to the source (new task)
+          if (existingOrderMap.has(depId)) {
+            if (
+              rel === "PRECEDES" || rel === "BLOCKS" || rel === "REQUIRED_BY"
+            ) {
+              // depTask must precede newTask => depTask before new task
+              tasksBefore.add(depId);
+            } else if (
+              rel === "FOLLOWS" || rel === "REQUIRES" || rel === "BLOCKED_BY"
+            ) {
+              // depTask must follow newTask => depTask after new task
+              tasksAfter.add(depId);
+            }
+          }
+        }
+      }
+
+      if (existingItems.length > 0) {
+        const existingIds = new Set(existingItems.map((it) => String(it.task)));
+        const bankTasks =
+          (allBankTasks as { _id: unknown; dependencies?: unknown[] }[]).filter(
+            (t) => existingIds.has(String((t as { _id: unknown })._id)),
+          );
+        for (const t of bankTasks) {
+          for (
+            const dep
+              of ((t as {
+                dependencies?: { depTask?: unknown; depRelation?: unknown }[];
+              }).dependencies || [])
+          ) {
+            const depId = String((dep as { depTask?: unknown }).depTask);
+            if (depId !== String(task)) continue;
+            const rel = String((dep as { depRelation?: unknown }).depRelation);
+            // dep.depTask === newTask; dep.depRelation describes depTask relative to t
+            if (
+              rel === "PRECEDES" || rel === "BLOCKS" || rel === "REQUIRED_BY"
+            ) {
+              // depTask (new task) must precede t => new task before t
+              tasksAfter.add(String((t as { _id: unknown })._id));
+            } else if (
+              rel === "FOLLOWS" || rel === "REQUIRES" || rel === "BLOCKED_BY"
+            ) {
+              // depTask (new task) must follow t => new task after t
+              tasksBefore.add(String((t as { _id: unknown })._id));
+            }
+          }
+        }
+      }
+
+      // Compute allowed insertion range
+      const beforeOrders = Array.from(tasksBefore)
+        .map((id) => existingOrderMap.get(id))
+        .filter((o): o is number => typeof o === "number");
+      const afterOrders = Array.from(tasksAfter)
+        .map((id) => existingOrderMap.get(id))
+        .filter((o): o is number => typeof o === "number");
+
+      const minPos = (beforeOrders.length > 0 ? Math.max(...beforeOrders) : 0) +
+        1;
+      const maxPos = afterOrders.length > 0
+        ? Math.min(...afterOrders)
+        : (targetList.itemCount + 1);
+
+      if (minPos > maxPos) {
+        return {
+          error:
+            `Cannot add task '${task}' without violating existing dependencies.`,
+        };
+      }
+
+      const insertPos = minPos; // choose earliest valid position
+
+      // Build updated list items with shifted orderNumbers and the new item inserted
+      const updatedListItems: ListItem[] = [];
+      for (const it of existingItems) {
+        if (it.orderNumber >= insertPos) {
+          updatedListItems.push({ ...it, orderNumber: it.orderNumber + 1 });
+        } else {
+          updatedListItems.push(it);
+        }
+      }
+
+      const newListItem: ListItem = { name, task, orderNumber: insertPos };
+      // Insert new item at correct index to keep array ordered
+      updatedListItems.splice(insertPos - 1, 0, newListItem);
+
+      await this.lists.updateOne(
+        { _id: listId },
+        {
+          $set: { listItems: updatedListItems },
+          $inc: { itemCount: 1 },
+        },
+      );
+
+      return { listItem: newListItem };
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error(
+        "ListCreation.addTask: failed to insert while validating dependencies:",
+        e,
+      );
+      return { error: `Failed to add task: ${msg}` };
+    }
   }
 
   /**
@@ -318,6 +452,11 @@ export default class ListCreationConcept {
       orderMap.set(String(li.task), li.orderNumber);
     }
 
+    console.debug(
+      "ListCreation.assignOrder: computed orderMap",
+      Array.from(orderMap.entries()),
+    );
+
     try {
       // Load TaskBank tasks for tasks present in this list
       const taskIds = Array.from(orderMap.keys());
@@ -328,6 +467,13 @@ export default class ListCreationConcept {
         const bankTasks = allBankTasks.filter((t) =>
           orderMap.has(String(t._id))
         );
+        console.debug(
+          "ListCreation.assignOrder: loaded bankTasks for validation",
+          {
+            count: bankTasks.length,
+            tasks: bankTasks.map((t: { _id: unknown }) => String(t._id)),
+          },
+        );
 
         // For each task, validate its dependencies that reference tasks within this list
         for (const t of bankTasks) {
@@ -335,33 +481,79 @@ export default class ListCreationConcept {
           if (aOrder === undefined) continue;
           for (const dep of (t.dependencies || [])) {
             const bStr = String(dep.depTask);
-            if (!orderMap.has(bStr)) continue; // dependency to outside-list task: ignore here
+            if (!orderMap.has(bStr)) {
+              console.debug(
+                "ListCreation.assignOrder: skipping dependency to outside-list task",
+                { task: String(t._id), dep: bStr },
+              );
+              continue; // dependency to outside-list task: ignore here
+            }
 
             const bOrder = orderMap.get(bStr)!;
             const rel = String(dep.depRelation);
+            console.debug("ListCreation.assignOrder: checking dependency", {
+              task: String(t._id),
+              dep: bStr,
+              relation: rel,
+              aOrder,
+              bOrder,
+            });
 
-            // Relations that require source to precede target
+            // Explicitly interpret each relation as an ordering constraint
+            // using the convention: dep.depTask depRelation sourceTask
+            // i.e. dep.depRelation describes dep.depTask relative to t (the source)
+            // Map relations to the corresponding ordering requirement:
+            // - PRECEDES | BLOCKS | REQUIRED_BY  => dep.depTask (target) must precede t (source)
+            // - FOLLOWS | REQUIRES | BLOCKED_BY  => t (source) must precede dep.depTask (target)
             if (
-              rel === "BLOCKS" || rel === "PRECEDES" || rel === "REQUIRED_BY"
+              rel === "PRECEDES" || rel === "BLOCKS" || rel === "REQUIRED_BY"
             ) {
+              // target (dep.depTask) must come before source (t)
+              if (!(bOrder < aOrder)) {
+                console.debug(
+                  "ListCreation.assignOrder: dependency violation (target must precede source)",
+                  {
+                    task: String(t._id),
+                    dep: bStr,
+                    relation: rel,
+                    aOrder,
+                    bOrder,
+                  },
+                );
+                return {
+                  error: `Dependency violation: task '${
+                    String(t._id)
+                  }' (${rel}) requires '${bStr}' to come before it.`,
+                };
+              }
+            } else if (
+              rel === "FOLLOWS" || rel === "REQUIRES" || rel === "BLOCKED_BY"
+            ) {
+              // source (t) must come before target (dep.depTask)
               if (!(aOrder < bOrder)) {
+                console.debug(
+                  "ListCreation.assignOrder: dependency violation (source must precede target)",
+                  {
+                    task: String(t._id),
+                    dep: bStr,
+                    relation: rel,
+                    aOrder,
+                    bOrder,
+                  },
+                );
                 return {
                   error: `Dependency violation: task '${
                     String(t._id)
                   }' (${rel}) must come before '${bStr}'.`,
                 };
               }
-            } else if (rel === "REQUIRES") {
-              // source requires target -> target must precede source
-              if (!(bOrder < aOrder)) {
-                return {
-                  error: `Dependency violation: task '${
-                    String(t._id)
-                  }' (REQUIRES) requires '${bStr}' to come before it.`,
-                };
-              }
+            } else {
+              console.debug(
+                "ListCreation.assignOrder: unknown relation type, skipping enforcement",
+                { relation: rel, task: String(t._id), dep: bStr },
+              );
+              // Unknown relation: be conservative and enforce nothing here
             }
-            // Other relations (BLOCKED_BY, FOLLOWS) are covered by inverse entries and need no separate check here
           }
         }
       }

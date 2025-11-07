@@ -1,6 +1,7 @@
 import { ClientSession, Collection, Db, MongoClient } from "npm:mongodb";
 import { Empty, ID } from "../../utils/types.ts"; // Adjust path as necessary
 import { freshID } from "../../utils/database.ts"; // Adjust path as necessary
+import { usernameToUserId } from "../../utils/users.ts";
 
 // Declare collection prefix, use concept name
 const PREFIX = "TaskBank" + ".";
@@ -181,7 +182,17 @@ export default class TaskBankConcept {
     { deleter, task }: { deleter: User; task: Task },
   ): Promise<Empty | { error: string }> {
     try {
-      const bank = await this._getOrCreateBank(deleter);
+      // Allow callers to pass either a user ID or a username as `deleter`.
+      // If a username was provided, resolve it to the user's ID.
+      let resolvedDeleter: User = deleter as User;
+      try {
+        const maybe = await usernameToUserId(this.db, String(deleter));
+        if (maybe) resolvedDeleter = maybe;
+      } catch {
+        // If username resolution fails for any reason, fall back to provided deleter
+      }
+
+      const bank = await this._getOrCreateBank(resolvedDeleter);
 
       // Precondition: task is in deleter's bank
       const taskToDelete = await this.tasks.findOne({
@@ -572,19 +583,33 @@ export default class TaskBankConcept {
         }
 
         for (const dep of t.dependencies) {
+          // Interpret each dep.depRelation as the relation from `t._id` (the source task)
+          // to `dep.depTask` (the target). Map that relation to a "must precede" edge
+          // (A -> B means A must precede B).
           switch (dep.depRelation) {
-            case RelationType.BLOCKS:
+            // Interpret dependency entry as: dep.depTask depRelation t
+            // i.e. the relation describes dep.depTask relative to the source task `t._id`.
+            // Map that to a "must precede" edge (A -> B means A must precede B):
+            // - PRECEDES | BLOCKS | REQUIRED_BY => dep.depTask must precede t
+            // - FOLLOWS | REQUIRES | BLOCKED_BY => t must precede dep.depTask
             case RelationType.PRECEDES:
-            case RelationType.REQUIRED_BY: // If task_source is REQUIRED_BY task_target, then task_source must precede task_target.
-              mustPrecedeGraph.get(t._id)!.add(dep.depTask);
-              break;
-            case RelationType.REQUIRES: // If task_source REQUIRES task_target, then task_target must precede task_source.
+            case RelationType.BLOCKS:
+            case RelationType.REQUIRED_BY:
+              // dep.depTask must precede t
               if (!mustPrecedeGraph.has(dep.depTask)) {
                 mustPrecedeGraph.set(dep.depTask, new Set<Task>());
               }
               mustPrecedeGraph.get(dep.depTask)!.add(t._id);
               break;
-              // BLOCKED_BY and FOLLOWS are inverses and implicitly covered by their counterparts
+            case RelationType.FOLLOWS:
+            case RelationType.REQUIRES:
+            case RelationType.BLOCKED_BY:
+              // t must precede dep.depTask
+              mustPrecedeGraph.get(t._id)!.add(dep.depTask);
+              break;
+            default:
+              // Unknown relation: be conservative and do not add an edge
+              break;
           }
         }
       }
@@ -619,9 +644,13 @@ export default class TaskBankConcept {
       const task2MustPrecedeTask1 = dfsCheckPath(task2);
 
       return { orderValid: !task2MustPrecedeTask1 };
-    } catch (e: any) {
+    } catch (e) {
       console.error("Error evaluating order:", e);
-      return { error: `Failed to evaluate order: ${e.message}` };
+      return {
+        error: `Failed to evaluate order: ${
+          (e as Error)?.message ?? String(e)
+        }`,
+      };
     }
   }
 }

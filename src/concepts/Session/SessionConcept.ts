@@ -235,6 +235,7 @@ export default class SessionConcept {
     if (!sessionDoc) {
       return { error: `Session with ID ${session} not found.` };
     }
+    console.debug("Session.randomizeOrder: sessionDoc found", { sessionDoc });
 
     // requires: session's active Flag is currently False
     if (sessionDoc.active) {
@@ -316,30 +317,208 @@ export default class SessionConcept {
       return { error: "Only the session owner can randomize order." };
     }
 
-    // effects: each ListItems randomOrder value is updated at random
+    // Load list items for this session
     const items = await this.listItems.find({ sessionId: session }).toArray();
+    console.debug("Session.randomizeOrder: loaded session list items", {
+      session,
+      count: items.length,
+      taskIds: items.map((it) => it.taskId),
+    });
     if (items.length === 0) {
       return { error: "No items to randomize in this session." };
     }
 
-    // Generate a permutation of indices for random ordering
-    const randomOrders: number[] = Array.from(
-      { length: items.length },
-      (_, i) => i,
-    );
-    for (let i = randomOrders.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [randomOrders[i], randomOrders[j]] = [randomOrders[j], randomOrders[i]]; // Fisher-Yates shuffle
+    // Build set of taskIds belonging to this session
+    const taskIds = items.map((it) => it.taskId);
+    const taskIdSet = new Set(taskIds);
+
+    // Attempt to fetch dependency info from TaskBank.tasks (if present)
+    // We defensively support a few common field names for dependencies: `dependsOn`, `dependencies`, `prereqs`.
+    type TaskDocLike = {
+      _id: ID;
+      dependsOn?: ID[];
+      dependencies?: ID[];
+      prereqs?: ID[];
+    };
+    let taskDocs: TaskDocLike[] = [];
+    try {
+      // The Mongo driver collection typings may expect ObjectId etc.; to avoid
+      // strict driver type coupling we define a minimal local find signature
+      // and call it. This lets runtime queries proceed while keeping local
+      // types narrow and avoiding `any`.
+      const taskColl = this.db.collection("TaskBank.tasks") as unknown as {
+        find(filter: unknown): { toArray(): Promise<TaskDocLike[]> };
+      };
+      taskDocs = await taskColl.find({ _id: { $in: taskIds } }).toArray();
+    } catch (_err) {
+      // If lookup fails, we'll fall back to simple random shuffle below.
+      taskDocs = [];
+    }
+    console.debug("Session.randomizeOrder: fetched taskDocs count", {
+      session,
+      taskDocsCount: taskDocs.length,
+    });
+
+    // Build adjacency and indegree only for tasks present in this session
+    const neighbors = new Map<ID, ID[]>();
+    const indegree = new Map<ID, number>();
+    for (const id of taskIds) {
+      neighbors.set(id, []);
+      indegree.set(id, 0);
     }
 
-    const updates = items.map((item, index) =>
-      this.listItems.updateOne(
-        { _id: item._id },
-        { $set: { randomOrder: randomOrders[index] } },
-      )
+    if (taskDocs.length > 0) {
+      for (const td of taskDocs) {
+        const id = td._id as ID;
+        // normalize dependency lists
+        let deps: ID[] = [];
+        if (Array.isArray(td.dependsOn)) deps = td.dependsOn;
+        else if (Array.isArray(td.dependencies)) deps = td.dependencies;
+        else if (Array.isArray(td.prereqs)) deps = td.prereqs;
+        // Log raw deps for this task
+        console.debug("Session.randomizeOrder: raw deps for task", {
+          session,
+          task: id,
+          rawDeps: deps,
+        });
+
+        for (const d of deps || []) {
+          // only consider dependencies that are also in this session
+          if (!taskIdSet.has(d)) {
+            console.debug(
+              "Session.randomizeOrder: skipping dependency not in session",
+              { session, task: id, dep: d },
+            );
+            continue;
+          }
+          // edge d -> id
+          neighbors.get(d)!.push(id);
+          indegree.set(id, (indegree.get(id) ?? 0) + 1);
+          console.debug("Session.randomizeOrder: added dependency edge", {
+            session,
+            from: d,
+            to: id,
+          });
+        }
+      }
+      // After processing all taskDocs, log the built graph
+      console.debug(
+        "Session.randomizeOrder: neighbors map after build",
+        Array.from(neighbors.entries()),
+      );
+      console.debug(
+        "Session.randomizeOrder: indegree map after build",
+        Array.from(indegree.entries()),
+      );
+    }
+
+    // Kahn's algorithm with randomized selection among zero-indegree nodes
+    const zero: ID[] = [];
+    for (const [id, deg] of indegree.entries()) {
+      if (!deg) zero.push(id);
+    }
+    console.debug(
+      "Session.randomizeOrder: initial indegree entries",
+      Array.from(indegree.entries()),
     );
+    console.debug("Session.randomizeOrder: initial zero-indegree nodes", {
+      session,
+      zero,
+    });
+
+    const resultOrder: ID[] = [];
+    function shuffleArray<T>(arr: T[]) {
+      for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+      }
+    }
+
+    while (zero.length > 0) {
+      // pick a random index from zero
+      const idx = Math.floor(Math.random() * zero.length);
+      const n = zero.splice(idx, 1)[0];
+      console.debug("Session.randomizeOrder: selecting node", {
+        session,
+        node: n,
+        remainingZero: zero.length,
+      });
+      resultOrder.push(n);
+      const neigh = neighbors.get(n) || [];
+      for (const m of neigh) {
+        const newDeg = (indegree.get(m) ?? 0) - 1;
+        indegree.set(m, newDeg);
+        if (newDeg === 0) zero.push(m);
+      }
+    }
+
+    console.debug("Session.randomizeOrder: resultOrder length", {
+      session,
+      length: resultOrder.length,
+    });
+
+    // If we didn't include all tasks, there's a cycle or missing task docs.
+    // Append any remaining tasks in random order (break cycles deterministically by randomness).
+    if (resultOrder.length < taskIds.length) {
+      const remaining = taskIds.filter((id) => !resultOrder.includes(id));
+      shuffleArray(remaining);
+      resultOrder.push(...remaining);
+    }
+
+    // Map taskId -> position
+    const positionByTask = new Map<ID, number>();
+    for (let i = 0; i < resultOrder.length; i++) {
+      positionByTask.set(resultOrder[i], i);
+    }
+
+    console.debug(
+      "Session.randomizeOrder: positionByTask mapping created",
+      Array.from(positionByTask.entries()),
+    );
+
+    // Diagnostics: compare to defaultOrder to detect no-op results
+    const defaultMatch = items.every((it) => {
+      const pos = positionByTask.get(it.taskId);
+      return typeof pos === "number" && pos === it.defaultOrder;
+    });
+    if (defaultMatch) {
+      console.debug(
+        "Session.randomizeOrder: computed order matches defaultOrder; falling back to Fisher-Yates shuffle",
+        { session },
+      );
+      // fallback: compute a pure random permutation of taskIds
+      const fallback = [...taskIds];
+      shuffleArray(fallback);
+      positionByTask.clear();
+      for (let i = 0; i < fallback.length; i++) {
+        positionByTask.set(fallback[i], i);
+      }
+    }
+
+    // Persist randomOrder values
+    console.debug(
+      "Session.randomizeOrder: persisting randomOrder values for items",
+      { session, itemCount: items.length },
+    );
+    const updates = items.map((item) => {
+      const newVal = positionByTask.get(item.taskId) ?? 0;
+      console.debug("Session.randomizeOrder: updating item randomOrder", {
+        session,
+        listItemId: item._id,
+        taskId: item.taskId,
+        randomOrder: newVal,
+      });
+      return this.listItems.updateOne(
+        { _id: item._id },
+        { $set: { randomOrder: newVal } },
+      );
+    });
     await Promise.all(updates);
 
+    console.debug("Session.randomizeOrder: completed", {
+      session,
+      count: items.length,
+    });
     return {};
   }
 
@@ -366,6 +545,20 @@ export default class SessionConcept {
     }
 
     // effects: session's active Flag is set to True
+    // If ordering is Random, generate a fresh randomized order at start time
+    if (sessionDoc.ordering === "Random") {
+      // activator is already verified to be owner above, so this will succeed
+      console.debug(
+        "Session.activateSession: ordering is Random, calling randomizeOrder",
+        { session, activator },
+      );
+      const rr = await this.randomizeOrder({ session, randomizer: activator });
+      console.debug("Session.activateSession: randomizeOrder returned", {
+        session,
+        result: rr,
+      });
+    }
+
     await this.sessions.updateOne(
       { _id: session },
       { $set: { active: true } },

@@ -109,13 +109,42 @@ export const ListCreationDeleteListRequest: Sync = (
     { path: "/ListCreation/deleteList", list, deleter },
     { request },
   ]),
-  then: actions([ListCreation.deleteList, { list, deleter }]),
+  // Map incoming `list` body field to the action's expected `listId` param
+  then: actions([ListCreation.deleteList, { listId: list, deleter }]),
 });
 
-export const ListCreationDeleteListResponse: Sync = ({ request, success }) => ({
+// Alternate mapping: allow clients to send `listId` in the request body instead of `list`.
+export const ListCreationDeleteListRequest_Alt: Sync = (
+  { request, listId, deleter },
+) => ({
+  when: actions([
+    Requesting.request,
+    { path: "/ListCreation/deleteList", listId, deleter },
+    { request },
+  ]),
+  then: actions([ListCreation.deleteList, { listId, deleter }]),
+});
+
+// Ensure Requesting.respond is triggered regardless of the exact shape returned
+// by ListCreation.deleteList (it may return an empty object {}). Capture the
+// action's returned result under `result` and forward it to Requesting.respond.
+export const ListCreationDeleteListResponse: Sync = ({ request, result }) => ({
   when: actions(
     [Requesting.request, { path: "/ListCreation/deleteList" }, { request }],
-    [ListCreation.deleteList, {}, { success }],
+    // Capture any result returned by the action as `result`
+    [ListCreation.deleteList, {}, { result }],
   ),
-  then: actions([Requesting.respond, { request, success }]),
+  then: actions([Requesting.respond, { request, result }]),
+});
+
+// Also handle explicit error result from deleteList so waiting Requesting callers
+// receive the error instead of timing out when the action reports a problem.
+export const ListCreationDeleteListErrorResponse: Sync = (
+  { request, error },
+) => ({
+  when: actions(
+    [Requesting.request, { path: "/ListCreation/deleteList" }, { request }],
+    [ListCreation.deleteList, {}, { error }],
+  ),
+  then: actions([Requesting.respond, { request, error }]),
 });
