@@ -109,7 +109,10 @@ export const SessionStartTaskRequest: Sync = (
 ) => ({
   when: actions([
     Requesting.request,
-    { path: "/Session/startTask", session, task, starter },
+    // `starter` may be provided by the server (authenticated user) and
+    // omitted by the client — don't require it in the when matcher so
+    // browser requests without this field still match the sync.
+    { path: "/Session/startTask", session, task },
     { request },
   ]),
   then: actions([Session.startTask, { session, task, starter }]),

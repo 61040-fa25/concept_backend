@@ -417,6 +417,11 @@ export default class SessionConcept {
       { _id: listItem._id },
       { $set: { itemStatus: "In Progress" } },
     );
+    console.debug("Session.startTask: updated item to In Progress", {
+      session,
+      task,
+      listItemId: listItem._id,
+    });
     return {};
   }
 
@@ -451,6 +456,11 @@ export default class SessionConcept {
       { _id: listItem._id },
       { $set: { itemStatus: "Complete" } },
     );
+    console.debug("Session.completeTask: updated item to Complete", {
+      session,
+      task,
+      listItemId: listItem._id,
+    });
     return {};
   }
 

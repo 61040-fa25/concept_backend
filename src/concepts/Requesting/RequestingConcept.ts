@@ -4,7 +4,7 @@ import { Collection, Db } from "npm:mongodb";
 import { freshID } from "@utils/database.ts";
 import { ID } from "@utils/types.ts";
 import { exclusions, inclusions } from "./passthrough.ts";
-import { addClient, broadcast } from "@utils/broadcast.ts";
+import { addClient, broadcast, clientCount } from "@utils/broadcast.ts";
 import "jsr:@std/dotenv/load";
 
 /**
@@ -141,6 +141,10 @@ export default class RequestingConcept {
       // deno-lint-ignore no-explicit-any
       const path = (doc?.input && (doc.input as any).path) ?? null;
       // Generic broadcast for any Requesting.respond
+      console.log("[Broadcast] request.responded ->", {
+        request: String(request),
+        path,
+      });
       await broadcast({
         type: "request.responded",
         payload: { request: String(request), path, response },
@@ -155,6 +159,7 @@ export default class RequestingConcept {
         const listId = (doc?.input as any).list ?? null;
         // deno-lint-ignore no-explicit-any
         const taskId = (doc?.input as any).task ?? null;
+        console.log("[Broadcast] list.item.deleted ->", { listId, taskId });
         await broadcast({
           type: "list.item.deleted",
           payload: {
@@ -162,6 +167,55 @@ export default class RequestingConcept {
             taskId: String(taskId ?? ""),
             response,
           },
+        });
+      }
+      // Broadcast session task changes so clients can update status in real-time
+      if (path === "/Session/startTask") {
+        // deno-lint-ignore no-explicit-any
+        const sessionId = (doc?.input as any).session ?? null;
+        // deno-lint-ignore no-explicit-any
+        const taskId = (doc?.input as any).task ?? null;
+        console.log("[Broadcast] session.task.started ->", {
+          sessionId,
+          taskId,
+        });
+        await broadcast({
+          type: "session.task.started",
+          payload: {
+            sessionId: String(sessionId ?? ""),
+            taskId: String(taskId ?? ""),
+            response,
+          },
+        });
+        // Also emit a more generic change event so clients can reload session items
+        console.log("[Broadcast] session.items.changed ->", { sessionId });
+        await broadcast({
+          type: "session.items.changed",
+          payload: { sessionId: String(sessionId ?? "") },
+        });
+      }
+      if (path === "/Session/completeTask") {
+        // deno-lint-ignore no-explicit-any
+        const sessionId = (doc?.input as any).session ?? null;
+        // deno-lint-ignore no-explicit-any
+        const taskId = (doc?.input as any).task ?? null;
+        console.log("[Broadcast] session.task.completed ->", {
+          sessionId,
+          taskId,
+        });
+        await broadcast({
+          type: "session.task.completed",
+          payload: {
+            sessionId: String(sessionId ?? ""),
+            taskId: String(taskId ?? ""),
+            response,
+          },
+        });
+        // Also emit a more generic change event so clients can reload session items
+        console.log("[Broadcast] session.items.changed ->", { sessionId });
+        await broadcast({
+          type: "session.items.changed",
+          payload: { sessionId: String(sessionId ?? "") },
         });
       }
     } catch (_err) {
@@ -381,37 +435,65 @@ export function startRequestingServer(
   });
 
   app.get("/events", (_c) => {
-    const stream = new ReadableStream({
+    // Use a ReadableStream<Uint8Array> and encode string chunks with TextEncoder.
+    // This avoids casting and ensures the runtime sees the correct typed stream.
+    const encoder = new TextEncoder();
+    let _writer: WritableStreamDefaultWriter<string> | undefined;
+    let _remove: (() => void) | undefined;
+
+    const stream = new ReadableStream<Uint8Array>({
       start(controller) {
         // Send a comment to establish connection
-        controller.enqueue(":\n\n");
+        controller.enqueue(encoder.encode(":\n\n"));
 
-        // Create a WritableStream and register its writer with the broadcaster.
+        // Create a WritableStream<string> translator that encodes strings
+        // into Uint8Array and enqueues them to the controller.
         const ws = new WritableStream<string>({
           write(chunk) {
-            controller.enqueue(chunk);
+            try {
+              controller.enqueue(encoder.encode(chunk));
+            } catch (err) {
+              // Re-throw so the writer receives the failure and the broadcaster
+              // can handle removal. The caller will log the removal.
+              throw err;
+            }
           },
           close() {
-            controller.close();
+            try {
+              controller.close();
+            } catch (_e) {
+              // ignore
+            }
           },
         });
 
         const w = ws.getWriter();
         const remove = addClient(w);
+        _writer = w;
+        _remove = remove;
 
-        // Return an object with a cancel handler so the runtime will call it
-        // when the consumer disconnects; this ensures we clean up the writer
-        // and remove it from the broadcaster's client set.
-        return {
-          cancel() {
-            try {
-              w.close();
-            } catch (_e) {
-              // ignore close errors
-            }
-            remove();
-          },
-        };
+        try {
+          console.debug("[SSE] client connected -> count=", clientCount());
+        } catch (_e) {
+          // ignore logging errors
+        }
+      },
+      cancel() {
+        try {
+          _remove?.();
+        } catch (_e) {
+          // ignore
+        }
+        try {
+          _writer?.close();
+        } catch (_e) {
+          // ignore close errors
+        }
+        try {
+          console.debug("[SSE] client disconnected -> count=", clientCount());
+        } catch (_e) {
+          // ignore
+        }
       },
     });
 
@@ -423,6 +505,65 @@ export function startRequestingServer(
         Connection: "keep-alive",
       },
     });
+  });
+
+  // Debug helper: a simple streaming endpoint that emits a heartbeat every
+  // second. Use this to confirm whether clients remain connected when the
+  // server sends periodic messages (bypasses the broadcaster). Call with:
+  //   curl -v -N http://localhost:8000/debug/stream
+  app.get("/debug/stream", (_c) => {
+    let timer: number | undefined;
+    const stream = new ReadableStream<string>({
+      start(controller) {
+        controller.enqueue(":\n\n");
+        let i = 0;
+        timer = setInterval(() => {
+          try {
+            controller.enqueue(`data: {"tick":${i++}}\n\n`);
+          } catch (_err) {
+            // controller probably closed; clear interval
+            if (timer) {
+              clearInterval(timer);
+              timer = undefined;
+            }
+          }
+        }, 1000) as unknown as number;
+      },
+      cancel() {
+        if (timer) {
+          clearInterval(timer);
+          timer = undefined;
+        }
+      },
+    });
+
+    return new Response(stream as unknown as ReadableStream<Uint8Array>, {
+      status: 200,
+      headers: {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache, no-transform",
+        Connection: "keep-alive",
+      },
+    });
+  });
+
+  // Debug broadcast endpoint: trigger a broadcaster event without going
+  // through the Requesting flow. Useful for quick testing of connected
+  // clients. Example:
+  //   curl -v http://localhost:8000/debug/broadcast
+  app.get("/debug/broadcast", async (_c) => {
+    try {
+      const payload = { ts: new Date().toISOString(), msg: "debug-broadcast" };
+      await broadcast({ type: "debug", payload });
+      return new Response(JSON.stringify({ ok: true, payload }), {
+        status: 200,
+      });
+    } catch (e) {
+      console.error("/debug/broadcast error", e);
+      return new Response(JSON.stringify({ error: String(e) }), {
+        status: 500,
+      });
+    }
   });
 
   console.log(
