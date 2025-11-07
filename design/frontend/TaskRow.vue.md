@@ -59,6 +59,6 @@ padding: .25rem .5rem;
 border-radius:4px;
 cursor: pointer;
 }
-.actions button:hover { filter: brightness(1.03); }
+.actions button:hover { filter: brightness(1.5); }
 </style>
 ```

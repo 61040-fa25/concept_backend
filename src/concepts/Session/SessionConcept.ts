@@ -680,6 +680,21 @@ export default class SessionConcept {
       { _id: session },
       { $set: { active: false } },
     );
+    // Reset statuses of all list items in this session to Incomplete so that
+    // a subsequently restarted session starts fresh.
+    try {
+      await this.listItems.updateMany(
+        { sessionId: session },
+        { $set: { itemStatus: "Incomplete" } },
+      );
+      console.debug(
+        "Session.endSession: reset itemStatus to Incomplete for session",
+        { session },
+      );
+    } catch (e) {
+      console.error("Session.endSession: failed to reset item statuses:", e);
+      // continue — ending the session should not fail entirely if status reset fails
+    }
     return {};
   }
 
