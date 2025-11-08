@@ -188,7 +188,7 @@ Deno.test("TaskBankConcept", async (t) => {
         adder: userAlice,
         task1: taskA_id,
         task2: taskB_id,
-        dependency: RelationType.BLOCKS,
+        dependency: RelationType.PRECEDES,
       });
       assertExists((addDepResult as { dependency: object }).dependency);
 
@@ -202,7 +202,7 @@ Deno.test("TaskBankConcept", async (t) => {
       }
       assertEquals(aDeps.dependencies!.length, 1);
       assertEquals(aDeps.dependencies![0].depTask, taskB_id);
-      assertEquals(aDeps.dependencies![0].depRelation, RelationType.BLOCKS);
+      assertEquals(aDeps.dependencies![0].depRelation, RelationType.PRECEDES);
 
       // Check taskB's dependencies (should have the inverse)
       const bDeps = await taskBankConcept._getDependencies({
@@ -214,7 +214,7 @@ Deno.test("TaskBankConcept", async (t) => {
       }
       assertEquals(bDeps.dependencies!.length, 1);
       assertEquals(bDeps.dependencies![0].depTask, taskA_id);
-      assertEquals(bDeps.dependencies![0].depRelation, RelationType.BLOCKED_BY);
+      assertEquals(bDeps.dependencies![0].depRelation, RelationType.FOLLOWS);
     },
   );
 
@@ -255,7 +255,7 @@ Deno.test("TaskBankConcept", async (t) => {
       adder: userAlice,
       task1: taskA_id,
       task2: taskA_id,
-      dependency: RelationType.BLOCKS,
+      dependency: RelationType.PRECEDES,
     });
     assertExists((result as { error: string }).error);
     assert(
@@ -317,7 +317,7 @@ Deno.test("TaskBankConcept", async (t) => {
         adder: userAlice,
         task1: taskC_id,
         task2: taskD_id,
-        dependency: RelationType.REQUIRES,
+        dependency: RelationType.PRECEDES,
       });
 
       // Verify dependencies before deletion
@@ -332,7 +332,7 @@ Deno.test("TaskBankConcept", async (t) => {
       assertEquals(cDepsBefore.dependencies![0].depTask, taskD_id);
       assertEquals(
         cDepsBefore.dependencies![0].depRelation,
-        RelationType.REQUIRES,
+        RelationType.PRECEDES,
       );
 
       const dDepsBefore = await taskBankConcept._getDependencies({
@@ -346,7 +346,7 @@ Deno.test("TaskBankConcept", async (t) => {
       assertEquals(dDepsBefore.dependencies![0].depTask, taskC_id);
       assertEquals(
         dDepsBefore.dependencies![0].depRelation,
-        RelationType.REQUIRED_BY,
+        RelationType.FOLLOWS,
       );
 
       // Delete the dependency
@@ -354,7 +354,7 @@ Deno.test("TaskBankConcept", async (t) => {
         deleter: userAlice,
         sourceTask: taskC_id,
         targetTask: taskD_id,
-        relation: RelationType.REQUIRES,
+        relation: RelationType.PRECEDES,
       });
       assertEquals(deleteDepResult, {});
 
@@ -434,19 +434,19 @@ Deno.test("TaskBankConcept", async (t) => {
       name: "Eval Task 4",
     }) as { task: ID }).task;
 
-    // Task1 BLOCKS Task2 (T1 -> T2)
+    // Task1 BLOCKS Task2 (T1 -> T2) -- normalized to PRECEDES
     await taskBankConcept.addDependency({
       adder: userAlice,
       task1: task1_id,
       task2: task2_id,
-      dependency: RelationType.BLOCKS,
+      dependency: RelationType.PRECEDES,
     });
-    // Task2 REQUIRES Task3 (T3 -> T2)
+    // Task2 REQUIRES Task3 (T3 -> T2) -- normalized to PRECEDES
     await taskBankConcept.addDependency({
       adder: userAlice,
       task1: task2_id,
       task2: task3_id,
-      dependency: RelationType.REQUIRES,
+      dependency: RelationType.PRECEDES,
     });
     // Task3 PRECEDES Task4 (T3 -> T4)
     await taskBankConcept.addDependency({
@@ -633,43 +633,49 @@ Deno.test("TaskBankConcept", async (t) => {
       assertExists(writeTests_id);
 
       // 2. Alice adds dependencies:
-      await st.step("add 'Design UI' BLOCKS 'Implement Backend'", async () => {
-        const depResult = await taskBankConcept.addDependency({
-          adder: userAlice,
-          task1: designUI_id,
-          task2: implementBackend_id,
-          dependency: RelationType.BLOCKS,
-        });
-        if ("error" in depResult) {
-          throw new Error(`Unexpected error: ${depResult.error}`);
-        }
-        assertEquals(depResult.dependency!.depTask, implementBackend_id);
+      await st.step(
+        "add 'Design UI' BLOCKS 'Implement Backend' (normalized to PRECEDES)",
+        async () => {
+          const depResult = await taskBankConcept.addDependency({
+            adder: userAlice,
+            task1: designUI_id,
+            task2: implementBackend_id,
+            dependency: RelationType.PRECEDES,
+          });
+          if ("error" in depResult) {
+            throw new Error(`Unexpected error: ${depResult.error}`);
+          }
+          assertEquals(depResult.dependency!.depTask, implementBackend_id);
 
-        const uiDeps = await taskBankConcept._getDependencies({
-          getter: userAlice,
-          task: designUI_id,
-        });
-        if ("error" in uiDeps) {
-          throw new Error(`Unexpected error: ${uiDeps.error}`);
-        }
-        assertEquals(uiDeps.dependencies!.length, 1);
-        assertEquals(uiDeps.dependencies![0].depTask, implementBackend_id);
-        assertEquals(uiDeps.dependencies![0].depRelation, RelationType.BLOCKS);
+          const uiDeps = await taskBankConcept._getDependencies({
+            getter: userAlice,
+            task: designUI_id,
+          });
+          if ("error" in uiDeps) {
+            throw new Error(`Unexpected error: ${uiDeps.error}`);
+          }
+          assertEquals(uiDeps.dependencies!.length, 1);
+          assertEquals(uiDeps.dependencies![0].depTask, implementBackend_id);
+          assertEquals(
+            uiDeps.dependencies![0].depRelation,
+            RelationType.PRECEDES,
+          );
 
-        const backendDeps = await taskBankConcept._getDependencies({
-          getter: userAlice,
-          task: implementBackend_id,
-        });
-        if ("error" in backendDeps) {
-          throw new Error(`Unexpected error: ${backendDeps.error}`);
-        }
-        assertEquals(backendDeps.dependencies!.length, 1);
-        assertEquals(backendDeps.dependencies![0].depTask, designUI_id);
-        assertEquals(
-          backendDeps.dependencies![0].depRelation,
-          RelationType.BLOCKED_BY,
-        );
-      });
+          const backendDeps = await taskBankConcept._getDependencies({
+            getter: userAlice,
+            task: implementBackend_id,
+          });
+          if ("error" in backendDeps) {
+            throw new Error(`Unexpected error: ${backendDeps.error}`);
+          }
+          assertEquals(backendDeps.dependencies!.length, 1);
+          assertEquals(backendDeps.dependencies![0].depTask, designUI_id);
+          assertEquals(
+            backendDeps.dependencies![0].depRelation,
+            RelationType.FOLLOWS,
+          );
+        },
+      );
 
       await st.step(
         "add 'Implement Backend' REQUIRES 'Design UI'",
@@ -680,7 +686,7 @@ Deno.test("TaskBankConcept", async (t) => {
             adder: userAlice,
             task1: implementBackend_id,
             task2: designUI_id,
-            dependency: RelationType.REQUIRES,
+            dependency: RelationType.PRECEDES,
           });
           if ("error" in depResult) {
             throw new Error(`Unexpected error: ${depResult.error}`);
@@ -688,7 +694,7 @@ Deno.test("TaskBankConcept", async (t) => {
           assertEquals(depResult.dependency!.depTask, designUI_id);
           assertEquals(
             depResult.dependency!.depRelation,
-            RelationType.REQUIRES,
+            RelationType.PRECEDES,
           );
 
           const backendDeps = await taskBankConcept._getDependencies({
@@ -698,11 +704,11 @@ Deno.test("TaskBankConcept", async (t) => {
           if ("error" in backendDeps) {
             throw new Error(`Unexpected error: ${backendDeps.error}`);
           }
-          assertEquals(backendDeps.dependencies!.length, 2); // Now has BLOCKED_BY (from UI) and REQUIRES (to UI)
+          assertEquals(backendDeps.dependencies!.length, 2); // Now has FOLLOWS (from UI) and PRECEDES (to UI)
           assert(
             backendDeps.dependencies!.some((d) =>
               d.depTask === designUI_id &&
-              d.depRelation === RelationType.REQUIRES
+              d.depRelation === RelationType.PRECEDES
             ),
           );
 
@@ -713,11 +719,11 @@ Deno.test("TaskBankConcept", async (t) => {
           if ("error" in uiDeps) {
             throw new Error(`Unexpected error: ${uiDeps.error}`);
           }
-          assertEquals(uiDeps.dependencies!.length, 2); // Now has BLOCKS (to Backend) and REQUIRED_BY (from Backend)
+          assertEquals(uiDeps.dependencies!.length, 2); // Now has PRECEDES (to Backend) and FOLLOWS (from Backend)
           assert(
             uiDeps.dependencies!.some((d) =>
               d.depTask === implementBackend_id &&
-              d.depRelation === RelationType.REQUIRED_BY
+              d.depRelation === RelationType.FOLLOWS
             ),
           );
         },
@@ -730,7 +736,7 @@ Deno.test("TaskBankConcept", async (t) => {
             adder: userAlice,
             task1: implementBackend_id,
             task2: writeTests_id,
-            dependency: RelationType.BLOCKS,
+            dependency: RelationType.PRECEDES,
           });
           if ("error" in depResult) {
             throw new Error(`Unexpected error: ${depResult.error}`);
@@ -744,11 +750,11 @@ Deno.test("TaskBankConcept", async (t) => {
           if ("error" in backendDeps) {
             throw new Error(`Unexpected error: ${backendDeps.error}`);
           }
-          assertEquals(backendDeps.dependencies!.length, 3); // BLOCKED_BY (UI), REQUIRES (UI), BLOCKS (Tests)
+          assertEquals(backendDeps.dependencies!.length, 3); // FOLLOWS (UI), PRECEDES (UI), PRECEDES (Tests)
           assert(
             backendDeps.dependencies!.some((d) =>
               d.depTask === writeTests_id &&
-              d.depRelation === RelationType.BLOCKS
+              d.depRelation === RelationType.PRECEDES
             ),
           );
 
@@ -763,7 +769,7 @@ Deno.test("TaskBankConcept", async (t) => {
           assertEquals(testDeps.dependencies![0].depTask, implementBackend_id);
           assertEquals(
             testDeps.dependencies![0].depRelation,
-            RelationType.BLOCKED_BY,
+            RelationType.FOLLOWS,
           );
         },
       );

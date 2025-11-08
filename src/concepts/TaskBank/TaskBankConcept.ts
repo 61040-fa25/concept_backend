@@ -21,22 +21,32 @@ type BankID = ID; // Represents BankDoc._id
  * Inverses are automatically managed to ensure bidirectional consistency.
  */
 export enum RelationType {
-  BLOCKS = "BLOCKS",
-  BLOCKED_BY = "BLOCKED_BY",
   PRECEDES = "PRECEDES",
   FOLLOWS = "FOLLOWS",
-  REQUIRES = "REQUIRES",
-  REQUIRED_BY = "REQUIRED_BY",
 }
-
 const inverseRelations: Record<RelationType, RelationType> = {
-  [RelationType.BLOCKS]: RelationType.BLOCKED_BY,
-  [RelationType.BLOCKED_BY]: RelationType.BLOCKS,
   [RelationType.PRECEDES]: RelationType.FOLLOWS,
   [RelationType.FOLLOWS]: RelationType.PRECEDES,
-  [RelationType.REQUIRES]: RelationType.REQUIRED_BY,
-  [RelationType.REQUIRED_BY]: RelationType.REQUIRES,
 };
+
+// Normalize incoming/legacy relation strings to the canonical RelationType values
+function normalizeRelationString(
+  raw: string | RelationType | undefined,
+): RelationType | null {
+  if (!raw) return null;
+  const r = String(raw).toUpperCase();
+  // Map legacy/semantic varieties to PRECEDES or FOLLOWS
+  if (r === "PRECEDES" || r === "REQUIRES" || r === "BLOCKS") {
+    return RelationType.PRECEDES;
+  }
+  if (r === "FOLLOWS" || r === "REQUIRED_BY" || r === "BLOCKED_BY") {
+    return RelationType.FOLLOWS;
+  }
+  // If already one of the canonical names, return it
+  if (r === RelationType.PRECEDES) return RelationType.PRECEDES;
+  if (r === RelationType.FOLLOWS) return RelationType.FOLLOWS;
+  return null;
+}
 
 /**
  * Retrieves the inverse relation type for a given relation.
@@ -167,9 +177,11 @@ export default class TaskBankConcept {
       await this.tasks.insertOne(newTask);
       console.log("Added new task:", name);
       return { task: newTaskId };
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error("Error adding task:", e);
-      return { error: `Failed to add task: ${e.message}` };
+      return {
+        error: `Failed to add task: ${(e as Error)?.message ?? String(e)}`,
+      };
     }
   }
 
@@ -227,9 +239,11 @@ export default class TaskBankConcept {
       }
 
       return {};
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error("Error deleting task:", e);
-      return { error: `Failed to delete task: ${e.message}` };
+      return {
+        error: `Failed to delete task: ${(e as Error)?.message ?? String(e)}`,
+      };
     }
   }
 
@@ -268,11 +282,19 @@ export default class TaskBankConcept {
       if (task1 === task2) {
         return { error: "Cannot add a dependency to the same task." };
       }
+      // Normalize the requested dependency relation and validate
+      const canonicalDep = normalizeRelationString(
+        dependency as unknown as string,
+      );
+      if (!canonicalDep) {
+        return { error: `Unknown dependency relation: ${String(dependency)}` };
+      }
 
-      // Check if the specific dependency (task1 -> task2 with 'dependency' type) already exists
+      // Check if the specific dependency (task1 -> task2 with canonical relation) already exists
       if (
         t1.dependencies.some((d) =>
-          d.depTask === task2 && d.depRelation === dependency
+          d.depTask === task2 &&
+          normalizeRelationString(d.depRelation) === canonicalDep
         )
       ) {
         return {
@@ -281,10 +303,10 @@ export default class TaskBankConcept {
         };
       }
 
-      // Add dependency from task1 to task2
+      // Add dependency from task1 to task2 (store canonical relation)
       const newDepEntry: DependencyEntry = {
         depTask: task2,
-        depRelation: dependency,
+        depRelation: canonicalDep,
       };
       await this.tasks.updateOne(
         { _id: task1 },
@@ -292,8 +314,8 @@ export default class TaskBankConcept {
         { session },
       );
 
-      // Add inverse dependency from task2 to task1
-      const inverseDependency = getInverseRelation(dependency);
+      // Add inverse dependency from task2 to task1 (use inverse of canonical relation)
+      const inverseDependency = getInverseRelation(canonicalDep);
       await this.tasks.updateOne(
         { _id: task2 },
         {
@@ -320,19 +342,23 @@ export default class TaskBankConcept {
             const r = await impl(session);
             result = r as DependencyResult;
             // If the impl returned an error, throw to abort the transaction and return after catching
-            if ((result as any).error) throw new Error("ClientError");
+            if (result && "error" in result) throw new Error("ClientError");
           });
           // If result contains error, return it; otherwise return success
           return result ?? { error: "Unknown transaction result" };
-        } catch (e: any) {
+        } catch (e: unknown) {
           // Distinguish client errors bubbled via throw
-          if (e && e.message === "ClientError") {
+          if (e && (e as Error).message === "ClientError") {
             // Retrieve the impl result outside of transaction to provide the error message
             const r = await impl();
             return r as DependencyResult;
           }
           console.error("Error adding dependency (transaction):", e);
-          return { error: `Failed to add dependency: ${e.message}` };
+          return {
+            error: `Failed to add dependency: ${
+              (e as Error)?.message ?? String(e)
+            }`,
+          };
         } finally {
           try {
             await session.endSession();
@@ -344,9 +370,13 @@ export default class TaskBankConcept {
 
       // Fallback: no client available, run without transaction
       return await impl();
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error("Error adding dependency:", e);
-      return { error: `Failed to add dependency: ${e.message}` };
+      return {
+        error: `Failed to add dependency: ${
+          (e as Error)?.message ?? String(e)
+        }`,
+      };
     }
   }
 
@@ -383,17 +413,25 @@ export default class TaskBankConcept {
         return { error: `Target task '${targetTask}' not found in your bank.` };
       }
 
-      // Identify the specific dependency to remove from sourceTask
+      // Normalize the relation value (accept legacy inputs) and identify the specific dependency to remove from sourceTask
+      const canonicalRel = normalizeRelationString(
+        relation as unknown as string,
+      );
+      if (!canonicalRel) {
+        return { error: `Unknown dependency relation: ${String(relation)}` };
+      }
+
       const dependencyToRemove: DependencyEntry = {
         depTask: targetTask,
-        depRelation: relation,
+        depRelation: canonicalRel,
       };
 
-      // Check if dependency exists on sourceTask
+      // Check if dependency exists on sourceTask (compare normalized forms)
       const existsOnSource = sourceTaskDoc.dependencies.some(
         (dep) =>
           dep.depTask === dependencyToRemove.depTask &&
-          dep.depRelation === dependencyToRemove.depRelation,
+          normalizeRelationString(dep.depRelation as unknown as string) ===
+            canonicalRel,
       );
       if (!existsOnSource) {
         return {
@@ -409,18 +447,19 @@ export default class TaskBankConcept {
         { session },
       );
 
-      // Remove inverse dependency from targetTask
-      const inverseRelation = getInverseRelation(relation);
+      // Remove inverse dependency from targetTask (compute inverse of canonical relation)
+      const inverseRelation = getInverseRelation(canonicalRel);
       const inverseDependencyToRemove: DependencyEntry = {
         depTask: sourceTask,
         depRelation: inverseRelation,
       };
 
-      // Check if inverse dependency exists on targetTask before trying to pull
+      // Check if inverse dependency exists on targetTask before trying to pull (compare normalized forms)
       const existsOnTarget = targetTaskDoc.dependencies.some(
         (dep) =>
           dep.depTask === inverseDependencyToRemove.depTask &&
-          dep.depRelation === inverseDependencyToRemove.depRelation,
+          normalizeRelationString(dep.depRelation as unknown as string) ===
+            inverseRelation,
       );
       if (existsOnTarget) {
         await this.tasks.updateOne(
@@ -449,18 +488,22 @@ export default class TaskBankConcept {
           await session.withTransaction(async () => {
             const r = await impl(session);
             result = r as Empty | { error: string };
-            if ((result as any).error) throw new Error("ClientError");
+            if (result && "error" in result) throw new Error("ClientError");
           });
           return (result ?? { error: "Unknown transaction result" }) as
             | Empty
             | { error: string };
-        } catch (e: any) {
-          if (e && e.message === "ClientError") {
+        } catch (e: unknown) {
+          if (e && (e as Error).message === "ClientError") {
             const r = await impl();
             return r as Empty | { error: string };
           }
           console.error("Error deleting dependency (transaction):", e);
-          return { error: `Failed to delete dependency: ${e.message}` };
+          return {
+            error: `Failed to delete dependency: ${
+              (e as Error)?.message ?? String(e)
+            }`,
+          };
         } finally {
           try {
             await session.endSession();
@@ -472,9 +515,13 @@ export default class TaskBankConcept {
 
       // Fallback: no client available, run without transaction
       return await impl();
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error("Error deleting dependency:", e);
-      return { error: `Failed to delete dependency: ${e.message}` };
+      return {
+        error: `Failed to delete dependency: ${
+          (e as Error)?.message ?? String(e)
+        }`,
+      };
     }
   }
 
@@ -496,9 +543,13 @@ export default class TaskBankConcept {
       }
 
       return { dependencies: taskDoc.dependencies };
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error("Error getting dependencies:", e);
-      return { error: `Failed to get dependencies: ${e.message}` };
+      return {
+        error: `Failed to get dependencies: ${
+          (e as Error)?.message ?? String(e)
+        }`,
+      };
     }
   }
 
@@ -514,9 +565,11 @@ export default class TaskBankConcept {
       const bank = await this._getOrCreateBank(owner);
       const tasks = await this.tasks.find({ bankId: bank._id }).toArray();
       return { tasks };
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error("Error listing tasks:", e);
-      return { error: `Failed to list tasks: ${e.message}` };
+      return {
+        error: `Failed to list tasks: ${(e as Error)?.message ?? String(e)}`,
+      };
     }
   }
 
@@ -533,9 +586,11 @@ export default class TaskBankConcept {
       const taskDoc = await this.tasks.findOne({ _id: task, bankId: bank._id });
       if (!taskDoc) return { error: `Task '${task}' not found in your bank.` };
       return { task: taskDoc };
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error("Error getting task:", e);
-      return { error: `Failed to get task: ${e.message}` };
+      return {
+        error: `Failed to get task: ${(e as Error)?.message ?? String(e)}`,
+      };
     }
   }
 
@@ -583,18 +638,17 @@ export default class TaskBankConcept {
         }
 
         for (const dep of t.dependencies) {
-          // Interpret each dep.depRelation as the relation from `t._id` (the source task)
-          // to `dep.depTask` (the target). Map that relation to a "must precede" edge
-          // (A -> B means A must precede B).
-          switch (dep.depRelation) {
-            // Interpret dependency entry as: dep.depTask depRelation t
-            // i.e. the relation describes dep.depTask relative to the source task `t._id`.
-            // Map that to a "must precede" edge (A -> B means A must precede B):
-            // - PRECEDES | BLOCKS | REQUIRED_BY => dep.depTask must precede t
-            // - FOLLOWS | REQUIRES | BLOCKED_BY => t must precede dep.depTask
+          // Normalize the stored relation value (accept legacy or canonical stored values)
+          const rel = normalizeRelationString(
+            dep.depRelation as unknown as string,
+          );
+          if (!rel) {
+            // Unknown relation: be conservative and skip
+            continue;
+          }
+
+          switch (rel) {
             case RelationType.PRECEDES:
-            case RelationType.BLOCKS:
-            case RelationType.REQUIRED_BY:
               // dep.depTask must precede t
               if (!mustPrecedeGraph.has(dep.depTask)) {
                 mustPrecedeGraph.set(dep.depTask, new Set<Task>());
@@ -602,13 +656,10 @@ export default class TaskBankConcept {
               mustPrecedeGraph.get(dep.depTask)!.add(t._id);
               break;
             case RelationType.FOLLOWS:
-            case RelationType.REQUIRES:
-            case RelationType.BLOCKED_BY:
               // t must precede dep.depTask
               mustPrecedeGraph.get(t._id)!.add(dep.depTask);
               break;
             default:
-              // Unknown relation: be conservative and do not add an edge
               break;
           }
         }

@@ -67,22 +67,40 @@ export const TaskBankAddDependencyResponse: Sync = (
 });
 
 export const TaskBankDeleteDependencyRequest: Sync = (
-  { request, deleter, task, dependency },
+  { request, deleter, sourceTask, targetTask, relation },
 ) => ({
+  // Match the incoming Requesting.request which provides fields named
+  // `deleter`, `sourceTask`, `targetTask`, and `relation` (as sent by the frontend).
   when: actions([
     Requesting.request,
-    { path: "/TaskBank/deleteDependency", deleter, task, dependency },
+    {
+      path: "/TaskBank/deleteDependency",
+      deleter,
+      sourceTask,
+      targetTask,
+      relation,
+    },
     { request },
   ]),
-  then: actions([TaskBank.deleteDependency, { deleter, task, dependency }]),
+  // Call the TaskBank.deleteDependency action with the same named parameters
+  // expected by the concept implementation.
+  then: actions([TaskBank.deleteDependency, {
+    deleter,
+    sourceTask,
+    targetTask,
+    relation,
+  }]),
 });
 
 export const TaskBankDeleteDependencyResponse: Sync = (
-  { request, success },
+  { request, result },
 ) => ({
+  // Listen for completion of the TaskBank.deleteDependency action and forward
+  // whatever it returned (success empty object or an { error }) back to the
+  // original Requesting.request so the HTTP caller receives it.
   when: actions(
     [Requesting.request, { path: "/TaskBank/deleteDependency" }, { request }],
-    [TaskBank.deleteDependency, {}, { success }],
+    [TaskBank.deleteDependency, {}, { result }],
   ),
-  then: actions([Requesting.respond, { request, success }]),
+  then: actions([Requesting.respond, { request, result }]),
 });

@@ -46,6 +46,22 @@ interface ListDocument {
 export default class ListCreationConcept {
   private lists: Collection<ListDocument>;
 
+  // Local helper to normalize legacy relation strings to canonical PRECEDES/FOLLOWS
+  // This mirrors the mapping used by TaskBank but kept local to avoid cross-concept imports.
+  private normalizeRelationStringLocal(
+    raw: unknown,
+  ): "PRECEDES" | "FOLLOWS" | null {
+    if (raw === undefined || raw === null) return null;
+    const r = String(raw).toUpperCase();
+    if (r === "PRECEDES" || r === "REQUIRES" || r === "BLOCKS") {
+      return "PRECEDES";
+    }
+    if (r === "FOLLOWS" || r === "REQUIRED_BY" || r === "BLOCKED_BY") {
+      return "FOLLOWS";
+    }
+    return null;
+  }
+
   /**
    * @concept ListCreation
    * @purpose allow for grouping of tasks into lists, subsets of the task bank
@@ -181,24 +197,20 @@ export default class ListCreationConcept {
         Array.isArray((newTaskDoc as { dependencies?: unknown[] }).dependencies)
       ) {
         for (
-          const dep
-            of (newTaskDoc as {
-              dependencies?: { depTask?: unknown; depRelation?: unknown }[];
-            }).dependencies || []
+          const dep of (newTaskDoc as {
+            dependencies?: { depTask?: unknown; depRelation?: unknown }[];
+          }).dependencies || []
         ) {
           const depId = String((dep as { depTask?: unknown }).depTask);
           const rel = String((dep as { depRelation?: unknown }).depRelation);
+          const relCanonical = this.normalizeRelationStringLocal(rel);
           // Interpret dependency entries as: dep.depTask depRelation sourceTask
           // i.e. the relation describes depTask relative to the source (new task)
           if (existingOrderMap.has(depId)) {
-            if (
-              rel === "PRECEDES" || rel === "BLOCKS" || rel === "REQUIRED_BY"
-            ) {
+            if (relCanonical === "PRECEDES") {
               // depTask must precede newTask => depTask before new task
               tasksBefore.add(depId);
-            } else if (
-              rel === "FOLLOWS" || rel === "REQUIRES" || rel === "BLOCKED_BY"
-            ) {
+            } else if (relCanonical === "FOLLOWS") {
               // depTask must follow newTask => depTask after new task
               tasksAfter.add(depId);
             }
@@ -214,23 +226,19 @@ export default class ListCreationConcept {
           );
         for (const t of bankTasks) {
           for (
-            const dep
-              of ((t as {
-                dependencies?: { depTask?: unknown; depRelation?: unknown }[];
-              }).dependencies || [])
+            const dep of ((t as {
+              dependencies?: { depTask?: unknown; depRelation?: unknown }[];
+            }).dependencies || [])
           ) {
             const depId = String((dep as { depTask?: unknown }).depTask);
             if (depId !== String(task)) continue;
             const rel = String((dep as { depRelation?: unknown }).depRelation);
+            const relCanonical = this.normalizeRelationStringLocal(rel);
             // dep.depTask === newTask; dep.depRelation describes depTask relative to t
-            if (
-              rel === "PRECEDES" || rel === "BLOCKS" || rel === "REQUIRED_BY"
-            ) {
+            if (relCanonical === "PRECEDES") {
               // depTask (new task) must precede t => new task before t
               tasksAfter.add(String((t as { _id: unknown })._id));
-            } else if (
-              rel === "FOLLOWS" || rel === "REQUIRES" || rel === "BLOCKED_BY"
-            ) {
+            } else if (relCanonical === "FOLLOWS") {
               // depTask (new task) must follow t => new task after t
               tasksBefore.add(String((t as { _id: unknown })._id));
             }
@@ -491,6 +499,7 @@ export default class ListCreationConcept {
 
             const bOrder = orderMap.get(bStr)!;
             const rel = String(dep.depRelation);
+            const relCanonical = this.normalizeRelationStringLocal(rel);
             console.debug("ListCreation.assignOrder: checking dependency", {
               task: String(t._id),
               dep: bStr,
@@ -505,9 +514,7 @@ export default class ListCreationConcept {
             // Map relations to the corresponding ordering requirement:
             // - PRECEDES | BLOCKS | REQUIRED_BY  => dep.depTask (target) must precede t (source)
             // - FOLLOWS | REQUIRES | BLOCKED_BY  => t (source) must precede dep.depTask (target)
-            if (
-              rel === "PRECEDES" || rel === "BLOCKS" || rel === "REQUIRED_BY"
-            ) {
+            if (relCanonical === "PRECEDES") {
               // target (dep.depTask) must come before source (t)
               if (!(bOrder < aOrder)) {
                 console.debug(
@@ -526,9 +533,7 @@ export default class ListCreationConcept {
                   }' (${rel}) requires '${bStr}' to come before it.`,
                 };
               }
-            } else if (
-              rel === "FOLLOWS" || rel === "REQUIRES" || rel === "BLOCKED_BY"
-            ) {
+            } else if (relCanonical === "FOLLOWS") {
               // source (t) must come before target (dep.depTask)
               if (!(aOrder < bOrder)) {
                 console.debug(
