@@ -23,9 +23,11 @@ type OrderType = "Default" | "Random";
 
 /**
  * Type for the display format of the session's list.
- * (Only "List" is specified, but this allows for future expansion)
+ * Supported formats:
+ * - "List": show the full list in the session UI
+ * - "task-by-task": present tasks one at a time (task-by-task flow)
  */
-type FormatType = "List";
+type FormatType = "List" | "task-by-task";
 
 /**
  * A set of Sessions with
