@@ -57,8 +57,13 @@ export async function getDb() {
  */
 export async function testDb() {
   const [client, DB_NAME] = await init();
-  const test_DB_NAME = `test-${DB_NAME}`;
+  // Create a unique test database per invocation to avoid cross-test interference
+  // when tests run in parallel. Use a short unique suffix (UUID v7) to isolate runs.
+  // Use a short unique suffix (8 chars) to avoid exceeding MongoDB database name length limits
+  const uniqueSuffix = generate().replace(/-/g, "").slice(0, 8);
+  const test_DB_NAME = `test-${DB_NAME}-${uniqueSuffix}`;
   const test_Db = client.db(test_DB_NAME);
+  // Ensure a clean state for this test database
   await dropAllCollections(test_Db);
   return [test_Db, client] as [Db, MongoClient];
 }

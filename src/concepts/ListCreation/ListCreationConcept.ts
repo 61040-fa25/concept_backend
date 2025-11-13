@@ -1,0 +1,756 @@
+import { Collection, Db } from "npm:mongodb";
+import { Empty, ID } from "@utils/types.ts"; // Assuming @utils/types.ts provides ID and Empty
+import { freshID } from "@utils/database.ts"; // Assuming @utils/database.ts provides freshID
+import { usernameToUserId } from "@utils/users.ts";
+
+// Declare collection prefix, use concept name
+const PREFIX = "ListCreation" + ".";
+
+// Generic types of this concept
+type List = ID; // The ID of a List document created by this concept
+type User = ID; // The ID of a User, e.g., from a UserAuthentication concept, external to ListCreation
+type Task = ID; // The ID of a Task, e.g., from a TaskManagement concept, external to ListCreation
+
+/**
+ * @interface ListItem
+ * A member of a list, representing a task within that list.
+ *
+ * @state a set of ListItems with
+ *   a task of type Task
+ *   an orderNumber of type Number
+ */
+interface ListItem {
+  name: string;
+  task: Task;
+  orderNumber: number;
+}
+
+/**
+ * @interface ListDocument
+ * Represents a user-created list, which groups tasks.
+ *
+ * @state a set of Lists with
+ *   an owner of type User
+ *   a title of type String
+ *   a set of ListItems (embedded within the list)
+ *   an itemCount of type Number
+ */
+interface ListDocument {
+  _id: List;
+  owner: User;
+  title: string;
+  listItems: ListItem[];
+  itemCount: number;
+}
+
+export default class ListCreationConcept {
+  private lists: Collection<ListDocument>;
+
+  // Local helper to normalize legacy relation strings to canonical PRECEDES/FOLLOWS
+  // This mirrors the mapping used by TaskBank but kept local to avoid cross-concept imports.
+  private normalizeRelationStringLocal(
+    raw: unknown,
+  ): "PRECEDES" | "FOLLOWS" | null {
+    if (raw === undefined || raw === null) return null;
+    const r = String(raw).toUpperCase();
+    if (r === "PRECEDES" || r === "REQUIRES" || r === "BLOCKS") {
+      return "PRECEDES";
+    }
+    if (r === "FOLLOWS" || r === "REQUIRED_BY" || r === "BLOCKED_BY") {
+      return "FOLLOWS";
+    }
+    return null;
+  }
+
+  /**
+   * @concept ListCreation
+   * @purpose allow for grouping of tasks into lists, subsets of the task bank
+   */
+  constructor(private readonly db: Db) {
+    this.lists = this.db.collection(PREFIX + "lists");
+  }
+
+  /**
+   * @action newList
+   * @principle users can create a to-do list, select tasks from their task bank to add to it,
+   *            and set a default ordering of the tasks according to their dependencies.
+   *
+   * Creates a new list with the specified name and owner.
+   *
+   * @param {object} params - The action arguments.
+   * @param {string} params.listName - The title of the new list.
+   * @param {User} params.listOwner - The ID of the user who owns this list.
+   * @returns {{list: List} | {error: string}} - An object containing the ID of the new list on success, or an error message.
+   *
+   * @requires no List with listName exists in set of Lists with owner = listOwner
+   * @effects new List with title = listName, owner = listOwner, itemCount = 0, and an empty set of ListItems is returned and added to set of Lists
+   */
+  async newList(
+    { listName, listOwner }: { listName: string; listOwner: User },
+  ): Promise<{ list: List } | { error: string }> {
+    // Requires: no List with listName exists in set of Lists with owner = listOwner
+    const existingList = await this.lists.findOne({
+      title: listName,
+      owner: listOwner,
+    });
+    if (existingList) {
+      return {
+        error:
+          `List with name '${listName}' already exists for user '${listOwner}'.`,
+      };
+    }
+
+    const newListId = freshID();
+    const newList: ListDocument = {
+      _id: newListId,
+      owner: listOwner,
+      title: listName,
+      listItems: [], // Initialize with an empty array of list items
+      itemCount: 0, // Initialize item count to 0
+    };
+
+    // Effects: new List is added to the database
+    await this.lists.insertOne(newList);
+
+    return { list: newListId };
+  }
+
+  /**
+   * @action addTask
+   *
+   * Adds a task to a specified list and assigns an order number that places it at the end of the current list.
+   *
+   * @param {object} params - The action arguments.
+   * @param {List} params.list - The ID of the list to add the task to.
+   * @param {Task} params.task - The ID of the task to add.
+   * @param {User} params.adder - The ID of the user attempting to add the task (must be the owner).
+   * @returns {{listItem: ListItem} | {error: string}} - An object containing the newly created ListItem on success, or an error message.
+   *
+   * @requires listItem containing task is not already in list and adder = owner of list
+   * @effects a new listItem is created with task = task and orderNumber = itemCount+1.
+   *          itemCount is incremented. The new listItem is returned and added to list's set of listItems.
+   */
+  async addTask(
+    { list: listId, name, task, adder }: {
+      list: List;
+      name: string;
+      task: Task;
+      adder: User;
+    },
+  ): Promise<{ listItem: ListItem } | { error: string }> {
+    const targetList = await this.lists.findOne({ _id: listId });
+
+    if (!targetList) {
+      return { error: `List with ID '${listId}' not found.` };
+    }
+
+    // Requires: adder = owner of list
+    if (targetList.owner !== adder) {
+      return { error: `User '${adder}' is not the owner of list '${listId}'.` };
+    }
+
+    // Requires: listItem containing task is not already in list
+    const existingListItem = targetList.listItems.find((item) =>
+      item.task === task
+    );
+    if (existingListItem) {
+      return { error: `Task '${task}' is already in list '${listId}'.` };
+    }
+
+    // Effects: new listItem is created and added, itemCount is incremented
+    // Insert the new task into the list at a position that respects TaskBank dependencies
+    // Load TaskBank task document for the new task and for tasks already in the list
+    try {
+      const taskCollection = this.db.collection("TaskBank.tasks");
+
+      // Minimal TaskBank task shape used locally for dependency inspection
+      type TaskBankTask = {
+        _id: ID;
+        dependencies?: { depTask: ID; depRelation: string }[];
+      };
+
+      // Existing items sorted
+      const existingItems = [...targetList.listItems].sort(
+        (a, b) => a.orderNumber - b.orderNumber,
+      );
+
+      // Build order map for existing items (stringified ids -> orderNumber)
+      const existingOrderMap = new Map<string, number>();
+      for (const it of existingItems) {
+        existingOrderMap.set(String(it.task), it.orderNumber);
+      }
+
+      // Fetch all bank tasks once and inspect relevant dependency edges
+      const allBankTasks = await taskCollection.find({}).toArray();
+      // newTaskDoc (if present) and bankTasks for existing items
+      const newTaskDoc =
+        (allBankTasks as { _id: unknown; dependencies?: unknown[] }[])
+          .find((t) => String((t as { _id: unknown })._id) === String(task));
+
+      // Collect constraints
+      const tasksBefore = new Set<string>(); // tasks that must come before new task
+      const tasksAfter = new Set<string>(); // tasks that must come after new task
+
+      // If new task declares dependencies referencing tasks in this list
+      if (
+        newTaskDoc &&
+        Array.isArray((newTaskDoc as { dependencies?: unknown[] }).dependencies)
+      ) {
+        for (
+          const dep of (newTaskDoc as {
+            dependencies?: { depTask?: unknown; depRelation?: unknown }[];
+          }).dependencies || []
+        ) {
+          const depId = String((dep as { depTask?: unknown }).depTask);
+          const rel = String((dep as { depRelation?: unknown }).depRelation);
+          const relCanonical = this.normalizeRelationStringLocal(rel);
+          // Interpret dependency entries as: dep.depTask depRelation sourceTask
+          // i.e. the relation describes depTask relative to the source (new task)
+          if (existingOrderMap.has(depId)) {
+            if (relCanonical === "PRECEDES") {
+              // depTask must precede newTask => depTask before new task
+              tasksBefore.add(depId);
+            } else if (relCanonical === "FOLLOWS") {
+              // depTask must follow newTask => depTask after new task
+              tasksAfter.add(depId);
+            }
+          }
+        }
+      }
+
+      if (existingItems.length > 0) {
+        const existingIds = new Set(existingItems.map((it) => String(it.task)));
+        const bankTasks =
+          (allBankTasks as { _id: unknown; dependencies?: unknown[] }[]).filter(
+            (t) => existingIds.has(String((t as { _id: unknown })._id)),
+          );
+        for (const t of bankTasks) {
+          for (
+            const dep of ((t as {
+              dependencies?: { depTask?: unknown; depRelation?: unknown }[];
+            }).dependencies || [])
+          ) {
+            const depId = String((dep as { depTask?: unknown }).depTask);
+            if (depId !== String(task)) continue;
+            const rel = String((dep as { depRelation?: unknown }).depRelation);
+            const relCanonical = this.normalizeRelationStringLocal(rel);
+            // dep.depTask === newTask; dep.depRelation describes depTask relative to t
+            if (relCanonical === "PRECEDES") {
+              // depTask (new task) must precede t => new task before t
+              tasksAfter.add(String((t as { _id: unknown })._id));
+            } else if (relCanonical === "FOLLOWS") {
+              // depTask (new task) must follow t => new task after t
+              tasksBefore.add(String((t as { _id: unknown })._id));
+            }
+          }
+        }
+      }
+
+      // Compute allowed insertion range
+      const beforeOrders = Array.from(tasksBefore)
+        .map((id) => existingOrderMap.get(id))
+        .filter((o): o is number => typeof o === "number");
+      const afterOrders = Array.from(tasksAfter)
+        .map((id) => existingOrderMap.get(id))
+        .filter((o): o is number => typeof o === "number");
+
+      const minPos = (beforeOrders.length > 0 ? Math.max(...beforeOrders) : 0) +
+        1;
+      const maxPos = afterOrders.length > 0
+        ? Math.min(...afterOrders)
+        : (targetList.itemCount + 1);
+
+      if (minPos > maxPos) {
+        return {
+          error:
+            `Cannot add task '${task}' without violating existing dependencies.`,
+        };
+      }
+
+      const insertPos = minPos; // choose earliest valid position
+
+      // Build updated list items with shifted orderNumbers and the new item inserted
+      const updatedListItems: ListItem[] = [];
+      for (const it of existingItems) {
+        if (it.orderNumber >= insertPos) {
+          updatedListItems.push({ ...it, orderNumber: it.orderNumber + 1 });
+        } else {
+          updatedListItems.push(it);
+        }
+      }
+
+      const newListItem: ListItem = { name, task, orderNumber: insertPos };
+      // Insert new item at correct index to keep array ordered
+      updatedListItems.splice(insertPos - 1, 0, newListItem);
+
+      await this.lists.updateOne(
+        { _id: listId },
+        {
+          $set: { listItems: updatedListItems },
+          $inc: { itemCount: 1 },
+        },
+      );
+
+      return { listItem: newListItem };
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error(
+        "ListCreation.addTask: failed to insert while validating dependencies:",
+        e,
+      );
+      return { error: `Failed to add task: ${msg}` };
+    }
+  }
+
+  /**
+   * @action deleteTask
+   *
+   * Removes a task from a specified list. The order numbers of subsequent tasks
+   * are adjusted to maintain a contiguous sequence.
+   *
+   * @param {object} params - The action arguments.
+   * @param {List} params.list - The ID of the list to delete the task from.
+   * @param {Task} params.task - The ID of the task to delete.
+   * @param {User} params.deleter - The ID of the user attempting to delete the task (must be the owner).
+   * @returns {Empty | {error: string}} - An empty object on success, or an error message.
+   *
+   * @requires a listItem containing task is in list's set of listItems and deleter = owner of list
+   * @effects the listItem containing task is removed from list's set of listItems.
+   *          orderNumbers of subsequent items are decremented. itemCount is decremented.
+   */
+  async deleteTask(
+    { list: listId, task, deleter }: { list: List; task: Task; deleter: User },
+  ): Promise<Empty | { error: string }> {
+    const targetList = await this.lists.findOne({ _id: listId });
+
+    if (!targetList) {
+      return { error: `List with ID '${listId}' not found.` };
+    }
+
+    // Requires: deleter = owner of list
+    if (targetList.owner !== deleter) {
+      return {
+        error: `User '${deleter}' is not the owner of list '${listId}'.`,
+      };
+    }
+
+    // Requires: a listItem containing task is in list's set of listItems
+    const listItemIndex = targetList.listItems.findIndex((item) =>
+      item.task === task
+    );
+    if (listItemIndex === -1) {
+      return { error: `Task '${task}' not found in list '${listId}'.` };
+    }
+
+    const removedOrderNumber = targetList.listItems[listItemIndex].orderNumber;
+
+    // Effects: listItem is removed, orderNumbers adjusted, itemCount decremented
+    const updatedListItems = targetList.listItems
+      .filter((_, index) => index !== listItemIndex) // Remove the target item
+      .map((item) => {
+        // Shift order numbers of items that were after the removed item
+        if (item.orderNumber > removedOrderNumber) {
+          return { ...item, orderNumber: item.orderNumber - 1 };
+        }
+        return item;
+      });
+
+    await this.lists.updateOne(
+      { _id: listId },
+      {
+        $set: { listItems: updatedListItems }, // Update the entire array
+        $inc: { itemCount: -1 }, // Decrement the count of items
+      },
+    );
+
+    return {};
+  }
+
+  /**
+   * @action assignOrder
+   *
+   * Reassigns the order number of a specific task within a list.
+   * Other tasks' order numbers are adjusted to maintain a contiguous sequence.
+   *
+   * @param {object} params - The action arguments.
+   * @param {List} params.list - The ID of the list containing the task.
+   * @param {Task} params.task - The ID of the task whose order is to be assigned.
+   * @param {number} params.newOrder - The new order number for the task (1-indexed).
+   * @param {User} params.assigner - The ID of the user attempting to assign the order (must be the owner).
+   * @returns {Empty | {error: string}} - An empty object on success, or an error message.
+   *
+   * @requires task belongs to a ListItem in list and assigner = owner of list
+   * @requires newOrder is valid (1 to itemCount)
+   * @effects task's ListItem gets orderNumber set to newOrder and the ListItems with
+   *          orderNumbers between the old value and new value are offset by one accordingly.
+   */
+  async assignOrder(
+    { list: listId, task, newOrder, assigner }: {
+      list: List;
+      task: Task;
+      newOrder: number;
+      assigner: User;
+    },
+  ): Promise<Empty | { error: string }> {
+    const targetList = await this.lists.findOne({ _id: listId });
+
+    if (!targetList) {
+      return { error: `List with ID '${listId}' not found.` };
+    }
+
+    // Requires: assigner = owner of list
+    if (targetList.owner !== assigner) {
+      return {
+        error: `User '${assigner}' is not the owner of list '${listId}'.`,
+      };
+    }
+
+    const listItemIndex = targetList.listItems.findIndex((item) =>
+      item.task === task
+    );
+    if (listItemIndex === -1) {
+      return { error: `Task '${task}' not found in list '${listId}'.` };
+    }
+
+    const oldOrder = targetList.listItems[listItemIndex].orderNumber;
+
+    // Validate newOrder against the current itemCount
+    if (newOrder < 1 || newOrder > targetList.itemCount) {
+      return {
+        error:
+          `New order '${newOrder}' is out of bounds (1 to ${targetList.itemCount}).`,
+      };
+    }
+
+    if (newOrder === oldOrder) {
+      return {}; // No change needed if the order is the same
+    }
+
+    // Effects: re-order list items by adjusting other items' orderNumbers
+    const updatedListItems = targetList.listItems.map((item) => {
+      if (item.task === task) {
+        // This is the item being moved
+        return { ...item, orderNumber: newOrder };
+      }
+
+      if (newOrder < oldOrder) {
+        // Item is moving UP (to a smaller order number)
+        // Items between newOrder (inclusive) and oldOrder (exclusive) should shift DOWN (+1)
+        if (item.orderNumber >= newOrder && item.orderNumber < oldOrder) {
+          return { ...item, orderNumber: item.orderNumber + 1 };
+        }
+      } else { // newOrder > oldOrder
+        // Item is moving DOWN (to a larger order number)
+        // Items between oldOrder (exclusive) and newOrder (inclusive) should shift UP (-1)
+        if (item.orderNumber > oldOrder && item.orderNumber <= newOrder) {
+          return { ...item, orderNumber: item.orderNumber - 1 };
+        }
+      }
+      return item;
+    });
+
+    // Sort the list items by their orderNumber to ensure consistent array ordering in the database.
+    // This is good practice but not strictly required by the effects if queries always sort.
+    updatedListItems.sort((a, b) => a.orderNumber - b.orderNumber);
+
+    // --- Validation: enforce TaskBank dependencies server-side ---
+    // Build map taskId (stringified) -> new orderNumber for validation
+    const orderMap = new Map<string, number>();
+    for (const li of updatedListItems) {
+      orderMap.set(String(li.task), li.orderNumber);
+    }
+
+    console.debug(
+      "ListCreation.assignOrder: computed orderMap",
+      Array.from(orderMap.entries()),
+    );
+
+    try {
+      // Load TaskBank tasks for tasks present in this list
+      const taskIds = Array.from(orderMap.keys());
+      if (taskIds.length > 0) {
+        const taskCollection = this.db.collection("TaskBank.tasks");
+        // Cast filter to any to avoid driver type issues with branded ID types
+        const allBankTasks = await taskCollection.find({}).toArray();
+        const bankTasks = allBankTasks.filter((t) =>
+          orderMap.has(String(t._id))
+        );
+        console.debug(
+          "ListCreation.assignOrder: loaded bankTasks for validation",
+          {
+            count: bankTasks.length,
+            tasks: bankTasks.map((t: { _id: unknown }) => String(t._id)),
+          },
+        );
+
+        // For each task, validate its dependencies that reference tasks within this list
+        for (const t of bankTasks) {
+          const aOrder = orderMap.get(String(t._id));
+          if (aOrder === undefined) continue;
+          for (const dep of (t.dependencies || [])) {
+            const bStr = String(dep.depTask);
+            if (!orderMap.has(bStr)) {
+              console.debug(
+                "ListCreation.assignOrder: skipping dependency to outside-list task",
+                { task: String(t._id), dep: bStr },
+              );
+              continue; // dependency to outside-list task: ignore here
+            }
+
+            const bOrder = orderMap.get(bStr)!;
+            const rel = String(dep.depRelation);
+            const relCanonical = this.normalizeRelationStringLocal(rel);
+            console.debug("ListCreation.assignOrder: checking dependency", {
+              task: String(t._id),
+              dep: bStr,
+              relation: rel,
+              aOrder,
+              bOrder,
+            });
+
+            // Explicitly interpret each relation as an ordering constraint
+            // using the convention: dep.depTask depRelation sourceTask
+            // i.e. dep.depRelation describes dep.depTask relative to t (the source)
+            // Map relations to the corresponding ordering requirement:
+            // - PRECEDES | BLOCKS | REQUIRED_BY  => dep.depTask (target) must precede t (source)
+            // - FOLLOWS | REQUIRES | BLOCKED_BY  => t (source) must precede dep.depTask (target)
+            if (relCanonical === "PRECEDES") {
+              // target (dep.depTask) must come before source (t)
+              if (!(bOrder < aOrder)) {
+                console.debug(
+                  "ListCreation.assignOrder: dependency violation (target must precede source)",
+                  {
+                    task: String(t._id),
+                    dep: bStr,
+                    relation: rel,
+                    aOrder,
+                    bOrder,
+                  },
+                );
+                return {
+                  error: `Dependency violation: task '${
+                    String(t._id)
+                  }' (${rel}) requires '${bStr}' to come before it.`,
+                };
+              }
+            } else if (relCanonical === "FOLLOWS") {
+              // source (t) must come before target (dep.depTask)
+              if (!(aOrder < bOrder)) {
+                console.debug(
+                  "ListCreation.assignOrder: dependency violation (source must precede target)",
+                  {
+                    task: String(t._id),
+                    dep: bStr,
+                    relation: rel,
+                    aOrder,
+                    bOrder,
+                  },
+                );
+                return {
+                  error: `Dependency violation: task '${
+                    String(t._id)
+                  }' (${rel}) must come before '${bStr}'.`,
+                };
+              }
+            } else {
+              console.debug(
+                "ListCreation.assignOrder: unknown relation type, skipping enforcement",
+                { relation: rel, task: String(t._id), dep: bStr },
+              );
+              // Unknown relation: be conservative and enforce nothing here
+            }
+          }
+        }
+      }
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error(
+        "Error validating TaskBank dependencies during assignOrder:",
+        e,
+      );
+      return { error: `Failed to validate dependencies: ${msg}` };
+    }
+
+    await this.lists.updateOne(
+      { _id: listId },
+      {
+        $set: { listItems: updatedListItems }, // Update the entire array with adjusted order numbers
+      },
+    );
+
+    return {};
+  }
+
+  // --- Concept Queries ---
+
+  /**
+   * @query _getLists
+   * Returns all lists stored by this concept.
+   *
+   * @returns {Promise<ListDocument[]>} - An array of all ListDocuments.
+   */
+  async _getLists(): Promise<ListDocument[]> {
+    return await this.lists.find({}).toArray();
+  }
+
+  /**
+   * @query _getListById
+   * Returns a specific list document by its ID.
+   *
+   * @param {object} params - The query arguments.
+   * @param {List} params.listId - The ID of the list to retrieve.
+   * @returns {Promise<ListDocument | null>} - The ListDocument if found, otherwise null.
+   */
+  async _getListById(
+    { listId }: { listId: List },
+  ): Promise<ListDocument | null> {
+    return await this.lists.findOne({ _id: listId });
+  }
+
+  // /**
+  //  * @query _getListsByOwner
+  //  * Returns all lists owned by a specific user.
+  //  *
+  //  * @param {object} params - The query arguments.
+  //  * @param {User} params.ownerId - The ID of the user whose lists to retrieve.
+  //  * @returns {Promise<ListDocument[]>} - An array of ListDocuments owned by the user.
+  //  */
+  // async _getListsByOwner(
+  //   { ownerId }: { ownerId: User },
+  // ): Promise<ListDocument[]> {
+  //   return await this.lists.find({ owner: ownerId }).toArray();
+  // }
+
+  /**
+   * @query getListsByOwner
+   * Returns all lists owned by the provided user id. This mirrors `_getListsByOwner`
+   * but uses the `owner` param name which is convenient for frontend calls.
+   *
+   * @param {object} params - The query arguments.
+   * @param {User} params.owner - The ID of the user whose lists to retrieve.
+   * @returns {{ lists: ListDocument[] } | { error: string }}
+   */
+  async getListsByOwner(
+    { owner, username }: { owner?: User; username?: string },
+  ): Promise<{ lists: ListDocument[] } | { error: string }> {
+    try {
+      // Allow the frontend to pass either the user ID (`owner`) or a `username`.
+      let resolvedOwner: User | undefined = owner;
+      if (!resolvedOwner && username) {
+        const uid = await usernameToUserId(this.db, username);
+        if (!uid) {
+          return { error: `No user found with username '${username}'.` };
+        }
+        resolvedOwner = uid;
+      }
+      if (!resolvedOwner) {
+        return { error: "Missing required parameter: owner or username" };
+      }
+
+      const lists = await this.lists.find({ owner: resolvedOwner }).toArray();
+      return { lists };
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error("Error getting lists by owner:", e);
+      return { error: `Failed to get lists: ${msg}` };
+    }
+  }
+
+  /**
+   * @query _getTasksInList
+   * Returns all list items (tasks) for a given list, sorted by their orderNumber.
+   *
+   * @param {object} params - The query arguments.
+   * @param {List} params.listId - The ID of the list to retrieve tasks from.
+   * @returns {Promise<ListItem[] | null>} - An array of ListItems sorted by order, or null if the list is not found.
+   */
+  async _getTasksInList(
+    { listId }: { listId: List },
+  ): Promise<ListItem[] | null> {
+    const list = await this.lists.findOne({ _id: listId });
+    if (!list) return null;
+    // Return a shallow copy sorted by orderNumber so we don't mutate the DB object
+    return [...list.listItems].sort((a, b) => a.orderNumber - b.orderNumber);
+  }
+  async deleteList(
+    { listId, listName, deleter, username }: {
+      listId?: List;
+      listName?: string;
+      deleter?: User;
+      username?: string;
+    },
+  ): Promise<Empty | { error: string }> {
+    // Resolve deleter (owner) from deleter id or username if provided
+    let resolvedDeleter: User | undefined = deleter;
+    if (!resolvedDeleter && username) {
+      const uid = await usernameToUserId(this.db, username);
+      if (!uid) return { error: `No user found with username '${username}'.` };
+      resolvedDeleter = uid;
+    }
+
+    // If listId not provided, try to resolve from listName
+    let resolvedListId: List | undefined = listId;
+    if (!resolvedListId && listName) {
+      if (resolvedDeleter) {
+        // Prefer scoped lookup by owner to avoid ambiguity
+        const list = await this.lists.findOne({
+          title: listName,
+          owner: resolvedDeleter,
+        });
+        if (!list) {
+          return { error: `List with name '${listName}' not found for user.` };
+        }
+        resolvedListId = list._id;
+      } else {
+        // No owner provided — try to find lists by title. If multiple, ask to disambiguate.
+        const candidates = await this.lists.find({ title: listName }).toArray();
+        if (candidates.length === 0) {
+          return { error: `List with name '${listName}' not found.` };
+        }
+        if (candidates.length > 1) {
+          return {
+            error:
+              `Multiple lists found with name '${listName}'. Please provide owner (deleter or username) to disambiguate.`,
+          };
+        }
+        // Exactly one candidate — use it, but log a warning since no deleter was supplied for auth.
+        const only = candidates[0];
+        console.warn(
+          `deleteList called without deleter; deleting unique list '${listName}' (id=${only._id})`,
+        );
+        resolvedListId = only._id;
+        // Also set resolvedDeleter to the list owner so downstream checks behave normally.
+        resolvedDeleter = only.owner;
+      }
+    }
+
+    if (!resolvedListId) {
+      return { error: "Missing required parameter: listId or listName" };
+    }
+
+    const targetList = await this.lists.findOne({ _id: resolvedListId });
+    if (!targetList) {
+      return { error: `List with ID '${resolvedListId}' not found.` };
+    }
+
+    // If we still don't have a resolvedDeleter, require it for authorization
+    if (!resolvedDeleter) {
+      return {
+        error:
+          "Missing required parameter: deleter or username (required to authorize deletion)",
+      };
+    }
+
+    // Requires: deleter = owner of list
+    if (targetList.owner !== resolvedDeleter) {
+      return {
+        error:
+          `User '${resolvedDeleter}' is not the owner of list '${resolvedListId}'.`,
+      };
+    }
+
+    // Effects: remove the entire list document
+    await this.lists.deleteOne({ _id: resolvedListId });
+    return {};
+  }
+}

@@ -4,6 +4,7 @@ import { Collection, Db } from "npm:mongodb";
 import { freshID } from "@utils/database.ts";
 import { ID } from "@utils/types.ts";
 import { exclusions, inclusions } from "./passthrough.ts";
+import { addClient, broadcast, clientCount } from "@utils/broadcast.ts";
 import "jsr:@std/dotenv/load";
 
 /**
@@ -23,8 +24,11 @@ const REQUESTING_TIMEOUT = parseInt(
 );
 
 // TODO: make sure you configure this environment variable for proper CORS configuration
+// Default to the frontend dev origin so browsers using credentials won't fail
+// a preflight check. You can override this with the REQUESTING_ALLOWED_DOMAIN
+// environment variable (or a .env file) in production/deployment.
 const REQUESTING_ALLOWED_DOMAIN = Deno.env.get("REQUESTING_ALLOWED_DOMAIN") ??
-  "*";
+  "http://localhost:5173";
 
 // Choose whether or not to persist responses
 const REQUESTING_SAVE_RESPONSES = Deno.env.get("REQUESTING_SAVE_RESPONSES") ??
@@ -129,6 +133,95 @@ export default class RequestingConcept {
       await this.requests.updateOne({ _id: request }, { $set: { response } });
     }
 
+    // Broadcast the response to any SSE clients so frontends can react to
+    // completed requests (e.g., reload or update UI). Include the original
+    // request path when available.
+    try {
+      const doc = await this.requests.findOne({ _id: request });
+      // deno-lint-ignore no-explicit-any
+      const path = (doc?.input && (doc.input as any).path) ?? null;
+      // Generic broadcast for any Requesting.respond
+      console.log("[Broadcast] request.responded ->", {
+        request: String(request),
+        path,
+      });
+      await broadcast({
+        type: "request.responded",
+        payload: { request: String(request), path, response },
+      });
+
+      // Targeted broadcasts for common mutation types to make client updates
+      // easier. For example, when a list item is deleted, include the list
+      // and task ids in a specific event so the frontend can remove the DOM
+      // element without a full reload.
+      if (path === "/ListCreation/deleteTask") {
+        // deno-lint-ignore no-explicit-any
+        const listId = (doc?.input as any).list ?? null;
+        // deno-lint-ignore no-explicit-any
+        const taskId = (doc?.input as any).task ?? null;
+        console.log("[Broadcast] list.item.deleted ->", { listId, taskId });
+        await broadcast({
+          type: "list.item.deleted",
+          payload: {
+            listId: String(listId ?? ""),
+            taskId: String(taskId ?? ""),
+            response,
+          },
+        });
+      }
+      // Broadcast session task changes so clients can update status in real-time
+      if (path === "/Session/startTask") {
+        // deno-lint-ignore no-explicit-any
+        const sessionId = (doc?.input as any).session ?? null;
+        // deno-lint-ignore no-explicit-any
+        const taskId = (doc?.input as any).task ?? null;
+        console.log("[Broadcast] session.task.started ->", {
+          sessionId,
+          taskId,
+        });
+        await broadcast({
+          type: "session.task.started",
+          payload: {
+            sessionId: String(sessionId ?? ""),
+            taskId: String(taskId ?? ""),
+            response,
+          },
+        });
+        // Also emit a more generic change event so clients can reload session items
+        console.log("[Broadcast] session.items.changed ->", { sessionId });
+        await broadcast({
+          type: "session.items.changed",
+          payload: { sessionId: String(sessionId ?? "") },
+        });
+      }
+      if (path === "/Session/completeTask") {
+        // deno-lint-ignore no-explicit-any
+        const sessionId = (doc?.input as any).session ?? null;
+        // deno-lint-ignore no-explicit-any
+        const taskId = (doc?.input as any).task ?? null;
+        console.log("[Broadcast] session.task.completed ->", {
+          sessionId,
+          taskId,
+        });
+        await broadcast({
+          type: "session.task.completed",
+          payload: {
+            sessionId: String(sessionId ?? ""),
+            taskId: String(taskId ?? ""),
+            response,
+          },
+        });
+        // Also emit a more generic change event so clients can reload session items
+        console.log("[Broadcast] session.items.changed ->", { sessionId });
+        await broadcast({
+          type: "session.items.changed",
+          payload: { sessionId: String(sessionId ?? "") },
+        });
+      }
+    } catch (_err) {
+      // best-effort broadcast; ignore errors
+    }
+
     return { request };
   }
 
@@ -194,10 +287,29 @@ export function startRequestingServer(
   const app = new Hono();
   app.use(
     "/*",
+    // Enable credentials so browser requests with `credentials: 'include'`
+    // succeed. Use a specific origin rather than '*' when credentials are true.
     cors({
       origin: REQUESTING_ALLOWED_DOMAIN,
+      credentials: true,
     }),
   );
+
+  // Debugging middleware: log every incoming request method/path and a few headers.
+  app.use("/*", async (c, next) => {
+    try {
+      const hdrs = {
+        origin: c.req.header("origin") ?? "",
+        host: c.req.header("host") ?? "",
+        cookie: c.req.header("cookie") ?? "",
+        referer: c.req.header("referer") ?? "",
+      } as Record<string, string>;
+      console.log("[Incoming]", c.req.method, c.req.path, hdrs);
+    } catch {
+      // ignore
+    }
+    return await next();
+  });
 
   /**
    * PASSTHROUGH ROUTES
@@ -229,6 +341,19 @@ export function startRequestingServer(
       app.post(route, async (c) => {
         try {
           const body = await c.req.json().catch(() => ({})); // Handle empty body
+          try {
+            // Log incoming passthrough request body and a subset of headers for debugging
+            const hdrs = {
+              origin: c.req.header("origin") ?? "",
+              host: c.req.header("host") ?? "",
+              "content-type": c.req.header("content-type") ?? "",
+              cookie: c.req.header("cookie") ?? "",
+              referer: c.req.header("referer") ?? "",
+            } as Record<string, string>;
+            console.log(`[Passthrough] ${route} body:`, body, "headers:", hdrs);
+          } catch {
+            // ignore logging errors
+          }
           const result = await concept[method](body);
           return c.json(result);
         } catch (e) {
@@ -267,15 +392,109 @@ export function startRequestingServer(
       const actionPath = c.req.path.substring(REQUESTING_BASE_URL.length);
 
       // Combine the path from the URL with the JSON body to form the action's input.
-      const inputs = {
-        ...body,
-        path: actionPath,
-      };
+      // Also attempt to include common auth header values so downstream syncs/actions
+      // can resolve the calling user without requiring the client to put their id
+      // into the JSON body explicitly. This supports `x-auth-userid` and
+      // `x-auth-username` headers sent by authenticated clients.
+      const headerUserId = c.req.header("x-auth-userid");
+      const headerUsername = c.req.header("x-auth-username");
+      const authHeader = c.req.header("authorization");
+      const cookieHeader = c.req.header("cookie");
+
+      // Use a mutable copy so we can augment with header-derived caller fields.
+      const inputs: Record<string, unknown> = { ...body, path: actionPath };
+
+      // If the client didn't provide an explicit deleter/adder/caller field,
+      // prefer the header user id when available. Also set a generic `caller`
+      // field for convenience.
+      if (headerUserId) {
+        if (!("deleter" in inputs) && !("adder" in inputs)) {
+          inputs.deleter = headerUserId;
+        }
+        if (!("caller" in inputs)) inputs.caller = headerUserId;
+      }
+      // If Authorization: Bearer <token> is present, and no caller is set,
+      // expose the token as `caller` (useful in simple dev setups where the
+      // frontend stores the user id as a bearer token). We only do this when
+      // `caller` is not already provided.
+      if (authHeader && !("caller" in inputs)) {
+        const m = String(authHeader).match(/^Bearer\s+(\S+)$/i);
+        if (m) inputs.caller = m[1];
+      }
+
+      // Parse cookies for common keys that may carry the authenticated user id.
+      // Accept cookie keys: auth_userid, x-auth-userid, userId, userid
+      if (
+        cookieHeader && !("caller" in inputs) && !("deleter" in inputs) &&
+        !("adder" in inputs)
+      ) {
+        try {
+          const cookies = String(cookieHeader).split(";").map((c) => c.trim());
+          const cookieMap: Record<string, string> = {};
+          for (const ck of cookies) {
+            const eq = ck.indexOf("=");
+            if (eq > 0) {
+              const k = ck.slice(0, eq).trim();
+              const v = ck.slice(eq + 1).trim();
+              cookieMap[k] = decodeURIComponent(v);
+            }
+          }
+          const possible = cookieMap["auth_userid"] ??
+            cookieMap["x-auth-userid"] ?? cookieMap["userId"] ??
+            cookieMap["userid"] ?? cookieMap["user_id"];
+          if (possible) {
+            // Favor structured fields when present: set deleter/adder/caller as appropriate
+            if (!("deleter" in inputs) && !("adder" in inputs)) {
+              inputs.deleter = possible;
+            }
+            if (!("caller" in inputs)) inputs.caller = possible;
+          }
+        } catch (_e) {
+          // ignore cookie parsing errors
+        }
+      }
+
+      if (headerUsername && !("caller" in inputs)) {
+        inputs.caller = headerUsername;
+      }
+
+      // If we have a generic `caller` value (from Authorization header or
+      // username header) but the client didn't provide an explicit `deleter`
+      // or `adder`, prefer to use the `caller` as the acting identity. This
+      // makes the Requesting layer tolerant when clients authenticate via
+      // bearer token or cookies but omit the explicit actor fields in JSON.
+      if (
+        ("caller" in inputs) && !("deleter" in inputs) && !("adder" in inputs)
+      ) {
+        // use the `caller` value for both deleter/adder as a pragmatic default
+        // when only a single authenticated identity is present.
+        const typedInputs = inputs as Record<string, unknown>;
+        const callerVal = typedInputs["caller"];
+        if (callerVal) {
+          typedInputs["deleter"] = callerVal;
+          typedInputs["adder"] = callerVal;
+        }
+      }
 
       console.log(`[Requesting] Received request for path: ${inputs.path}`);
+      try {
+        const hdrs = {
+          origin: c.req.header("origin") ?? "",
+          host: c.req.header("host") ?? "",
+          "content-type": c.req.header("content-type") ?? "",
+          cookie: c.req.header("cookie") ?? "",
+          referer: c.req.header("referer") ?? "",
+        } as Record<string, string>;
+        console.log(`[Requesting] Headers:`, hdrs, `[Requesting] Body:`, body);
+      } catch {
+        // ignore
+      }
 
       // 1. Trigger the 'request' action.
-      const { request } = await Requesting.request(inputs);
+      // `Requesting.request` expects a `{ path: string; [key: string]: unknown }`-like object.
+      // Narrow the `inputs` type to satisfy the linter without using `any`.
+      const typedInputs = inputs as { path: string; [key: string]: unknown };
+      const { request } = await Requesting.request(typedInputs);
 
       // 2. Await the response via the query. This is where the server waits for
       //    synchronizations to trigger the 'respond' action.
@@ -294,6 +513,138 @@ export function startRequestingServer(
       } else {
         return c.json({ error: "unknown error occurred." }, 418);
       }
+    }
+  });
+
+  app.get("/events", (_c) => {
+    // Use a ReadableStream<Uint8Array> and encode string chunks with TextEncoder.
+    // This avoids casting and ensures the runtime sees the correct typed stream.
+    const encoder = new TextEncoder();
+    let _writer: WritableStreamDefaultWriter<string> | undefined;
+    let _remove: (() => void) | undefined;
+
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        // Send a comment to establish connection
+        controller.enqueue(encoder.encode(":\n\n"));
+
+        // Create a WritableStream<string> translator that encodes strings
+        // into Uint8Array and enqueues them to the controller.
+        const ws = new WritableStream<string>({
+          write(chunk) {
+            try {
+              controller.enqueue(encoder.encode(chunk));
+            } catch (err) {
+              // Re-throw so the writer receives the failure and the broadcaster
+              // can handle removal. The caller will log the removal.
+              throw err;
+            }
+          },
+          close() {
+            try {
+              controller.close();
+            } catch (_e) {
+              // ignore
+            }
+          },
+        });
+
+        const w = ws.getWriter();
+        const remove = addClient(w);
+        _writer = w;
+        _remove = remove;
+
+        try {
+          console.debug("[SSE] client connected -> count=", clientCount());
+        } catch (_e) {
+          // ignore logging errors
+        }
+      },
+      cancel() {
+        try {
+          _remove?.();
+        } catch (_e) {
+          // ignore
+        }
+        try {
+          _writer?.close();
+        } catch (_e) {
+          // ignore close errors
+        }
+        try {
+          console.debug("[SSE] client disconnected -> count=", clientCount());
+        } catch (_e) {
+          // ignore
+        }
+      },
+    });
+
+    return new Response(stream, {
+      status: 200,
+      headers: {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache, no-transform",
+        Connection: "keep-alive",
+      },
+    });
+  });
+
+  // Debug helper: a simple streaming endpoint that emits a heartbeat every
+  // second. Use this to confirm whether clients remain connected when the
+  // server sends periodic messages (bypasses the broadcaster). Call with:
+  //   curl -v -N http://localhost:8000/debug/stream
+  app.get("/debug/stream", (_c) => {
+    let timer: number | undefined;
+    const stream = new ReadableStream<string>({
+      start(controller) {
+        controller.enqueue(":\n\n");
+        let i = 0;
+        timer = setInterval(() => {
+          try {
+            controller.enqueue(`data: {"tick":${i++}}\n\n`);
+          } catch (_err) {
+            // controller probably closed; clear interval
+            if (timer) {
+              clearInterval(timer);
+              timer = undefined;
+            }
+          }
+        }, 1000) as unknown as number;
+      },
+      cancel() {
+        if (timer) {
+          clearInterval(timer);
+          timer = undefined;
+        }
+      },
+    });
+
+    return new Response(stream as unknown as ReadableStream<Uint8Array>, {
+      status: 200,
+      headers: {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache, no-transform",
+        Connection: "keep-alive",
+      },
+    });
+  });
+
+  // Debug broadcast endpoint: trigger a broadcaster event without going
+  // through the Requesting flow. Useful for quick testing of connected
+  // clients. Example:
+  //   curl -v http://localhost:8000/debug/broadcast
+  app.get("/debug/broadcast", async (_c) => {
+    try {
+      const payload = { ts: new Date().toISOString(), msg: "debug-broadcast" };
+      await broadcast({ type: "debug", payload });
+      return new Response(JSON.stringify({ ok: true, payload }), {
+        status: 200,
+      });
+    } catch (e) {
+      console.error("/debug/broadcast error", e);
+      return new Response(JSON.stringify({ error: String(e) }), {
+        status: 500,
+      });
     }
   });
 

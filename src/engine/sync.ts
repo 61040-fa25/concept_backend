@@ -214,12 +214,12 @@ export class SyncConcept {
     const bound = Object.entries(then.input).map(([key, value]) => {
       let matchedValue = value;
       if (typeof value === "symbol") {
+        // If a symbol was used in the `then` input, attempt to read its
+        // bound value from the current frame. If it's missing, treat it as
+        // undefined (optional parameter) instead of throwing — this allows
+        // request matchers to omit optional fields like `description` while
+        // still forwarding them (as undefined) into the target action.
         matchedValue = frame[value];
-        if (matchedValue === undefined) {
-          throw new Error(
-            `Missing binding: ${String(value)} in frame: ${frame}`,
-          );
-        }
       }
       return [key, matchedValue];
     });
@@ -261,8 +261,22 @@ export class SyncConcept {
       throw new Error(`When pattern: ${when} is missing output pattern.`);
     }
     for (const [key, value] of Object.entries(when.output)) {
+      // Ensure action produced an output object; if not, this when doesn't match
       if (record.output === undefined) return;
       const recordValue = record.output[key];
+      // If the specific key is missing from the action's output but the
+      // when pattern expects a symbol, bind the whole output object to the
+      // symbol. This allows actions that return `{}` (or varying shapes)
+      // to be forwarded as a single `result` value to response syncs.
+      if (recordValue === undefined && typeof value === "symbol") {
+        const bound = frame[value];
+        if (bound === undefined) {
+          newFrame = { ...newFrame, [value]: record.output };
+        } else {
+          if (bound !== record.output) return;
+        }
+        continue;
+      }
       if (recordValue === undefined) return;
       if (typeof value === "symbol") {
         const bound = frame[value];

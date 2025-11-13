@@ -1,12 +1,15 @@
 {
     "imports": {
         "@concepts/": "./src/concepts/",
+        "@hono/cors": "https://deno.land/x/hono/middleware/cors/index.ts",
         "@concepts": "./src/concepts/concepts.ts",
+        "@concepts/": "./src/concepts/",
         "@test-concepts": "./src/concepts/test_concepts.ts",
         "@utils/": "./src/utils/",
         "@engine": "./src/engine/mod.ts",
         "@syncs": "./src/syncs/syncs.ts"
     },
+    
     "tasks": {
         "start": "deno run --allow-net --allow-write --allow-read --allow-sys --allow-env src/main.ts",
         "concepts": "deno run --allow-net --allow-read --allow-sys --allow-env src/concept_server.ts --port 8000 --baseUrl /api",
