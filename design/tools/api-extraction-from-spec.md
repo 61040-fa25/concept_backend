@@ -84,3 +84,4 @@ Generate the output in Markdown using the following template. For each action an
 
 Now, analyze the following Concept Specification and generate the API documentation based on these instructions.
 
+[@Posting](../../design/concepts/concept_specs/PostConcept.md)

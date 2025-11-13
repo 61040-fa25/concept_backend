@@ -73,7 +73,7 @@ A good principle should satisfy these criteria:
 
 ## Concept state
 
-The concept state is a data model that represents the set of possible states of the executing concept. For example, a concept for authenticating users might have a state declared like this: 
+The concept state is a data model that represents the set of possible states of the executing concept. For example, a concept for authenticating users might have a state declared like this:
 
 	a set of Users with
 	  a username String
@@ -136,7 +136,7 @@ because the non-error case (implicitly) returns an empty dictionary. Since syncs
 
 ### Pre and post conditions
 
-The detailed behavior of each action is specified in classical pre/post form. The precondition, labeled with the keyword *requires*, specifies the conditions under which execution is allowed, as a constraint on the state and the input arguments. The postcondition, labeled with the keyword *effects*, specifies the outcome (the results and the new state) as a constraint on the inputs, state before, state after and the outputs. 
+The detailed behavior of each action is specified in classical pre/post form. The precondition, labeled with the keyword *requires*, specifies the conditions under which execution is allowed, as a constraint on the state and the input arguments. The postcondition, labeled with the keyword *effects*, specifies the outcome (the results and the new state) as a constraint on the inputs, state before, state after and the outputs.
 
 For example, here is a specification of a *Counter* concept:
 
@@ -156,14 +156,14 @@ For example, here is a specification of a *Counter* concept:
 
   decrement ()
     **requires** count > 0
-    **effects** count := count - 1 
+    **effects** count := count - 1
   
   reset ()
     **requires** true
     **effects** count := 0
 
 Notes:
-- Most of the preconditions are true: that means the action can always happen. 
+- Most of the preconditions are true: that means the action can always happen.
 - The postconditions are written as assignments, but they could also be written informally. For example, the postcondition of increment might say "add one to the count". It is also possible to adopt a more declarative style and write "the count after is one more than the count before".
 
 In general, action specifications are written informally and assume frame conditions (that any state component not mentioned is not updated).
@@ -180,7 +180,7 @@ Note that the precondition allows the action to happen any time after the timer 
 
 ### Preconditions are firing conditions
 
-The pre/post specification idiom is conventional and is the same one that is used in many specification languages. Note however that in most of those languages the precondition is an *obligation* on the caller. That means that the action *can* be executed when the precondition is false, but that the outcome will be uncertain. 
+The pre/post specification idiom is conventional and is the same one that is used in many specification languages. Note however that in most of those languages the precondition is an *obligation* on the caller. That means that the action *can* be executed when the precondition is false, but that the outcome will be uncertain.
 
 In concept specs, in contrast, *preconditions are firing conditions*. This means that an action can never occur when its precondition is false. For system actions, the precondition indicates when they should occur.
 
@@ -228,11 +228,11 @@ that returns a set of users, each with a username and password property.
 
 A common misconception is that concepts are the same as objects in object-oriented programming. Here are the key differences:
 - A concept holds in its state the set of all objects that are involved in the behavioral concern that it embodies, rather than the properties of a single object.
-- The specification of a concept therefore has no constructor, and objects are allocated with actions instead. 
+- The specification of a concept therefore has no constructor, and objects are allocated with actions instead.
 - A concept must embody all the functionality associated with a behavioral concern, unlike objects which often depend on other objects for their functioning.
 - Concepts separate concerns, unlike objects in object oriented programming which tend to aggregate all properties and methods associated with a class of object.
 
-To illustrate these differences, consider the functionality of associating labels with items and then retrieving the items that match a given label. This functionality is used in Gmail for organizing email messages for example. In an object-oriented design, one might have an *EmailMessage* class that has an instance variable holding an array of labels; a Label *class* that has an instance variable holding the string name of the label; and a *Mailbox* class  that has an instance variable holding an array of *EmailMessage* objects. 
+To illustrate these differences, consider the functionality of associating labels with items and then retrieving the items that match a given label. This functionality is used in Gmail for organizing email messages for example. In an object-oriented design, one might have an *EmailMessage* class that has an instance variable holding an array of labels; a Label *class* that has an instance variable holding the string name of the label; and a *Mailbox* class  that has an instance variable holding an array of *EmailMessage* objects.
 
 In contrast, in concept design, we would have a single concept called *Labeling* for example whose state is a mapping from generic items to sets of labels:
 

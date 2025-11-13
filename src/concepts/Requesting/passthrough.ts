@@ -25,12 +25,40 @@
  */
 
 export const inclusions: Record<string, string> = {
-  // Feel free to delete these example inclusions
-  "/api/LikertSurvey/_getSurveyQuestions": "this is a public query",
-  "/api/LikertSurvey/_getSurveyResponses": "responses are public",
-  "/api/LikertSurvey/_getRespondentAnswers": "answers are visible",
-  "/api/LikertSurvey/submitResponse": "allow anyone to submit response",
-  "/api/LikertSurvey/updateResponse": "allow anyone to update their response",
+  "/api/Sessioning/create": "",
+  "/api/Sessioning/delete": "",
+  "/api/Sessioning/_getUser": "",
+
+  "/api/Authentication/_getAllUsers":"",
+  "/api/Authentication/_getUsername":"Should be able to get usernames even if not logged in",
+
+  "/api/Commenting/_getCommentsByAuthor": "public",
+  "/api/Commenting/_getCommentsByParent": "public",
+  "/api/Commenting/_getAllComments": "public",
+  "/api/Commenting/_getParent": "public",
+  "/api/Commenting/_getAuthor": "public",
+
+  "/api/Notifying/_getAllNotifications": "",
+  "/api/Notifying/_getRecipient":"never used by frontend",
+
+  // "/api/Posting/_getPostsByAuthor":"",
+  "/api/Posting/_getAllPosts":"public",
+  "/api/Posting/_getAuthor":"never actually used by frontend",
+
+  "/api/Shelving/_getShelvesByBook":"never used by frontend",
+  "/api/Shelving/_getAllShelves":"never used by frontend",
+  "/api/Shelving/_getShelfOwner":"never used by frontend",
+
+  "/api/Tagging/_getAllPublicTags": "public query",
+  "/api/Tagging/_getTagOwner":"never used by frontend",
+  "/api/Tagging/labelSubSet":"never used by frontend",
+  "/api/Tagging/hasAtLeastOneLabel":"never used by frontend",
+
+  "/api/Tagging/_getAllTags":"public",
+  "/api/Tagging/_getBooksByLabel":"only ever used for public labels",
+
+  "/api/Upvoting/_getUpvotesByItem":"public",
+  "/api/Upvoting/_getAllUpvotes":"public"
 };
 
 /**
@@ -45,6 +73,44 @@ export const inclusions: Record<string, string> = {
 
 export const exclusions: Array<string> = [
   // Feel free to delete these example exclusions
-  "/api/LikertSurvey/createSurvey",
-  "/api/LikertSurvey/addQuestion",
+
+  "/api/Authentication/register",
+  "/api/Authentication/authenticate",
+  "/api/Authentication/changePassword",
+  "/api/Authentication/deleteUser",
+
+  "/api/Commenting/createComment",
+  "/api/Commenting/deleteComment",
+  "/api/Commenting/editComment",
+
+  "/api/Notifying/notify",
+  "/api/Notifying/read",
+  "/api/Notifying/_getNotificationsByUser",
+  "/api/Notifying/_getReadNotificationsByUser",
+  "/api/Notifying/_getUnreadNotificationsByUser",
+
+  "/api/Posting/createPost",
+  "/api/Posting/deletePost",
+  "/api/Posting/editPost",
+
+  "/api/Shelving/addBook",
+  "/api/Shelving/removeBook",
+  "/api/Shelving/changeStatus",
+  "/api/Shelving/_getUserShelfByBook",
+  "/api/Shelving/_getBooksByUser",
+  "/api/Shelving/_getShelfByBookAndOwner",
+
+  "/api/Tagging/addTag",
+  "/api/Tagging/removeTag",
+  "/api/Tagging/markPrivate",
+  "/api/Tagging/markPublic",
+  "/api/Tagging/_getTagsByBook",
+  "/api/Tagging/_getLabelsByBook",
+  "/api/Tagging/_getTagsByUser",
+  "/api/Tagging/_getLabelsByUser",
+
+  "/api/Upvoting/upvote",
+  "/api/Upvoting/unvote",
+  "/api/Upvoting/_getUpvotessByUser",
+
 ];

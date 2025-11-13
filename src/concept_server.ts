@@ -1,8 +1,10 @@
 import { Hono } from "jsr:@hono/hono";
+import { cors } from "@hono/hono/cors";
 import { getDb } from "@utils/database.ts";
 import { walk } from "jsr:@std/fs";
 import { parseArgs } from "jsr:@std/cli/parse-args";
 import { toFileUrl } from "jsr:@std/path/to-file-url";
+// import * as path from "https://deno.land/std@0.217.0/path/mod.ts"; // Use your Deno std version
 
 // Parse command-line arguments for port and base URL
 const flags = parseArgs(Deno.args, {
@@ -24,6 +26,15 @@ async function main() {
   const [db] = await getDb();
   const app = new Hono();
 
+  app.use(
+    cors({
+      origin: "http://localhost:8001", // <--- Specify the allowed origin
+      credentials: true, // Set to true if your client sends cookies or authorization headers
+      allowMethods: ["POST", "GET", "OPTIONS"], // Explicitly allow methods you use
+      allowHeaders: ["Content-Type", "Authorization"], // Explicitly allow headers your client might send
+    }),
+  );
+
   app.get("/", (c) => c.text("Concept Server is running."));
 
   // --- Dynamic Concept Loading and Routing ---
@@ -36,9 +47,13 @@ async function main() {
       includeFiles: false,
     })
   ) {
+    entry.path = entry.path.replace('\\', '/');
+    // console.log(entry)
+    console.log(`entry.path: ${entry.path}, CONCEPTS_DIR: ${CONCEPTS_DIR}`)
     if (entry.path === CONCEPTS_DIR) continue; // Skip the root directory
 
     const conceptName = entry.name;
+    // const conceptFilePath = path.join(entry.path, `${conceptName}Concept.ts`);
     const conceptFilePath = `${entry.path}/${conceptName}Concept.ts`;
 
     try {
@@ -71,7 +86,9 @@ async function main() {
 
       for (const methodName of methodNames) {
         const actionName = methodName;
+        // const route = path.join(BASE_URL, conceptApiName, actionName);
         const route = `${BASE_URL}/${conceptApiName}/${actionName}`;
+        // console.log(route)
 
         app.post(route, async (c) => {
           try {
@@ -99,3 +116,7 @@ async function main() {
 
 // Run the server
 main();
+
+
+'src/concepts\Shelving/ShelvingConcept.ts'
+'src/concepts\Shelving/ShelvingConcept.ts'

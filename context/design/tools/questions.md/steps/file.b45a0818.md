@@ -1,0 +1,129 @@
+---
+timestamp: 'Tue Oct 21 2025 18:39:20 GMT-0400 (Eastern Daylight Time)'
+parent: '[[..\20251021_183920.640f5e25.md]]'
+content_id: b45a08188e2dc2f6186e936f5d8c51d7a120501ebf5005eefd3a2ff60130b5de
+---
+
+# file: src\concept\_server.ts
+
+```typescript
+import { Hono } from "jsr:@hono/hono";
+import { cors } from "jsr:@hono/cors"; // NEW: Import CORS middleware
+import { getDb } from "@utils/database.ts";
+import { walk } from "jsr:@std/fs";
+import { parseArgs } from "jsr:@std/cli/parse-args";
+import { toFileUrl } from "jsr:@std/path/to-file-url";
+// import * as path from "https://deno.land/std@0.217.0/path/mod.ts"; // Use your Deno std version
+
+// Parse command-line arguments for port and base URL
+const flags = parseArgs(Deno.args, {
+  string: ["port", "baseUrl"],
+  default: {
+    port: "8000",
+    baseUrl: "/api",
+  },
+});
+
+const PORT = parseInt(flags.port, 10);
+const BASE_URL = flags.baseUrl;
+const CONCEPTS_DIR = "src/concepts";
+
+/**
+ * Main server function to initialize DB, load concepts, and start the server.
+ */
+async function main() {
+  const [db] = await getDb();
+  const app = new Hono();
+
+  app.use(
+    cors({
+      origin: "http://localhost:8001", // <--- Specify the allowed origin
+      credentials: true, // Set to true if your client sends cookies or authorization headers
+      allowMethods: ["POST", "GET", "OPTIONS"], // Explicitly allow methods you use
+      allowHeaders: ["Content-Type", "Authorization"], // Explicitly allow headers your client might send
+    }),
+  );
+
+  app.get("/", (c) => c.text("Concept Server is running."));
+
+  // --- Dynamic Concept Loading and Routing ---
+  console.log(`Scanning for concepts in ./${CONCEPTS_DIR}...`);
+
+  for await (
+    const entry of walk(CONCEPTS_DIR, {
+      maxDepth: 1,
+      includeDirs: true,
+      includeFiles: false,
+    })
+  ) {
+    entry.path = entry.path.replace('\\', '/');
+    // console.log(entry)
+    console.log(`entry.path: ${entry.path}, CONCEPTS_DIR: ${CONCEPTS_DIR}`)
+    if (entry.path === CONCEPTS_DIR) continue; // Skip the root directory
+
+    const conceptName = entry.name;
+    // const conceptFilePath = path.join(entry.path, `${conceptName}Concept.ts`);
+    const conceptFilePath = `${entry.path}/${conceptName}Concept.ts`;
+
+    try {
+      const modulePath = toFileUrl(Deno.realPathSync(conceptFilePath)).href;
+      const module = await import(modulePath);
+      const ConceptClass = module.default;
+
+      if (
+        typeof ConceptClass !== "function" ||
+        !ConceptClass.name.endsWith("Concept")
+      ) {
+        console.warn(
+          `! No valid concept class found in ${conceptFilePath}. Skipping.`,
+        );
+        continue;
+      }
+
+      const instance = new ConceptClass(db);
+      const conceptApiName = conceptName;
+      console.log(
+        `- Registering concept: ${conceptName} at ${BASE_URL}/${conceptApiName}`,
+      );
+
+      const methodNames = Object.getOwnPropertyNames(
+        Object.getPrototypeOf(instance),
+      )
+        .filter((name) =>
+          name !== "constructor" && typeof instance[name] === "function"
+        );
+
+      for (const methodName of methodNames) {
+        const actionName = methodName;
+        // const route = path.join(BASE_URL, conceptApiName, actionName);
+        const route = `${BASE_URL}/${conceptApiName}/${actionName}`;
+        // console.log(route)
+
+        app.post(route, async (c) => {
+          try {
+            const body = await c.req.json().catch(() => ({})); // Handle empty body
+            const result = await instance[methodName](body);
+            return c.json(result);
+          } catch (e) {
+            console.error(`Error in ${conceptName}.${methodName}:`, e);
+            return c.json({ error: "An internal server error occurred." }, 500);
+          }
+        });
+        console.log(`  - Endpoint: POST ${route}`);
+      }
+    } catch (e) {
+      console.error(
+        `! Error loading concept from ${conceptFilePath}:`,
+        e,
+      );
+    }
+  }
+
+  console.log(`\nServer listening on http://localhost:${PORT}`);
+  Deno.serve({ port: PORT }, app.fetch);
+}
+
+// Run the server
+main();
+
+```

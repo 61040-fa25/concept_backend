@@ -1,0 +1,170 @@
+---
+timestamp: 'Sat Oct 18 2025 21:21:19 GMT-0400 (Eastern Daylight Time)'
+parent: '[[..\20251018_212119.ef8e583a.md]]'
+content_id: 2229c53e12b2aa80069b2a8781548f3ad6a50dba4eb04e233cb5c3bdc58babdc
+---
+
+# file: src\concepts\skrib\Tagging.ts
+
+```typescript
+import { Collection, Db } from "npm:mongodb";
+import { Empty, ID } from "@utils/types.ts";
+import { freshID } from "@utils/database.ts";
+
+
+// Declare collection prefix, use concept name
+const PREFIX = "Tagging" + ".";
+
+// Generic types of this concept
+type User = ID;
+type Book = ID;
+
+
+//internal ids
+type Tag = ID;
+
+/**
+ * a set of Tags with
+ *  a label String
+ *  an book Book
+ *  a user User
+ *  a private Flag
+ */
+interface Tags {
+  _id: Tag;
+  user: User;
+  label: string;
+  book: Book;
+  private: boolean;
+}
+
+
+/**
+ * @concept Tagging
+ * @purpose to label books to assist in searching and organization
+ */
+export default class PostingConcept {
+    private tags: Collection<Tags>;
+
+
+    constructor(private readonly db: Db) {
+        this.tags = this.db.collection(PREFIX + "tags");
+    }
+
+
+    /**
+     * Adds a tag to a book
+     * @requires no user tag with label already associated with book
+     * @effects adds a tag from user with label associated with book to Tags set; default is public (private is false)
+     */
+    async addTag({ user, label, book }: { user: User; label: string; book: Book}): Promise<{tag: Tag}|{error: string}> {
+        const existingTag = await this.tags.findOne({user, label, book});
+        if(existingTag != null)
+            return {error: `tag already added`};
+
+        const tagID = freshID() as Tag;
+        await this.tags.insertOne({
+            _id: tagID,
+            user,
+            label,
+            book,
+            private: false
+        });
+
+        return {tag: tagID};
+    }
+
+    /**
+     * Removes a tag from a book
+     * @requires tag exists
+     * @effects removes tag from Tags set
+     */
+    async removeTag({ tag }: { tag: Tag}): Promise<Empty|{error: string}> {
+        const existingTag = await this.tags.findOne({_id: tag});
+        if(existingTag == null)
+            return {error: `tag doesn't exist`};
+
+        await this.tags.deleteOne({_id: tag});
+        console.log(`tag: ${tag}`);
+        return {};
+    }
+
+    /**
+     * Marks a tag as private (only searchable to user)
+     * @requires tag exists
+     * @effects sets private flag to true
+     */
+    async markPrivate({ tag }: { tag: Tag}): Promise<Empty|{error: string}> {
+        const existingTag = await this.tags.findOne({_id: tag});
+        if(existingTag == null)
+            return {error: `tag doesn't exist`};
+
+        await this.tags.updateOne({_id: tag }, { $set: { private: true } });
+        return {};
+        // throw new Error("not implemented");
+    }
+
+    /**
+     * Marks a tag as public (searchable to all)
+     * @requires tag exists
+     * @effects sets private flag to false
+     */
+    async markPublic({ tag }: { tag: Tag}): Promise<Empty|{error: string}> {
+        const existingTag = await this.tags.findOne({_id: tag});
+        if(existingTag == null)
+            return {error: `tag doesn't exist`};
+
+        await this.tags.updateOne({_id: tag }, { $set: { private: false } });
+        return {};
+        // throw new Error("not implemented");
+    }
+
+
+    /**
+     * returns all public tags associated with book along with
+     * private tags created by user associated with book
+     */
+    async _getTagsByBook({ user, book }: {user: User; book: Book}): Promise<Tags[]> {
+        const tags = this.tags.find({book}).toArray();
+        return (await tags).filter((x) => (!x.private || x.user == user));
+        // throw new Error("not implemented");
+    }
+
+    /**
+     * returns all books with all labels in labels, including labels of private tags by user
+     */
+    async _getBooksByLabel({ user, labels }: {user: User; labels: string[]}): Promise<Tags[]> {
+
+        throw new Error("not implemented");
+    }
+
+    /**
+     * returns all tags created by user
+     */
+    async _getTagsByUser({ user }: {user: User}): Promise<Tags[]> {
+        const tags = await this.tags.find({user}).toArray();
+        console.log(tags);
+        return tags;
+        // throw new Error("not implemented");
+    }
+
+    /**
+     * returns all public tags in database
+     */
+    async _getAllPublicTags(empty: Empty): Promise<Tags[]> {
+        return await this.tags.find({private: false}).toArray();
+        // throw new Error("not implemented");
+    }
+
+    /**
+     * returns all tags in database
+     */
+    async _getAllTags(empty: Empty): Promise<Tags[]> {
+        return await this.tags.find({}).toArray();
+        // throw new Error("not implemented");
+    }
+}
+
+```
+
+Please split tests into multiple Deno test functions instead of Deno step functions and be sure to open and close a new database for each test

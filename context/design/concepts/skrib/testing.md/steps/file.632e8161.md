@@ -1,0 +1,139 @@
+---
+timestamp: 'Tue Oct 14 2025 22:57:12 GMT-0400 (Eastern Daylight Time)'
+parent: '[[..\20251014_225712.197c1849.md]]'
+content_id: 632e8161465164dc79155056fa4668a5986cfa4daaf00e9c68e140db8ffba528
+---
+
+# file: src\concepts\skrib\Notifying.ts
+
+```typescript
+import { Collection, Db } from "npm:mongodb";
+import { Empty, ID } from "@utils/types.ts";
+import { freshID } from "@utils/database.ts";
+
+
+// Declare collection prefix, use concept name
+const PREFIX = "Notifying" + ".";
+
+// Generic types of this concept
+type User = ID;
+
+
+//internal ids
+type Notification = ID;
+
+/**
+ * a set of Notifications with
+ *  a message String
+ *  a recipient User
+ */
+interface Notifications {
+  _id: Notification;
+  author: User;
+  message: string;
+  read: boolean;
+}
+
+
+/**
+ * @concept Post
+ * @purpose to allow users to upload content, generally to ask for book recommendations
+ */
+export default class PostingConcept {
+  notifications: Collection<Notifications>;
+
+
+  constructor(private readonly db: Db) {
+    this.notifications = this.db.collection(PREFIX + "posts");
+  }
+
+
+  /**
+   * createPost (user: User, body: String):(post:Post)
+   *
+   * @effects creates a post with body by user and adds it to Posts set
+   *
+   */
+  async notify({ user, message }: { user: User; message: string }): Promise<{notification: Notification}> {
+
+    const notificationId = freshID() as Notification;
+    await this.notifications.insertOne({
+      _id: notificationId,
+      author: user,
+      message,
+      read: false
+    });
+    return { notification: notificationId };
+  }
+
+
+  async readonly({notification}: {notification: Notification}): Promise<{message: string}|{error: string}>{
+    const existingNotification = await this.notifications.findOne({ _id: notification });
+    if (!existingNotification) {
+      return { error: `Survey with ID ${notification} not found.` };
+    }
+
+    if(!existingNotification.read)
+        await this.notifications.updateOne({_id: notification }, { $set: { read: true } });
+    return {message: existingNotification.message}
+
+  }
+
+
+
+  /**
+   * returns all notifications to specified user
+   */
+  async _getNotificationsByUser({ recipient }: { recipient: User }): Promise<Notifications[]> {
+    return await this.notifications.find({ recipient }).toArray();
+  }
+
+  /**
+   * returns all read notifications to specified user
+   */
+  async _getReadNotificationsByUser({ recipient }: { recipient: User }): Promise<Notifications[]> {
+    return await this.notifications.find({ recipient, read: true }).toArray();
+  }
+
+  /**
+   * returns all unread notifications to specified user
+   */
+  async _getUnreadNotificationsByUser({ recipient }: { recipient: User }): Promise<Notifications[]> {
+    return await this.notifications.find({ recipient, read: false }).toArray();
+  }
+
+  /**
+   * returns all posts
+   */
+  async _getAllPosts(): Promise<Notifications[]> {
+    return await this.notifications.find().toArray();
+  }
+}
+
+```
+
+**Concept: Notify\[User]**
+
+Purpose: notify users of variuos events
+
+Principle: A user recieves a notification after a certain event which they can then view in whatever inbox the system specifies
+
+State:
+
+```
+a set of Notifications with
+  a user User
+  a message String
+  a read flag
+```
+
+actions:
+
+```
+notify (user: User, message: String):(notification:Notification)
+  effects: creates a Notification for user with message, adds it to the Notifications set, and returns it to the user
+
+read(notification:Notification):(message: String)
+  requires: notification to exist
+  effects: marks notification as read regardless of previous read status
+```

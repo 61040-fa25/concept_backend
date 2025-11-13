@@ -17,7 +17,7 @@ For our specific implementation, we will use MongoDB as the database. Each piece
 
 ## Technology stack details
 
-- Make sure that each action/method preserves its **requires**, and performs the specified **effects** in terms of its updates on the MongoDB collection. 
+- Make sure that each action/method preserves its **requires**, and performs the specified **effects** in terms of its updates on the MongoDB collection.
 - It should be possible to confirm any expectations for what the state looks like when described in **effects** or **principle** using the chosen set of **queries**.
 - Use the Deno runtime to minimize setup, and qualified imports such as `import { Collection, Db } from "npm:mongodb";`
 
