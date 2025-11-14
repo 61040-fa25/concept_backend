@@ -25,12 +25,28 @@
  */
 
 export const inclusions: Record<string, string> = {
-  // Feel free to delete these example inclusions
-  "/api/LikertSurvey/_getSurveyQuestions": "this is a public query",
-  "/api/LikertSurvey/_getSurveyResponses": "responses are public",
-  "/api/LikertSurvey/_getRespondentAnswers": "answers are visible",
-  "/api/LikertSurvey/submitResponse": "allow anyone to submit response",
-  "/api/LikertSurvey/updateResponse": "allow anyone to update their response",
+  // Auth - Public actions for registration/login
+  "/api/Auth/registerUser": "public action - new user registration",
+  "/api/Auth/authenticateUser": "public action - user login",
+
+  // Auth - Public queries for user information
+  "/api/Auth/getUserById": "public query - user profile lookup",
+  "/api/Auth/getUserByUsername": "public query - user lookup by username",
+
+  // TaskCatalog - Read-only queries
+  "/api/TaskCatalog/_getUserTasks": "read query - returns user's tasks",
+  "/api/TaskCatalog/_getTask": "read query - returns specific task",
+
+  // ScheduleTime - Read-only queries
+  "/api/ScheduleTime/_getUserSchedule": "read query - returns user's schedule",
+  "/api/ScheduleTime/_getTaskSchedule": "read query - returns specific time block",
+
+  // RoutineLog - Read-only queries
+  "/api/RoutineLog/_getUserSessions": "read query - returns user's sessions",
+
+  // AdaptiveSchedule - Read-only queries
+  "/api/AdaptiveSchedule/_getAdaptiveSchedule": "read query - returns AI schedule",
+  "/api/AdaptiveSchedule/_getDroppedTask": "read query - returns dropped tasks",
 };
 
 /**
@@ -44,7 +60,47 @@ export const inclusions: Record<string, string> = {
  */
 
 export const exclusions: Array<string> = [
-  // Feel free to delete these example exclusions
-  "/api/LikertSurvey/createSurvey",
-  "/api/LikertSurvey/addQuestion",
+  // === Auth - Account modifications & Session management ===
+  "/api/Auth/updatePassword",
+  "/api/Auth/deleteUser",
+  "/api/Auth/createSession", // Internal - used by syncs
+  "/api/Auth/validateSession", // Internal - used by syncs
+  "/api/Auth/deleteSession", // Logout
+  "/api/Auth/cleanupExpiredSessions", // Maintenance - backend only
+
+  // === TaskCatalog - All modifications ===
+  "/api/TaskCatalog/createTask",
+  "/api/TaskCatalog/assignSchedule",
+  "/api/TaskCatalog/deleteSchedule",
+  "/api/TaskCatalog/updateTaskName",
+  "/api/TaskCatalog/updateTaskCategory",
+  "/api/TaskCatalog/updateTaskDuration",
+  "/api/TaskCatalog/updateTaskPriority",
+  "/api/TaskCatalog/updateTaskSplittable",
+  "/api/TaskCatalog/updateTaskDeadline",
+  "/api/TaskCatalog/updateTaskSlack",
+  "/api/TaskCatalog/updateTaskNote",
+  "/api/TaskCatalog/addPreDependence",
+  "/api/TaskCatalog/removePreDependence",
+  "/api/TaskCatalog/deleteTask",
+
+  // === ScheduleTime - All modifications ===
+  "/api/ScheduleTime/addTimeBlock",
+  "/api/ScheduleTime/assignTimeBlock",
+  "/api/ScheduleTime/removeTask",
+
+  // === RoutineLog - All modifications ===
+  "/api/RoutineLog/createSession",
+  "/api/RoutineLog/startSession",
+  "/api/RoutineLog/endSession",
+  "/api/RoutineLog/interruptSession",
+  "/api/RoutineLog/deleteSession",
+  "/api/RoutineLog/completeTask",
+
+  // === AdaptiveSchedule - All modifications ===
+  "/api/AdaptiveSchedule/addTimeBlock",
+  "/api/AdaptiveSchedule/assignAdaptiveSchedule",
+  "/api/AdaptiveSchedule/deleteAdaptiveBlock",
+  "/api/AdaptiveSchedule/requestAdaptiveScheduleAI", // Backend-only AI operation
+  "/api/AdaptiveSchedule/unassignBlock",
 ];

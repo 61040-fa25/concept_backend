@@ -1,4 +1,5 @@
 import { Hono } from "jsr:@hono/hono";
+import { cors } from "jsr:@hono/hono/cors";
 import { getDb } from "@utils/database.ts";
 import { walk } from "jsr:@std/fs";
 import { parseArgs } from "jsr:@std/cli/parse-args";
@@ -24,6 +25,9 @@ async function main() {
   const [db] = await getDb();
   const app = new Hono();
 
+  // Enable CORS for all origins (development only)
+  app.use('/*', cors());
+
   app.get("/", (c) => c.text("Concept Server is running."));
 
   // --- Dynamic Concept Loading and Routing ---
@@ -39,7 +43,7 @@ async function main() {
     if (entry.path === CONCEPTS_DIR) continue; // Skip the root directory
 
     const conceptName = entry.name;
-    const conceptFilePath = `${entry.path}/${conceptName}Concept.ts`;
+    const conceptFilePath = `${entry.path}/${conceptName}.ts`;
 
     try {
       const modulePath = toFileUrl(Deno.realPathSync(conceptFilePath)).href;

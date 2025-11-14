@@ -26,7 +26,7 @@ Adhere to the following rules for the API structure and the documentation format
 Generate the output in Markdown using the following template. For each action and query in the specification, create a dedicated endpoint section.
 
 ~~~markdown
-# API Specification: {Concept Name} Concept
+# API Specification: {Concept Name}
 
 **Purpose:** {The concept's purpose.}
 
@@ -82,5 +82,11 @@ Generate the output in Markdown using the following template. For each action an
 
 # prompt:
 
-Now, analyze the following Concept Specification and generate the API documentation based on these instructions.
+Now, analyze the following Concept Specification and generate the API documentation based on these instructions. Your API documentation should be generated to based exactly on how I defined my concepts:
 
+[@AdaptiveSchedule](../concepts/AdaptiveSchedule/AdaptiveSchedule.md)
+[@RoutineLog](../concepts/RoutineLog/RoutineLog.md)
+[@ScheduleTime](../concepts/ScheduleTime/ScheduleTime.md)
+[@TaskCatalog](../concepts/TaskCatalog/TaskCatalog.md)
+
+# response:

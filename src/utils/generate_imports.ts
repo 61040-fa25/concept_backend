@@ -38,31 +38,45 @@ async function discoverConcepts(baseDir: string): Promise<ConceptInfo[]> {
     }
 
     const conceptDirName = dirEntry.name;
-    const expectedFileName = `${conceptDirName}Concept.ts`;
-    const conceptFilePath = path.join(
-      absoluteBaseDir,
-      conceptDirName,
-      expectedFileName,
-    );
+    const conceptName = conceptDirName.charAt(0).toUpperCase() +
+      conceptDirName.slice(1);
 
-    try {
-      await Deno.stat(conceptFilePath); // Check if file exists
-      const conceptName = conceptDirName.charAt(0).toUpperCase() +
-        conceptDirName.slice(1);
+    // Try two naming patterns:
+    // 1. {ConceptName}Concept.ts (e.g., RequestingConcept.ts)
+    // 2. {ConceptName}.ts (e.g., Auth.ts)
+    const possibleFileNames = [
+      `${conceptDirName}Concept.ts`,
+      `${conceptDirName}.ts`,
+    ];
 
+    let foundFile = null;
+    for (const fileName of possibleFileNames) {
+      const conceptFilePath = path.join(
+        absoluteBaseDir,
+        conceptDirName,
+        fileName,
+      );
+
+      try {
+        await Deno.stat(conceptFilePath); // Check if file exists
+        foundFile = fileName;
+        break;
+      } catch (error) {
+        if (!(error instanceof Deno.errors.NotFound)) {
+          // Re-throw unexpected errors
+          throw error;
+        }
+        // File not found, try next pattern
+      }
+    }
+
+    if (foundFile) {
       concepts.push({
         name: conceptName,
         dirName: conceptDirName,
-        importPath: `./${conceptDirName}/${expectedFileName}`,
+        importPath: `./${conceptDirName}/${foundFile}`,
       });
-      console.log(`  -> Found concept: ${conceptName}`);
-    } catch (error) {
-      if (error instanceof Deno.errors.NotFound) {
-        // This directory doesn't contain a concept file, so we ignore it.
-      } else {
-        // Re-throw other unexpected errors.
-        throw error;
-      }
+      console.log(`  -> Found concept: ${conceptName} (${foundFile})`);
     }
   }
   return concepts;
@@ -80,6 +94,7 @@ function generateBarrelFileContent(
 // Do not edit it manually, unless you know your concept requires a custom instantiation procedure.
 
 import { SyncConcept } from "@engine";
+import type { Db, MongoClient } from "npm:mongodb";
 
 export const Engine = new SyncConcept();\n`;
 
@@ -97,16 +112,48 @@ export const Engine = new SyncConcept();\n`;
     )
     .join("\n");
 
-  const dbInitialization = `
-// Initialize the database connection
-export const [db, client] = await ${dbImportFunc}();
+  // Export db and client as let variables (initialized to null)
+  const dbExports = `
+// Database and client - will be initialized by init()
+export let db: Db = null as any;
+export let client: MongoClient = null as any;
 `;
 
-  const instantiations = concepts
-    .map((c) =>
-      `export const ${c.name} = Engine.instrumentConcept(new ${c.name}Concept(db));`
-    )
+  // Export concept instances as let variables (initialized to null)
+  const conceptExports = concepts
+    .map((c) => `export let ${c.name}: any = null as any;`)
     .join("\n");
+
+  // Create the init() function
+  const initFunction = `
+// Initialization flag
+let initialized = false;
+
+// Initialize all concepts - MUST be called before using any concepts
+export async function init() {
+  if (initialized) {
+    console.log("⚠️ Concepts already initialized, skipping...");
+    return;
+  }
+
+  try {
+    console.log("🔄 Initializing database connection...");
+    const [dbInstance, clientInstance] = await ${dbImportFunc}();
+    db = dbInstance;
+    client = clientInstance;
+    console.log("✅ Database connection successful");
+
+    console.log("🔄 Initializing concepts...");
+${concepts.map((c) => `    ${c.name} = Engine.instrumentConcept(new ${c.name}Concept(db));`).join("\n")}
+
+    initialized = true;
+    console.log("✅ All concepts initialized successfully");
+  } catch (error) {
+    console.error("❌ Failed to initialize concepts:", error);
+    throw new Error(\`Concept initialization failed: \${error instanceof Error ? error.message : String(error)}\`);
+  }
+}
+`;
 
   return [
     header,
@@ -114,8 +161,9 @@ export const [db, client] = await ${dbImportFunc}();
     conceptClassImports,
     "", // newline
     conceptTypeExports,
-    dbInitialization,
-    instantiations,
+    dbExports,
+    conceptExports,
+    initFunction,
     "", // trailing newline
   ].join("\n");
 }

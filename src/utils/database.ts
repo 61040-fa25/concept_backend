@@ -1,5 +1,12 @@
 // This import loads the `.env` file as environment variables
-import "jsr:@std/dotenv/load";
+// Wrapped in try-catch to handle deployment environments without .env files
+try {
+  await import("jsr:@std/dotenv/load");
+} catch {
+  // .env file not found or already loaded - this is fine in production
+  console.log("ℹ️  No .env file found, using environment variables directly");
+}
+
 import { Db, MongoClient } from "npm:mongodb";
 import { ID } from "@utils/types.ts";
 import { generate } from "jsr:@std/uuid/unstable-v7";
@@ -9,10 +16,20 @@ async function initMongoClient() {
   if (DB_CONN === undefined) {
     throw new Error("Could not find environment variable: MONGODB_URL");
   }
-  const client = new MongoClient(DB_CONN);
+
+  // For MongoDB Atlas with mongodb+srv://, use minimal configuration
+  // The connection string already includes TLS settings (tls=true&tlsInsecure=false)
+  const client = new MongoClient(DB_CONN, {
+    serverSelectionTimeoutMS: 5000,
+    connectTimeoutMS: 10000,
+  });
+
   try {
+    console.log("🔌 Attempting to connect to MongoDB Atlas...");
     await client.connect();
+    console.log("✅ Successfully connected to MongoDB");
   } catch (e) {
+    console.error("❌ MongoDB connection error details:", e);
     throw new Error("MongoDB connection failed: " + e);
   }
   return client;

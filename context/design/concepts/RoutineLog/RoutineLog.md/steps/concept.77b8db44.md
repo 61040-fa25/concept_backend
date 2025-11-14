@@ -1,0 +1,78 @@
+---
+timestamp: 'Fri Nov 07 2025 22:39:57 GMT-0500 (Eastern Standard Time)'
+parent: '[[../20251107_223957.edd33927.md]]'
+content_id: 77b8db44673cce1953cddb830c41aa60dcde3645308ce4e8a753585c3f66772e
+---
+
+# concept: RoutineLog
+
+```
+concept RoutineLog [User]
+
+purpose: Records what actually happened throughout the day as time-stamped sessions, optionally linked to planned tasks. Allow users to reflect on their planned schedule by comparing with logged routine sessions.
+
+principle: After a user starts and finishes a session, the system records its actual duration and possible reasons of interruption.
+
+state
+    a set of Sessions with
+        an owner User
+        a sessionName String
+        a sessionId String    // this is an unique ID
+        an isPaused Flag
+        an isActive Flag
+        an isComplete Flag
+        a start TimeStamp (optional)
+        an end TimeStamp (optional)
+        a linkedTaskId String (optional)  // this is the unique id identifying tasks
+        an interruptReason String (optional)
+    
+actions
+    _getUserSessions (owner: User): (sessionTable: set of Sessions)
+	    // this is a query
+        requires: exists at least one session with this owner
+        effect: return ALL sessions under this owner
+    
+    completeTask (owner: User, sessionName: String, linkedTaskId: String)
+        requires: session exists with matching (owner, sessionName, linkedTaskId)
+        effect: set session.isComplete as True
+
+    createSession(owner: User, sessionName: String, linkedTaskId?: String): (session: Session)
+        effect:
+            generate a unique sessionId;
+            create a session owned by owner with sessionName;
+            if linkedTaskId is provided, assign it to this session;
+            assign start and end for this session as None;
+            assign isPaused as False and isActive as False;
+            assign interruptReason as None;
+            return this newly created session;
+    
+    startSession(owner: User, session: Session)
+        requires:
+            session exists and is owned by owner and has isActive as False
+        effect:
+            get the current TimeStamp;
+            set session.start = current TimeStamp;
+            set session.isActive as True
+    
+    endSession(owner: User, session: Session, isDone: Flag)
+        requires:
+            session exists and is owned by owner and has isActive as True and has isDone as False
+        effect:
+            get the current TimeStamp;
+            set session.end = current TimeStamp;
+            set session.isActive as False;
+            set isDone as the given isDone flag;
+    
+    interruptSession(owner: User, session: Session, interruptReason: String)
+        requires:
+            session exists and is owned by owner and has isActive as True;
+            session has isPaused as False;
+        effect:
+            get the current TimeStamp;
+            set session.end = current TimeStamp;
+            set session.isPaused = True;
+            set session.interruptReason = interruptReason;
+
+```
+
+**Note:** The RoutineLog concept captures what actually happens in real time as timestamped sessions, enabling reflections as users can compare planned schedule vs actual routine. Sessions may optionally link back to tasks. Tasks are referenced by their IDs (i.e., a string representing their unique identifier), not by internal details, ensuring that recording actual activity is modular and does not interfere with task definitions.

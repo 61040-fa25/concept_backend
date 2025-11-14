@@ -1,0 +1,19 @@
+{
+  "obsidian-shellcommands:shell-command-o35hlo2dr5": [
+    {
+      "modifiers": [
+        "Mod"
+      ],
+      "key": "R"
+    }
+  ],
+  "obsidian-shellcommands:shell-command-hvfma18642": [
+    {
+      "modifiers": [
+        "Mod",
+        "Shift"
+      ],
+      "key": "S"
+    }
+  ]
+}

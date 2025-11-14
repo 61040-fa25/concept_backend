@@ -16,7 +16,10 @@ EXPOSE 10000
 COPY --chown=deno:deno . .
 
 # Run the custom build step defined in deno.json.
-# This step writes to src/concepts/concepts.ts and now has permission to do so.
+# The auto-generator now correctly:
+# - Supports both {ConceptName}Concept.ts and {ConceptName}.ts naming conventions
+# - Generates code using async init() pattern instead of top-level await
+# This ensures concepts.ts is always up-to-date with all concept files.
 RUN deno task build
 
 # Cache the main module and all its dependencies.
