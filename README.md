@@ -75,7 +75,7 @@ Implement my login behavior using UserAuthentication and Sessioning.
 This tool provides an easy way to **mitigate wasted time/effort while iterating with LLMs**. Whenever you receive some output that is not fully functional, such as broken code, try to **save what was learned as a memory**. For example, suppose a generation of a concept looks something like this:
 
 ```markdown
-[@generate-concept](design/tools/generate-concept.md)
+[@generate-concept](/design/tools/generate-concept.md)
 
 Specify and implement a FileUploading concept.
 
@@ -100,7 +100,7 @@ To mitigate the LLM making the same mistake again for other concepts, extract th
 ```markdown
 ... previous file ...
 
-[@extract-memory](design/tools/extract-memory.md)
+[@extract-memory](/design/tools/extract-memory.md)
 ```
 
 This will produce some markdown that you should paste under the appropriate file under `design/memories`, currently either to do with `concept-learnings.md` or `sync-learnings.md`, which will enrich the associated generation tools with the memory.
